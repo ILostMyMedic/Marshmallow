@@ -1,15 +1,16 @@
-// Adapted from cubefarm client/src/world/events/scenes/Helicopter.tsx (MIT): its landing on the roof's helipad and its
-// rotor's chop cut; it circles high enough to clear the rooftops round its circle.
+// Adapted from cubefarm client/src/world/events/scenes/Helicopter.tsx (MIT): its landing on the roof's helipad cut; it
+// circles high enough to clear the rooftops round its circle.
 
 // A news helicopter flying in, circling the block a few times just above the rooftops (banked into the turn, its
-// rotor a blur), and flying off again.
-import { useMemo, useRef } from 'react';
+// rotor a blur and chopping the air), and flying off again.
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { loop, placeAt } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { seeded } from '../director';
 import { ceilingWithin } from '../flight';
-import { eyeAbove, lerp, sign, smooth, toonOut, type SceneProps } from '../kit';
+import { eyeAbove, inOut, lerp, sign, smooth, toonOut, type SceneProps } from '../kit';
 
 const IN = 8; // seconds flying in, and out at the end
 const LAP = 19; // seconds per circle
@@ -30,7 +31,11 @@ export default function Helicopter({ run, elevation }: SceneProps) {
     const y = Math.max(eyeAbove(elevation) + 9 + r() * 8, top + 10);
     return { cx, cz, radius, y, dir: r() < 0.5 ? 1 : -1, phase: r() * Math.PI * 2, far: { x: s * 420, z: (r() - 0.5) * 500 }, heading: 0 };
   }, [run.seed, s, elevation]);
-  const m = useMemo(() => ({ prev: new THREE.Vector3(), first: true, spin: 0 }), []);
+  const m = useMemo(() => ({ prev: new THREE.Vector3(), first: true, spin: 0, rotor: null as ReturnType<typeof loop> | null }), []);
+  useEffect(() => {
+    m.rotor = loop('rotor');
+    return () => m.rotor?.stop(1);
+  }, [m]);
 
   useFrame((_, delta) => {
     const t = run.t;
@@ -63,6 +68,8 @@ export default function Helicopter({ run, elevation }: SceneProps) {
     m.spin += Math.min(delta, 0.1) * 31;
     if (rotor.current) rotor.current.rotation.y = m.spin;
     if (tail.current) tail.current.rotation.x = m.spin * 1.3;
+    const heard = placeAt(x, y - elevation, z, 60);
+    m.rotor?.set(heard.gain * inOut(t, run.seconds, 2), heard.pan);
   });
 
   const red = toonOut('#d62828');

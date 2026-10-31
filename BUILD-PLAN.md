@@ -221,7 +221,11 @@ Workers get up: walking (walk grid, paths, named spots), the errand system, coff
 
 ## Phase 14: the day and the senses
 
-The day/night clock (lunch and going home need it), synthesized sound effects, and the overview camera's click-a-worker.
+1. The day/night clock and the sky (`sky/`): a day every 30 minutes by default, or the viewer's own clock, or always day (picked on the debug page, kept per browser). The sun, the sky, the fog, the city's lit windows and the light indoors follow it; desk lamps, the roof's string lights and the fire glow at night. Lunch follows the same clock. Going home in the evening stays out (unchecked).
+2. Synthesized sound effects, no audio files (`client/src/ui/sfx.ts` and its neighbours): the room (the coffee machine, the fridge, the elevator, the gong and the cheering, ping-pong), people (footsteps, typing, sips and bites) and outside (the city by day and by night, the world events). M mutes, and the volume is kept per browser. Music, babble voices and the weather's sounds stay out (unchecked).
+3. The overview's click-a-worker (`camera/picking.ts`, `OverviewChips.tsx`): a status chip over each desk with the person's name and what they're doing; a click on a chip, or on anything with a panel, opens it, and the hint says what a click would open.
+
+**Done when:** in the demo the office goes from morning to night and back in 30 minutes, with the lamps on and the city lit at night; you hear the machine brew, the elevator ding, the gong and the cheering, ping-pong and footsteps, and M mutes them; and in the overview a click on a worker's chip opens their terminal. (Done: seen in a browser on the demo: the sky from morning through golden hour to night, lamps, halos and a lit city, the roof at night; the brew, the fridge, the gong with confetti and cheers, footsteps, sips, a UFO and the outside, with M muting them; the chips, the hover hint and a click opening a terminal or the board. The brew's ready beep, the elevator's ding and ping-pong were heard only in the sound agent's own headless run. The new rules are tested in `sky/*.test.ts`, the `ui/` sound rules' tests and `overviewInfo.test.ts`.)
 
 ## Phase 15: the manager UI
 

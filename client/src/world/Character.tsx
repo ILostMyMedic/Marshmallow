@@ -1,10 +1,13 @@
 // Adapted from cubefarm client/src/world/Character.tsx (MIT): toys hitting people, themes, the screen's glow on the
-// face, the handshake and the voices are cut.
+// face, the handshake and the chatter's voices are cut; their steps, chair and merge cheer are heard (ui/).
 import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Worker } from '../../../shared/types';
 import { qaKey, useStore } from '../store';
+import { cheerVoice } from '../ui/cheerRules';
+import { cheerFrom } from '../ui/cheerSfx';
+import { hearBody, hearing } from '../ui/peopleSounds';
 import { seededAppearance } from './appearance';
 import { Piece } from './Batched';
 import { WALK_SPEED, gait, newBodyState, smooth, stepBody, type BodyTarget, type Gait, type Gesture } from './body';
@@ -293,7 +296,10 @@ export function Character({
   const prMood = useStore((s) => prFaceOf({ role: worker.role, task: task?.kind ?? null, floorId: worker.floorId, prNumber: task?.prNumber ?? null }, s.floors, task?.prNumber != null ? s.qa[qaKey(worker.floorId, task.prNumber)] : undefined));
   const face = useMemo(() => ({ s: newFace(), seed: hashString(id) % 10007 }), [id]);
   const faceMesh = useRef<THREE.Mesh>(null);
+  // Their merge cheer (ui/cheerSfx.ts): their own voice, whether they were cheering last frame and where their head is.
+  const voice = useMemo(() => ({ v: cheerVoice(id, look.look), party: false, head: new THREE.Vector3() }), [id, look.look]);
   useEffect(() => trackBody(id, move.s), [id, move]);
+  useEffect(() => hearing(id), [id]);
   // Leaving mid-stretch (another floor): don't leave them standing.
   useEffect(
     () => () => {
@@ -310,6 +316,12 @@ export function Character({
     const wall = Date.now(); // moments carry the server's clock
     const lived = lifeOf(worker, office.moments, wall);
     const party = isCelebrating(worker.floorId, now); // the gong struck for a merge on this floor: everyone cheers, busy or not
+    if (party && !voice.party && head.current && !isHidden(id)) {
+      // the arms go up: a "woo!" from their head
+      head.current.getWorldPosition(voice.head);
+      cheerFrom(voice.v, voice.head.x, voice.head.y, voice.head.z);
+    }
+    voice.party = party;
 
     // ---------- where the body is ----------
     const st = move.s;
@@ -328,6 +340,7 @@ export function Character({
       st.standX = te[0] * standAt.x + te[8] * standAt.z + te[12];
       st.standZ = te[2] * standAt.x + te[10] * standAt.z + te[14];
       stepBody(st, goal ?? null, dt);
+      if (!isHidden(id)) hearBody(id, st, te[13]);
       const b = body.current;
       if (b && st.stage === 'seated') {
         b.position.set(0, 0, 0);

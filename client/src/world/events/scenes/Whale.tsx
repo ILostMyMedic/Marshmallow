@@ -1,15 +1,16 @@
-// Adapted from cubefarm client/src/world/events/scenes/Whale.tsx (MIT): the whale song and the engines cut; it swims
-// up over the skyline.
+// Adapted from cubefarm client/src/world/events/scenes/Whale.tsx (MIT): it swims up over the skyline.
 
 // A whale-shaped airship swimming slowly through the sky: a big friendly whale with a gondola slung under its belly,
-// flukes and flippers waving, propellers turning, and a puff of spray from its blowhole now and then.
-import { useLayoutEffect, useMemo, useRef } from 'react';
+// flukes and flippers waving, propellers turning, a puff of spray from its blowhole now and then, and whale song over
+// its engines' drone.
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { loop, placeAt, play } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { seeded } from '../director';
 import { along, clearStretch, flightProfile } from '../flight';
-import { eyeAbove, lerp, sign, toonOut, type SceneProps } from '../kit';
+import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 
 const SCALE = 12;
 const SPRAY = 14;
@@ -31,7 +32,7 @@ export default function Whale({ run, elevation }: SceneProps) {
     const [a, b] = clearStretch(theCity(), x, REACH, base + 15, 30);
     const [z0, z1] = dir > 0 ? [b, a] : [a, b];
     const profile = flightProfile(theCity(), { x0: x, z0, x1: x, z1 }, { base, margin: 18, pad: 30, slope: 0.25 });
-    return { dir, x, z0, z1, profile, puff: 8 + r() * 5, puffAt: -100 };
+    return { dir, x, z0, z1, profile, puff: 8 + r() * 5, puffAt: -100, song: 5 + r() * 4 };
   }, [run.seed, s, elevation]);
   const m = useMemo(() => ({ mat: new THREE.Matrix4(), v: new THREE.Vector3(), q: new THREE.Quaternion(), sc: new THREE.Vector3(), r: seeded(run.seed + 3) }), [run.seed]);
   const drops = useMemo(() => Array.from({ length: SPRAY }, () => ({ dx: (m.r() - 0.5) * 0.5, dz: (m.r() - 0.5) * 0.5, up: 0.7 + m.r() * 0.6 })), [m]);
@@ -42,6 +43,11 @@ export default function Whale({ run, elevation }: SceneProps) {
     for (let i = 0; i < SPRAY; i++) mesh.setMatrixAt(i, m.mat);
     mesh.instanceMatrix.needsUpdate = true;
   }, [m]);
+  const sound = useMemo(() => ({ engine: null as ReturnType<typeof loop> | null }), []);
+  useEffect(() => {
+    sound.engine = loop('engine');
+    return () => sound.engine?.stop(1.2);
+  }, [sound]);
 
   useFrame(() => {
     const t = run.t;
@@ -59,6 +65,13 @@ export default function Whale({ run, elevation }: SceneProps) {
     }
     const spin = props.current?.children;
     if (spin) for (let i = 0; i < spin.length; i++) spin[i].rotation.z = t * 12;
+    const heard = placeAt(p.x, y - elevation, z, 130);
+    const fade = inOut(t, run.seconds, 4);
+    sound.engine?.set(heard.gain * fade * 0.8, heard.pan, 0.8);
+    if (t >= p.song) {
+      p.song = t + 9 + Math.random() * 6;
+      play('whale', { gain: heard.gain * fade, pan: heard.pan, pitch: 0.85 + Math.random() * 0.3 });
+    }
     if (t >= p.puff) {
       p.puff = t + 10 + Math.random() * 6;
       p.puffAt = t;

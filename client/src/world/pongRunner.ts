@@ -1,12 +1,14 @@
 // Adapted from cubefarm client/src/world/toys/pongRunner.ts (MIT): on pongSim.ts's plain ball instead of a Rapier
-// body. The sounds, the room's "ooh" at a long rally and the leaderboard's report are cut.
+// body. The room's "ooh" at a long rally and the leaderboard's report are cut; a point won sounds (new).
 
 // Runs ping-pong on one ball: the serve (a toss and a hit), the rally (the air's pull and the table's bounce from
 // pongPhysics.ts, paddles meeting the ball), the umpire's calls and the score (pongRules.ts), the workers' play
-// (pongAi.ts), the player's paddle, and the workers' cheers and grumbles. Plain TypeScript over the ball's few
-// rigid-body calls (pongSim.ts PongBody), stepped before and after every ball step: PongMatch.tsx runs it at the
-// table, the tests on a bare ball. The probe's drills and forced rallies (pongProbe.ts) run here too.
+// (pongAi.ts), the player's paddle, the workers' cheers and grumbles, and when the ball makes a sound (io.sound).
+// Plain TypeScript over the ball's few rigid-body calls (pongSim.ts PongBody), stepped before and after every ball
+// step: PongMatch.tsx runs it at the table, the tests on a bare ball. The probe's drills and forced rallies
+// (pongProbe.ts) run here too.
 
+import type { PongSound } from '../ui/pongSfx';
 import type { Gesture } from './body';
 import { aiServe, aiShot, atContact, contactFor, missChance, REACH, reachTo, READY, readyPaddle, skillFor, ratingOf, standFor, swingPaddle, type Contact, type Skill, type Wobble } from './pongAi';
 import {
@@ -39,6 +41,8 @@ export interface RunnerIo {
   bodyAt(id: string): { x: number; z: number } | null;
   /** Speech bubbles over the workers (people.ts say). */
   say?(id: string, text: string | null): void;
+  /** The ball's sounds (ui/pongSfx.ts): what happened, where, and how hard (0-1; 1 for a point that wins the game). */
+  sound?(kind: PongSound, at: V3, level: number): void;
   rand?: () => number;
 }
 
@@ -129,6 +133,9 @@ export class PongRunner {
   private live = false;
   private b: BallState = { p: { x: 0, y: 0, z: 0 }, v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 } };
   private prevP: V3 = { x: 0, y: 0, z: 0 };
+  /** The ball's fall speed before its step, and when it last ticked off the floor, for the floor's sound. */
+  private prevVy = 0;
+  private lastFloorTick = 0;
   private padBackPrev = paddle.back;
   private rally: Rally = newRally('west');
   private lastEventT = 0;
@@ -237,6 +244,7 @@ export class PongRunner {
     this.moveWorkers(m);
     this.movePaddle(m);
     this.prevP = this.body.translation();
+    this.prevVy = this.body.linvel().y;
   }
 
   /**
@@ -250,6 +258,11 @@ export class PongRunner {
     const v = this.body.linvel();
     const onTable = !this.parked && v.y < 0 && p.y <= TOP + R && this.prevP.y > TOP + R - 0.05 && overTable(p.x, p.z);
     if (onTable) this.tableTouch(p, v);
+    // the sim bounced it off the floor during its step
+    if (this.prevVy < -0.8 && v.y > 0 && p.y < 0.3 && this.t - this.lastFloorTick > 0.06) {
+      this.lastFloorTick = this.t;
+      this.io.sound?.('floor', p, Math.min(1, -this.prevVy / 6));
+    }
     if (this.live && m?.phase === 'rally') this.umpire(m, p, onTable);
     this.padBackPrev = paddle.back;
   }
@@ -261,7 +274,10 @@ export class PongRunner {
       nv.y = 0;
       nv.x *= 0.985;
       nv.z *= 0.985;
-    } else tableBounce(nv, this.b.w);
+    } else {
+      tableBounce(nv, this.b.w);
+      if (this.live || -v.y > 0.8) this.io.sound?.('table', p, Math.min(1, -v.y / 5));
+    }
     this.body.setTranslation({ x: p.x, y: TOP + R, z: p.z }, true);
     this.body.setLinvel(nv, true);
     this.body.setAngvel(this.b.w, true);
@@ -335,6 +351,7 @@ export class PongRunner {
       const shot = seat.kind === 'player' ? serveShot(by, paddle.lat * 0.6, paddleSwing()) : aiServe(this.skill(seat.id), by, this.rand);
       const sol = solveShot(p, by, shot);
       this.launch(sol.v, sol.w);
+      this.io.sound?.('paddle', p, Math.min(1, shot.speed / 13));
       this.lastShot = { by, speed: shot.speed, top: shot.top, side: shot.side, landsAt: sol.land, smash: false };
       if (!player) this.swung(by, p);
       this.rally = newRally(by);
@@ -388,7 +405,10 @@ export class PongRunner {
       if (m.phase !== 'rally') return;
     }
     const nearNet = Math.abs(p.x - TABLE.x) < R + PONG.net.t / 2 + 0.02 && p.y < NET_TOP + R && p.y > TOP && Math.abs(p.z - TABLE.z) < HALF_WID + PONG.net.overhang + R;
-    if (nearNet && !this.inNet) this.event(m, { kind: 'net' });
+    if (nearNet && !this.inNet) {
+      this.io.sound?.('net', p, 0);
+      this.event(m, { kind: 'net' });
+    }
     this.inNet = nearNet;
     if (p.y < TOP - 0.05 && !overTable(p.x, p.z)) this.event(m, { kind: 'dead' });
     else if (this.t - this.lastEventT > TIMING.stall) this.event(m, { kind: 'dead' });
@@ -425,6 +445,7 @@ export class PongRunner {
     const over = scorePoint(m.game, winner);
     m.longest = Math.max(m.longest, m.rally);
     m.last = over ? { winner: over, why: 'game' } : { winner, why: call.why };
+    this.io.sound?.('point', { x: TABLE.x, y: TOP + 0.5, z: TABLE.z }, over ? 1 : 0);
     this.react(m, winner, !!over);
     this.setPhase(m, over ? 'over' : 'point');
   }
@@ -548,6 +569,8 @@ export class PongRunner {
   private strike(m: Match, end: End, p: V3, shot: Shot, smash: boolean, wobble: Wobble | null = null) {
     const sol = solveShot(p, end, shot);
     this.launch(wobble ? offLine(sol.v, wobble) : sol.v, sol.w);
+    this.io.sound?.('paddle', p, Math.min(1, shot.speed / 13));
+    if (smash) this.io.sound?.('smash', p, 1);
     if (m.seats[end]?.kind === 'player') this.returns.tried++;
     this.lastShot = { by: end, speed: shot.speed, top: shot.top, side: shot.side, landsAt: sol.land, smash };
     const you = playerAtTable(m);

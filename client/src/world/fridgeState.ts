@@ -1,8 +1,10 @@
 // The current floor's fridge (fridge.ts has its rules): the door, the stock, who stands at it, the player's E on it and
 // the workers' hands in it (fridgeErrand.ts). KitchenFridge.tsx draws it and runs its clock. One fridge is drawn at a
 // time (the floor you're on); each floor keeps its own stock for the session, while the door starts shut on every
-// visit. window.__mmFridge reports it and __mmFridgeDo works it, for QA.
-// Adapted from cubefarm client/src/world/fridgeState.ts (MIT): the tupperware's label and the sounds are cut.
+// visit. Its door, its beeps when left open and the snacks coming off the shelf are heard from its front.
+// window.__mmFridge reports it and __mmFridgeDo works it, for QA.
+// Adapted from cubefarm client/src/world/fridgeState.ts (MIT): the tupperware's label is cut; a snack taken clinks (new).
+import { fridgeBeep, fridgeClose, fridgeEmpty, fridgeOpen, fridgeTake } from '../ui/sfx';
 import { DOOR, SNACKS, closeDoor, doorTick, isSnackId, newDoor, newPantry, openDoor, restock, takeSnack, type Pantry, type SnackId, type Stock } from './fridge';
 import { snackHolders } from './people';
 import { playerAt } from './rig';
@@ -16,6 +18,8 @@ let atDoor: string | null = null;
 let seq = 1;
 /** Where its door is (the middle of its front), for who is near; set once it's drawn. */
 export const fridgeAt = { x: 0, z: 0, on: false };
+/** Where its sounds come from: the middle of its door. */
+const sounding = () => ({ x: fridgeAt.x, y: 1, z: fridgeAt.z });
 
 // ---------- redraws ----------
 
@@ -71,12 +75,14 @@ export const playerAtFridge = () => fridgeAt.on && Math.hypot(playerAt.x - fridg
 
 function open(): boolean {
   if (!fridgeAt.on || !openDoor(door, performance.now() / 1000)) return false;
+  fridgeOpen(sounding());
   changed();
   return true;
 }
 
 function close(): boolean {
   if (!closeDoor(door)) return false;
+  fridgeClose(sounding());
   changed();
   return true;
 }
@@ -85,15 +91,23 @@ function take(id: SnackId): boolean {
   if (!pantry || !door.open) return false;
   restock(pantry, performance.now());
   if (!takeSnack(pantry, id)) return false;
+  fridgeTake(sounding());
   changed();
   return true;
 }
 
-/** The fridge's clock (KitchenFridge.tsx calls it a few times a second): the door closes by itself once everyone has walked away, and the stock comes back. */
+/**
+ * The fridge's clock (KitchenFridge.tsx calls it a few times a second): the door closes by itself once everyone has
+ * walked away and beeps while it's left open (not in a hidden tab), and the stock comes back.
+ */
 export function tickFridge() {
   const now = performance.now();
   if (pantry && restock(pantry, now) > 0) changed();
-  if (doorTick(door, now / 1000, playerAtFridge() || atDoor !== null) === 'close') changed();
+  const ev = doorTick(door, now / 1000, playerAtFridge() || atDoor !== null);
+  if (ev === 'close') {
+    fridgeClose(sounding());
+    changed();
+  } else if (ev === 'beep' && !document.hidden) fridgeBeep(sounding());
 }
 
 // ---------- the player (E on the fridge) ----------
@@ -112,7 +126,10 @@ export function fridgeAction(op: 'door' | 'take', snack?: SnackId) {
     return;
   }
   if (!take(snack)) {
-    if (door.open) view.showToast(`${def.emoji} Out of ${def.short}: more comes in every few minutes`);
+    if (door.open) {
+      fridgeEmpty(sounding());
+      view.showToast(`${def.emoji} Out of ${def.short}: more comes in every few minutes`);
+    }
     return;
   }
   view.setHeld({ kind: 'snack', id: `snack-player-${seq++}`, snack, left: def.portions });

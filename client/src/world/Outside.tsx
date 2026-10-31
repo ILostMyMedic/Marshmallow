@@ -1,16 +1,18 @@
 // Adapted from cubefarm client/src/world/Outside.tsx (MIT): the balconies, the facade and the side doors that slide open
-// for you; the balcony lamps come with the day/night clock, the doors' whoosh with the sounds.
+// for you with a whoosh, and the balcony lamps that come on at night (sky/lamps.tsx).
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { doorSlide } from '../ui/sfx';
 import { doorOpen, resetDoors, tickDoors } from './doors';
 import { drawFacade } from './draw';
-import { BALCONY, BALCONY_OUT, BENCH, FLOOR_HEIGHT, HALF_D, HALF_W, PLANTER, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, balconyFurniture, floorElevation, sideSign, type FloorKind, type Side } from './layout';
+import { BALCONY, BALCONY_OUT, BALCONY_TOP, BENCH, FLOOR_HEIGHT, HALF_D, HALF_W, PLANTER, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, balconyFurniture, floorElevation, sideSign, type FloorKind, type Side } from './layout';
 import { toon, toonMap } from './materials';
 import { INK, Outlines } from './Outlines';
 import { boxesGeometry, merged, type BoxSpec } from './shapes';
 import { playerAt } from './rig';
 import { paneMaterial } from './Shell';
+import { balconyBulb, LampHalos } from './sky/lamps';
 
 // Outside the side walls: the glass doors, the balconies (the lobby's is a patio on the ground), and the rest of the
 // building round you: its walls above and below your floor and every floor's balcony (the city, City.tsx, is the
@@ -55,7 +57,7 @@ function SideDoors({ kind, floor }: { kind: FloorKind; floor: number }) {
   }, [kind, floor]);
   const leaves = useRef<(THREE.Group | null)[]>([]);
   useFrame((_, dt) => {
-    tickDoors(playerAt.x, playerAt.z, Math.min(dt, 0.05), () => undefined);
+    tickDoors(playerAt.x, playerAt.z, Math.min(dt, 0.05), (side, opening) => doorSlide({ x: wallX(side), y: 1.2, z: SIDE_OPENINGS[kind][side].door }, opening));
     for (const i of LEAVES) {
       const g = leaves.current[i];
       if (!g) continue;
@@ -117,7 +119,12 @@ function balconyGeometry(floor: number, top: number) {
   return { slabs: boxesGeometry(slabs), patio: boxesGeometry(patio), glass: boxesGeometry(glass), rails: boxesGeometry(rails) };
 }
 
-/** On your floor's balconies: planters with shrubs and flowers, and a bench. */
+/** The lamps under the balcony above yours: four down each side. */
+const BALCONY_LIGHTS = SIDES.flatMap((side) => [-8, -2.7, 2.7, 8].map((z) => ({ x: sideSign(side) * (IN + BALCONY.depth / 2), y: BALCONY_TOP - 0.08, z })));
+/** The bulbs' halos, on the underside of the balcony above (the lamp's own box hides the middle). */
+const BULB_HALOS = BALCONY_LIGHTS.map((l): [number, number, number] => [l.x, l.y + 0.055, l.z]);
+
+/** On your floor's balconies: planters with shrubs and flowers, a bench, and the lamps under the balcony above. */
 function furnitureGeometry(kind: FloorKind) {
   const planters: BoxSpec[] = [];
   const bench: BoxSpec[] = [];
@@ -156,7 +163,9 @@ function furnitureGeometry(kind: FloorKind) {
       for (const dx of [-0.2, 0.2]) legs.push({ size: [0.06, 0.42, 0.06], at: [seatX + dx, 0.21, bz + dz] });
     }
   }
-  return { planters: boxesGeometry(planters), bench: boxesGeometry(bench), legs: boxesGeometry(legs), shrubs: merged(shrubs), flowers: merged(flowers) };
+  const lamps = boxesGeometry(BALCONY_LIGHTS.map((l): BoxSpec => ({ size: [0.5, 0.06, 0.5], at: [l.x, l.y + 0.05, l.z] })));
+  const bulbs = merged(BALCONY_LIGHTS.map((l) => new THREE.PlaneGeometry(0.4, 0.4).rotateX(Math.PI / 2).translate(l.x, l.y + 0.015, l.z)));
+  return { planters: boxesGeometry(planters), bench: boxesGeometry(bench), legs: boxesGeometry(legs), shrubs: merged(shrubs), flowers: merged(flowers), lamps, bulbs };
 }
 
 function Balconies({ kind, floor, top }: { kind: FloorKind; floor: number; top: number }) {
@@ -178,6 +187,9 @@ function Balconies({ kind, floor, top }: { kind: FloorKind; floor: number; top: 
         <Outlines thickness={0.018} color={INK} />
       </mesh>
       <mesh geometry={stuff.legs} material={toon('#495057')} />
+      <mesh geometry={stuff.lamps} material={toon('#e9ecef', ABOVE)} />
+      <mesh geometry={stuff.bulbs} material={balconyBulb()} />
+      <LampHalos positions={BULB_HALOS} size="bulb" cut="above" />
     </group>
   );
 }

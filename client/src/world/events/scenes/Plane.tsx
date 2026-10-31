@@ -1,15 +1,16 @@
-// Adapted from cubefarm client/src/world/events/scenes/Plane.tsx (MIT): its jet's rumble cut; it climbs over the skyline.
+// Adapted from cubefarm client/src/world/events/scenes/Plane.tsx (MIT): it climbs over the skyline.
 
 // An airliner crossing high over the city, left to right or back, with two contrails puffing out behind its engines
-// that linger, spread and fade after it has gone. The trail is one instanced mesh of puffs laid where the engines
-// were; the plane is a dozen boxes and cylinders.
-import { useLayoutEffect, useMemo, useRef } from 'react';
+// that linger, spread and fade after it has gone, and a distant jet's rumble. The trail is one instanced mesh of puffs
+// laid where the engines were; the plane is a dozen boxes and cylinders.
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { loop, placeAt } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { seeded } from '../director';
 import { along, flightProfile } from '../flight';
-import { eyeAbove, lerp, sign, toonOut, type SceneProps } from '../kit';
+import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 
 const CROSS = 44; // seconds to cross
 const PUFFS = 260;
@@ -39,14 +40,23 @@ export default function Plane({ run, elevation }: SceneProps) {
     m.instanceMatrix.needsUpdate = true;
   }, [scratch]);
 
+  const sound = useMemo(() => ({ jet: null as ReturnType<typeof loop> | null }), []);
+  useEffect(() => {
+    sound.jet = loop('jet');
+    return () => sound.jet?.stop(1.5);
+  }, [sound]);
+
   useFrame(() => {
     const t = run.t;
     const k = Math.min(1, t / CROSS);
     const z = lerp(path.z0, path.z1, k);
+    const y = along(path.profile, k);
+    const heard = placeAt(path.x, y - elevation, z, 160);
+    sound.jet?.set(heard.gain * inOut(t, CROSS, 6), heard.pan, 0.9 + 0.2 * (1 - k));
     const g = plane.current;
     if (g) {
       g.visible = t < CROSS;
-      g.position.set(path.x, along(path.profile, k), z);
+      g.position.set(path.x, y, z);
       g.rotation.y = path.dir > 0 ? 0 : Math.PI;
     }
     // a pair of puffs every EVERY seconds while it flies, behind each engine

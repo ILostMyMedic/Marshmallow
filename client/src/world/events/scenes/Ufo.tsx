@@ -1,11 +1,12 @@
-// Adapted from cubefarm client/src/world/events/scenes/Ufo.tsx (MIT): the hum, the beam's whine and the zips cut.
+// Adapted from cubefarm client/src/world/events/scenes/Ufo.tsx (MIT).
 
 // A UFO zips in, hovers over a rooftop with its lights chasing round the rim, drifts over the street next door, shines
-// its beam down on a parked car and lifts it, spinning, up into the saucer, wobbles happily and zips away. Built from a
-// few spheres, a cone of light and a little car.
-import { useMemo, useRef } from 'react';
+// its beam down on a parked car and lifts it, spinning, up into the saucer, wobbles happily and zips away, humming all
+// the while, the beam whining. Built from a few spheres, a cone of light and a little car.
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { loop, placeAt, play } from '../../../ui/eventSfx';
 import { CITY, CORRIDOR_HALF, LANE, theCity } from '../../cityLayout';
 import { seeded } from '../director';
 import { clamp01, glowOut, lerp, sign, smooth, span, toonOut, type SceneProps } from '../kit';
@@ -13,7 +14,7 @@ import { clamp01, glowOut, lerp, sign, smooth, span, toonOut, type SceneProps } 
 const T = { arrive: 4, hover: 12, glide: 16, beam: 17.5, lift: 19, gone: 28, leave: 30, away: 34 };
 const LIGHTS = 10;
 
-export default function Ufo({ run }: SceneProps) {
+export default function Ufo({ run, elevation }: SceneProps) {
   const ufo = useRef<THREE.Group>(null);
   const lights = useRef<THREE.Group>(null);
   const beam = useRef<THREE.Group>(null);
@@ -37,6 +38,11 @@ export default function Ufo({ run }: SceneProps) {
       carColor: ['#e85d75', '#4a90d9', '#f2c94c', '#6fcf97'][Math.floor(r() * 4)],
     };
   }, [run.seed, s]);
+  const sound = useMemo(() => ({ hum: null as ReturnType<typeof loop> | null, beamed: false, zipped: false, came: false }), []);
+  useEffect(() => {
+    sound.hum = loop('hum');
+    return () => sound.hum?.stop(0.5);
+  }, [sound]);
 
   useFrame(() => {
     const t = run.t;
@@ -93,6 +99,21 @@ export default function Ufo({ run }: SceneProps) {
       c.position.set(p.car.x, lerp(0, y + bob - 3, k * k), p.car.z);
       c.rotation.set(Math.sin(t * 2) * 0.3 * k, k * 9, Math.cos(t * 1.7) * 0.25 * k);
       c.scale.setScalar(1 - 0.5 * span(t, T.gone - 2, T.gone));
+    }
+
+    const heard = placeAt(x, y - elevation, z, 80);
+    sound.hum?.set(heard.gain * (t < T.away ? 1 : 0), heard.pan, 1 + (t > T.leave ? (t - T.leave) * 0.6 : 0));
+    if (!sound.came && t > 0.1) {
+      sound.came = true;
+      play('zip', { gain: 0.6, pan: heard.pan, pitch: 0.7 });
+    }
+    if (!sound.beamed && t > T.beam) {
+      sound.beamed = true;
+      play('beam', { gain: heard.gain, pan: heard.pan });
+    }
+    if (!sound.zipped && t > T.leave) {
+      sound.zipped = true;
+      play('zip', { gain: heard.gain, pan: heard.pan });
     }
   });
 

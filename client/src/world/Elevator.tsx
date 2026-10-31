@@ -2,12 +2,13 @@
 // stepping out, a leaver with their box, the CEO coming up for a stand-up) and stay shut while a ride is under way;
 // the cabin behind them, its panel and the call button beside the doors (E on either: choose a floor, ui/ElevatorPanel),
 // and the floor's name lit over the doors. It steps the ride (elevatorRide.ts) and all of it goes with the room's
-// walls in the overview's cutaway.
+// walls in the overview's cutaway. The doors rumble open and shut, and ding when someone steps out of the cabin.
 // Adapted from cubefarm client/src/world/Elevator.tsx (MIT): the reduced-motion doors are cut.
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../store';
+import { ding, elevatorDoors } from '../ui/sfx';
 import { useCanvasTexture } from './canvasTexture';
 import { drawSign } from './draw';
 import { doors, doorsHeldShut, tickRide } from './elevatorRide';
@@ -42,14 +43,27 @@ export function Elevator({ zDoor, accent }: { zDoor: number; accent: string }) {
   const { doorHalf, cabinHalf, depth, doorHeight } = ELEVATOR;
   const call = useInteractable<THREE.Group>(CHOOSE, 2.6);
   const panel = useInteractable<THREE.Group>(CHOOSE, 2.4);
+  // whether the doors were wanted open last frame (null until the first: a floor coming into view makes no sound)
+  const wanted = useRef<number | null>(null);
 
   useFrame((_, delta) => {
     tickRide();
     let near = false;
-    for (const b of bodies()) if (b.stage !== 'seated' && Math.abs(b.x) < doorHalf + 0.6 && Math.abs(b.z - zDoor) < 2) near = true;
+    let arriving = false;
+    for (const b of bodies()) {
+      if (b.stage === 'seated' || Math.abs(b.x) >= doorHalf + 0.6 || Math.abs(b.z - zDoor) >= 2) continue;
+      near = true;
+      if (b.z > zDoor + 0.3) arriving = true; // in the cabin: they've come up or down in it
+    }
     // you, on foot in front of the doors or in the cabin
     if (!rigOwnsCamera() && Math.abs(playerAt.x) < doorHalf + 0.8 && playerAt.z > zDoor - 2.4) near = true;
     const want = near && !doorsHeldShut() ? 1 : 0;
+    if (wanted.current !== null && want !== wanted.current) {
+      const at = { x: 0, y: 1.3, z: zDoor };
+      elevatorDoors(at, want === 1);
+      if (want && arriving) ding(at);
+    }
+    wanted.current = want;
     doors.open += (want - doors.open) * (1 - Math.exp(-Math.min(delta, 0.1) * 5));
     const slide = doors.open * doorHalf * 0.98;
     if (left.current) left.current.position.x = -doorHalf / 2 - slide;

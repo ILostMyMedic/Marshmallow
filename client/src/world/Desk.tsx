@@ -18,6 +18,7 @@ import { shade } from './materials';
 import { MUG_SIZE, MugLook, mugColor } from './mugLook';
 import { deskMug, subscribeMugs } from './people';
 import { Ball, Box, Cyl } from './Toon';
+import { useView } from './view';
 
 const SCREEN = { w: 1.0, h: 0.6, px: 640, py: 384 };
 const WOOD = '#f1d19b';
@@ -69,13 +70,17 @@ function useTerminalTexture(worker: Worker, anchor: RefObject<THREE.Object3D | n
   return made.texture;
 }
 
-/** A worker's name tag, always facing the camera. */
+/** A worker's name tag, always facing the camera; the overview has their status chip instead (OverviewChips.tsx). */
 export function NameTag({ worker, color }: { worker: Worker; color: string }) {
   const task = worker.task;
   const tex = useCanvasTexture(512, 96, (ctx) => drawTag(ctx, 512, 96, worker, color), [worker.name, worker.status, worker.role, task?.kind, task?.issueNumber, task?.prNumber, tagIcon(worker), color]);
+  const tag = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    if (tag.current) tag.current.visible = useView.getState().mode !== 'overview';
+  });
   return (
     <Billboard>
-      <mesh>
+      <mesh ref={tag}>
         <planeGeometry args={[1.15, 0.216]} />
         <meshBasicMaterial map={tex} transparent toneMapped={false} depthWrite={false} />
       </mesh>

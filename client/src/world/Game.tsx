@@ -1,14 +1,17 @@
 // The game: the floor you're on in 3D, walked in first person or looked down on in the overview (rig.ts): the lobby,
 // a repo's office with its workers at their desks, out on errands and chatting, the CEO's floor or the roof terrace
 // (floors.ts), and the city round the building. A picker along the bottom moves between them; panels (a terminal, the
-// board, the front desk) open over the view. Adapted from cubefarm client/src/world/Game.tsx and
-// camera/CameraRig.tsx (MIT): the canvas, lights and sky, and the overview's mouse.
+// board, the front desk) open over the view. The sky, the light and the lamps follow the office's clock (sky/).
+// Adapted from cubefarm client/src/world/Game.tsx and camera/CameraRig.tsx (MIT): the canvas, lights and sky, and the
+// overview's mouse.
 import { useEffect, useMemo } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../store';
 import { HUD } from '../ui/HUD';
 import { Overlays } from '../ui/Overlays';
+import { SoundToggle } from '../ui/SoundToggle';
+import { act } from './actions';
 import { OVERVIEW } from './cameraMath';
 import { Chatter } from './Chatter';
 import { City } from './City';
@@ -20,59 +23,71 @@ import { ceoColliders, lobbyColliders, officeColliders, shellColliders } from '.
 import { Lobby } from './Lobby';
 import { Me } from './Me';
 import { OfficeFloor } from './OfficeFloor';
+import { OverviewChips } from './OverviewChips';
 import { AdaptiveResolution, currentDpr } from './perf';
+import { pickAt } from './picking';
 import { Player } from './Player';
 import { bindCamera, orbitBy, panBy, setViewport, zoomBy } from './rig';
 import { Roof } from './roof/Roof';
 import { roofColliders } from './roof/roofLayout';
+import { DayClock } from './sky/DayClock';
+import { DayLights } from './sky/DayLights';
+import { Sky } from './sky/Sky';
+import { Sounds } from './Sounds';
 import { TourGuide } from './TourGuide';
 import { useView } from './view';
 
-const SKY = '#bfe3ff';
-const HAZE = '#e4eef4';
-
-function Lights() {
-  return (
-    <>
-      <hemisphereLight args={['#fffaf0', '#a48a6a', 0.95]} />
-      <ambientLight intensity={0.18} />
-      <directionalLight position={[9, 14, 7]} intensity={1.55} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0006} shadow-normalBias={0.03}>
-        <orthographicCamera attach="shadow-camera" args={[-22, 22, 22, -22, 0.5, 60]} />
-      </directionalLight>
-    </>
-  );
-}
+/** A press that moves less than this (px) before it lets go is a click, not a drag. */
+const CLICK_PX = 5;
 
 /**
  * Hands the camera and the view's size to the rig, and takes the overview's mouse: a drag turns it round the floor (and
- * tilts it), a right-drag or shift-drag pans, the wheel zooms. Mouse events, so the player's quiet guard can swallow
- * them after a click that opened something.
+ * tilts it), a right-drag or shift-drag pans, the wheel zooms, and a click opens what's under it (picking.ts: a
+ * person's chip, a desk, the board). Mouse events, so the player's quiet guard can swallow them after a click that
+ * opened something.
  */
 function CameraRig() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
   const dom = useThree((s) => s.gl.domElement);
+  const ray = useMemo(() => new THREE.Raycaster(), []);
+  const mouse = useMemo(() => ({ ndc: new THREE.Vector2(), moved: false }), []);
   useEffect(() => {
     bindCamera(camera);
     return () => bindCamera(null);
   }, [camera]);
   useEffect(() => setViewport(size.width, size.height), [size.width, size.height]);
   useEffect(() => {
-    let drag: { x: number; y: number; pan: boolean } | null = null;
+    let drag: { x: number; y: number; pan: boolean; travel: number } | null = null;
     const overview = () => useView.getState().mode === 'overview' && !useView.getState().overlay;
+    const toNdc = (e: MouseEvent) => {
+      const r = dom.getBoundingClientRect();
+      mouse.ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      mouse.moved = true;
+    };
     const down = (e: MouseEvent) => {
-      if (overview()) drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
+      if (overview()) drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey, travel: 0 };
     };
     const move = (e: MouseEvent) => {
+      if (e.target === dom) toNdc(e);
       if (!drag) return;
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
       drag.x = e.clientX;
       drag.y = e.clientY;
+      drag.travel += Math.abs(dx) + Math.abs(dy);
       if (drag.pan) panBy(dx, dy);
       else orbitBy(dx, dy);
     };
-    const up = () => (drag = null);
+    const up = (e: MouseEvent) => {
+      const click = drag && !drag.pan && drag.travel < CLICK_PX && e.button === 0;
+      drag = null;
+      if (!click || !overview()) return;
+      toNdc(e);
+      ray.setFromCamera(mouse.ndc, camera);
+      const hit = pickAt(ray);
+      if (hit) act(hit.action);
+    };
     const wheel = (e: WheelEvent) => {
       if (!overview()) return;
       e.preventDefault();
@@ -91,7 +106,24 @@ function CameraRig() {
       dom.removeEventListener('wheel', wheel);
       dom.removeEventListener('contextmenu', menu);
     };
-  }, [dom]);
+  }, [dom, camera, ray, mouse]);
+  // what a click would open, under the mouse once it has moved: the hint says it and the cursor points
+  useFrame(() => {
+    const view = useView.getState();
+    if (view.mode !== 'overview' || view.overlay) {
+      if (view.hover) {
+        view.setHover(null);
+        dom.style.cursor = '';
+      }
+      return;
+    }
+    if (!mouse.moved) return;
+    mouse.moved = false;
+    ray.setFromCamera(mouse.ndc, camera);
+    const hit = pickAt(ray);
+    view.setHover(hit);
+    dom.style.cursor = hit ? 'pointer' : '';
+  });
   return null;
 }
 
@@ -166,18 +198,20 @@ export function Game() {
           gl.localClippingEnabled = true;
         }}
       >
-        <color attach="background" args={[SKY]} />
-        <fog attach="fog" args={[HAZE, 90, 320]} />
-        <Lights />
+        <DayClock />
+        <Sky />
+        <DayLights roof={kind === 'roof'} />
         <CameraRig />
         <Player floor={shown} colliders={colliders} walls={walls} />
         <AdaptiveResolution />
         <Chatter />
         <Me />
+        <OverviewChips floor={shown} />
         {floor ? <OfficeFloor key={floor.id} floor={floor} top={topStorey(top)} /> : kind === 'ceo' ? <CeoFloor top={top} /> : kind === 'roof' ? <Roof top={top} /> : <Lobby top={topStorey(top)} />}
         <TourGuide floor={shown} />
         <City elevation={elevationOf(shown, top)} />
         <WorldEvents elevation={elevationOf(shown, top)} />
+        <Sounds floor={shown} />
       </Canvas>
       <header className="game-title">
         <strong>{titleOf(kind, floor?.fullName)}</strong>
@@ -188,6 +222,7 @@ export function Game() {
       <a className="game-debug" href="/debug">
         Debug page
       </a>
+      <SoundToggle />
       <RideFade />
       <Overlays />
     </div>

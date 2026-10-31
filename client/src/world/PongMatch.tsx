@@ -1,6 +1,7 @@
 // Adapted from cubefarm client/src/world/toys/PingPong.tsx (MIT): the match on pongSim.ts's plain ball instead of a
-// Rapier body. The table's colliders, the ball's band and trail, the sounds and the leaderboard's report are cut; the
-// ends you press E at are the hanging paddles (PongTable.tsx), and the paddle in your hand is your body's to draw.
+// Rapier body. The table's colliders, the ball's band and trail and the leaderboard's report are cut; the ends you
+// press E at are the hanging paddles (PongTable.tsx), and the paddle in your hand is your body's to draw. The ball's
+// sounds are ui/pongSfx.ts's.
 
 // Ping-pong at the table (PongTable.tsx draws this): the ball, and the match runner (pongRunner.ts) stepping it at the
 // physics rate whatever the frame rate. While it's on screen the errands (pongErrands.ts) get the match's seats, so
@@ -10,6 +11,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type * as THREE from 'three';
+import { pongSound } from '../ui/pongSfx';
 import { onAction } from './actions';
 import { toon } from './materials';
 import { bodyState, say } from './people';
@@ -32,7 +34,7 @@ export const PongMatch = memo(function PongMatch() {
       const s = bodyState(id);
       return s ? { x: s.x, z: s.z } : null;
     };
-    return { ball, runner: new PongRunner(ball, { bodyAt, say }), acc: 0 };
+    return { ball, runner: new PongRunner(ball, { bodyAt, say, sound: pongSound }), acc: 0 };
   }, []);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 // One floor of the building: its room and the building around it, a desk for every seat (each worker at the desk their
-// `desk` number names, the rest vacant), the whiteboard, the lounge with its couch, the kitchenette, the water cooler,
+// `desk` number names, with a lamp that comes on at night, the rest vacant), the whiteboard, the lounge with its couch, the kitchenette, the water cooler,
 // the clock, the ping-pong table, the gong and the plants, all where cubefarm has them, and the errand director
 // sending people out to them. The lobby (Lobby.tsx) and the CEO's floor (CeoFloor.tsx) are floors of their own.
 // Adapted from cubefarm client/src/world/OfficeFloor.tsx (MIT): signs are cut.
@@ -20,6 +20,7 @@ import { PongTable } from './PongTable';
 import { OfficeRituals } from './Rituals';
 import { CoffeeTable, Couch, Kitchenette, Plant, Rug, WallClock, WaterCooler } from './Props';
 import { Shell } from './Shell';
+import { DeskLamps } from './sky/DeskLamps';
 
 const FLOOR_WOOD = '#e8c79a';
 
@@ -55,6 +56,7 @@ export const OfficeFloor = memo(function OfficeFloor({ floor, top }: { floor: Fl
       {DESK_AT.map((d, s) => (
         <Desk key={s} worker={byDesk.get(s) ?? null} accent={color} position={d.position} rotationY={d.rotation} />
       ))}
+      <DeskLamps workers={workers} />
       <KanbanBoard floor={floor} />
       <Couch position={at(COUCH)} rotationY={-Math.PI / 2} color={shade(color, -0.05)} />
       <CoffeeTable position={at(COFFEE_TABLE)} rotationY={Math.PI / 2} />

@@ -1,7 +1,7 @@
 // The billboards on the rooftops round the office (billboardLayout.ts: where they stand and what they say), with the
 // office's own news on them: the team at work, today's merges, the open issues, the company's slogan, the floor at work
 // and the latest merge. Two out of each side's windows on every floor, two more for the roof. Two draw calls: the six
-// faces share one canvas, and their frames and legs are one mesh. Drawn in the city's frame (City.tsx).
+// faces share one canvas (lit from within, so they glow at night), and their frames and legs are one mesh. Drawn in the city's frame (City.tsx).
 // Adapted from cubefarm client/src/world/roof/Billboards.tsx (MIT): the telescope's aiming report cut.
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
@@ -85,7 +85,8 @@ export function Billboards() {
     return { faces: merged(faces), frames: merged(frames) };
   }, [spots]);
   useEffect(() => () => Object.values(geo).forEach((g) => g.dispose()), [geo]);
-  const face = useMemo(() => hazed(new THREE.MeshBasicMaterial({ map: atlas, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }), CITY_HAZE), [atlas]);
+  // lit from within: the faces keep their brightness when the night dims the rest of the city, so they glow
+  const face = useMemo(() => hazed(new THREE.MeshBasicMaterial({ map: atlas, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }), CITY_HAZE, { selfLit: true }), [atlas]);
   useEffect(() => () => face.dispose(), [face]);
   if (!spots.length) return null;
   return (

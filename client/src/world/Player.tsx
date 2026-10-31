@@ -5,12 +5,15 @@
 // elevator's doors: elevatorRide.ts); a ride in the elevator leaves you in its cabin on the new floor. With a ping-pong
 // paddle in hand the mouse moves the paddle, a click serves, and the camera stands behind your end of the table; at a
 // lookout on the roof you look through its binoculars until E, G or Esc. While the overview has the camera, the keys
-// pan it instead. Your body is Me.tsx's, drawn where this leaves you (playerAt).
+// pan it instead. Your body is Me.tsx's, drawn where this leaves you (playerAt); your steps sound by what's underfoot
+// (ui/footsteps.ts).
 // Adapted from cubefarm client/src/world/Player.tsx (MIT): walking, looking, using and holding things, sips and the
 // paddle; toys, the gamepad, perches, photo mode, saved spots and key bindings are cut.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { surfaceAt } from '../ui/footstepRules';
+import { footstepsFollow } from '../ui/footsteps';
 import { act, heldTakesE } from './actions';
 import { shutDoorways } from './doors';
 import { elevatorShut, takeArrival } from './elevatorRide';
@@ -374,6 +377,9 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       if (third) facing.current += Math.max(-BEHIND.turn * dt, Math.min(BEHIND.turn * dt, angleDelta(facing.current, Math.atan2(-dx, -dz))));
     }
     if (!third) facing.current = yaw;
+    // a step each half bob, whichever way the camera looks at you
+    bob.current += moving ? dt * speed * 2.2 : 0;
+    footstepsFollow(bob.current, moving, moving && running, surfaceAt(kindOf(floor), me.x, me.z));
     if (third) {
       // the camera behind you: in at once when a wall comes between, back out gently
       const want = behind(me.x, me.z, yaw, pitch, walls, ceiling, BEHIND.dist, cam);
@@ -382,7 +388,6 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       camera.position.set(cam.x, cam.y, cam.z);
       camera.rotation.set(cam.pitch, cam.yaw, 0, 'YXZ');
     } else {
-      bob.current += moving ? dt * speed * 2.2 : 0;
       camera.position.set(me.x, EYE_HEIGHT + (moving ? Math.sin(bob.current) * 0.035 : 0), me.z);
       // a sip tips your head back a little (the last gulp more)
       camera.rotation.set(pitch + sipPose.head, yaw, 0, 'YXZ');

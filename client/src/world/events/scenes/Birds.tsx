@@ -1,15 +1,16 @@
-// Adapted from cubefarm client/src/world/events/scenes/Birds.tsx (MIT): the wingbeats and chirps cut, and they fly
-// down the street beside our block, where nothing stands in their way, rather than past the balconies.
+// Adapted from cubefarm client/src/world/events/scenes/Birds.tsx (MIT): they fly down the street beside our block,
+// where nothing stands in their way, rather than past the balconies.
 
 // A flock of birds sweeping past the windows at your floor's height: each bird keeps its own place in the loose
-// flock, wobbling and flapping out of step, the whole flock swooping as it goes. Three instanced meshes (bodies and
-// each side's wings).
-import { useMemo, useRef } from 'react';
+// flock, wobbling and flapping out of step, the whole flock swooping as it goes, wings whirring and chirping. Three
+// instanced meshes (bodies and each side's wings).
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { loop, placeAt, play } from '../../../ui/eventSfx';
 import { CITY, CORRIDOR_HALF } from '../../cityLayout';
 import { seeded } from '../director';
-import { eyeAbove, lerp, sign, toonOut, type SceneProps } from '../kit';
+import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 
 const BIRDS = 26;
 const ONE = new THREE.Vector3(1, 1, 1);
@@ -27,7 +28,12 @@ export default function Birds({ run, elevation }: SceneProps) {
     // over the street along our side of the block
     return { dir, x: s * (CITY.homeHalfX + CORRIDOR_HALF), y: eyeAbove(elevation) + 1 + r() * 2.5, birds };
   }, [run.seed, s, elevation]);
-  const m = useMemo(() => ({ body: new THREE.Matrix4(), wing: new THREE.Matrix4(), tmp: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), p: new THREE.Vector3(), shape: new THREE.Vector3(1, 0.85, 1.8) }), []);
+  const m = useMemo(() => ({ body: new THREE.Matrix4(), wing: new THREE.Matrix4(), tmp: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler(), p: new THREE.Vector3(), shape: new THREE.Vector3(1, 0.85, 1.8), chirpAt: 1.2 }), []);
+  const sound = useMemo(() => ({ flap: null as ReturnType<typeof loop> | null }), []);
+  useEffect(() => {
+    sound.flap = loop('flap');
+    return () => sound.flap?.stop(0.6);
+  }, [sound]);
 
   useFrame(() => {
     const t = run.t;
@@ -60,6 +66,13 @@ export default function Birds({ run, elevation }: SceneProps) {
     b.instanceMatrix.needsUpdate = true;
     l.instanceMatrix.needsUpdate = true;
     rr.instanceMatrix.needsUpdate = true;
+    const heard = placeAt(cx, cy - elevation, cz, 25);
+    const fade = inOut(t, CROSS + 2, 2);
+    sound.flap?.set(heard.gain * fade, heard.pan);
+    if (t >= m.chirpAt && t < CROSS) {
+      m.chirpAt = t + 0.7 + Math.random() * 1.6;
+      play('chirps', { gain: heard.gain * fade, pan: heard.pan + (Math.random() - 0.5) * 0.4 });
+    }
   });
 
   const ink = toonOut('#3d405b');

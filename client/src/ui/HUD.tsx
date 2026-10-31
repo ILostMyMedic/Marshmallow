@@ -34,6 +34,7 @@ export function HUD() {
   const locked = useView((s) => s.locked);
   const overlay = useView((s) => s.overlay);
   const held = useView((s) => s.held);
+  const hover = useView((s) => s.hover);
   if (overlay) return null;
   if (mode === 'overview')
     return (
@@ -43,7 +44,7 @@ export function HUD() {
         <button className="hud-walk" onClick={toggleWalk}>
           🚶 Walk the floor <kbd>Tab</kbd>
         </button>
-        <div className="hud-hint">Drag to turn · wheel to zoom · right-drag or WASD to move</div>
+        <div className="hud-hint">{hover ? `Click: ${hover.label}` : 'Drag to turn · wheel to zoom · right-drag or WASD to move · click a person or a desk · M: sound'}</div>
       </>
     );
   const playing = held?.kind === 'paddle';
@@ -55,7 +56,7 @@ export function HUD() {
       {focus && locked && !playing && <div className="hud-use">E / Click: {focus.label}</div>}
       {playing && <PongHud />}
       {locked && held && held.kind !== 'paddle' && <div className="hud-hint">{heldHint(held)}</div>}
-      {!locked && <div className="hud-hint">Click to look around · WASD to walk, Shift to run · V: 1st / 3rd person · C: your look · Tab: overview</div>}
+      {!locked && <div className="hud-hint">Click to look around · WASD to walk, Shift to run · V: 1st / 3rd person · C: your look · Tab: overview · M: sound</div>}
     </>
   );
 }

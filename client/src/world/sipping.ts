@@ -2,9 +2,9 @@
 // gets first go at E, through actions.ts's onUseHeld, registered here), Player.tsx calls tickSip every frame, and the
 // player's body and the camera read `sipPose`. The timings are in sip.ts. Walking carries on throughout. The sip comes
 // off what you hold at the plan's 'drink' cue: an empty mug stays in your hand (refill it at the machine), a finished
-// snack leaves it.
-// Adapted from cubefarm client/src/world/toys/sipping.ts (MIT): the sounds wait for the sound effects, and the roof's
-// sausage and the dropped mug are cut.
+// snack leaves it. Each cue plays its sound from your own mouth (ui/sipSfx.ts).
+// Adapted from cubefarm client/src/world/toys/sipping.ts (MIT): the roof's sausage and the dropped mug are cut.
+import { sipSound } from '../ui/sipSfx';
 import { onUseHeld } from './actions';
 import { cuesDue, eAction, planFor, pose, snackFor, type SipPlan } from './sip';
 import { useView, type Action, type Held } from './view';
@@ -47,6 +47,7 @@ export function tickSip(now = performance.now()) {
   const to = cuesDue(plan, sip.next, t);
   for (let i = sip.next; i < to; i++) {
     const cue = plan.cues[i].cue;
+    sipSound(cue);
     const held = useView.getState().held;
     if (cue === 'drink') {
       if (held?.kind === 'mug') view.setHeld({ ...held, sips: Math.max(0, held.sips - 1) });

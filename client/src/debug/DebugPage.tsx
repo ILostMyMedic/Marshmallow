@@ -9,6 +9,7 @@ import { command, floorPath, query } from '../api';
 import { qaKey, useStore } from '../store';
 import { activityIcon, momentText, taskText } from './describe';
 import { LiveTerminal } from '../ui/LiveTerminal';
+import { dayTime, setDayMode, type DayMode } from '../world/dayTime';
 
 type Run = (method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown) => void;
 
@@ -49,6 +50,7 @@ export function DebugPage() {
         <label className="connect" title="The rules grow and shrink floors to fit the work, except floors held at a size">
           <input type="checkbox" checked={settings.autoscale} onChange={(e) => run('PATCH', '/api/settings', { autoscale: e.target.checked })} /> autoscale
         </label>
+        <OfficeClockPicker />
         <ModelField label="default model" value={settings.defaultModel} placeholder="claude-opus-5-5" onCommit={(v) => v && run('PATCH', '/api/settings', { defaultModel: v })} />
         <ConnectRepo run={run} />
         {demo && (
@@ -81,6 +83,32 @@ export function DebugPage() {
       <Messages />
       <Moments />
     </main>
+  );
+}
+
+const DAY_MODE_NAMES: Record<DayMode, string> = { cycle: '30-minute day', clock: 'your clock', day: 'always day' };
+
+/** The office's clock, kept in this browser: the game's sky, light, lamps and lunch follow it (world/dayTime.ts). */
+function OfficeClockPicker() {
+  const [mode, setMode] = useState<DayMode>(dayTime.mode);
+  return (
+    <label className="connect" title="What time it is in the office: a whole day every 30 minutes, your computer's clock, or always mid-afternoon. Kept in this browser.">
+      office clock
+      <select
+        value={mode}
+        onChange={(e) => {
+          const m = e.target.value as DayMode;
+          setDayMode(m);
+          setMode(m);
+        }}
+      >
+        {(Object.keys(DAY_MODE_NAMES) as DayMode[]).map((m) => (
+          <option key={m} value={m}>
+            {DAY_MODE_NAMES[m]}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

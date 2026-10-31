@@ -36,3 +36,6 @@ export function cutOff() {
   SIDE_X.constant = OPEN;
   SIDE_Z.constant = OPEN;
 }
+
+/** Whether a point (floor space) is cut away from the room right now, so the overview's clicks go through it. */
+export const isCut = (p: THREE.Vector3) => CUT_PLANES.room.some((plane) => plane.distanceToPoint(p) < 0);

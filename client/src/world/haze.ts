@@ -1,8 +1,10 @@
 // The haze out over the city: the far buildings, the bay and its bridge, the billboards and the world events fade into
 // the scene fog's colour with distance, on a much longer curve than the fog's own (Game.tsx tunes that for the office,
 // and it would swallow everything past 320 m). Patched into three.js's own materials in place of their fog, so it costs
-// nothing extra and follows the fog's colour; with no fog in the scene there's no haze either.
+// nothing extra and follows the fog's colour; with no fog in the scene there's no haze either. The same patch dims the
+// outside to the night (sky/outdoor.ts): it shares the office's lights, which the lamps warm after dusk.
 import * as THREE from 'three';
+import { outdoor } from './sky/outdoor';
 
 export interface Haze {
   /** Metres from the eye where it starts, and where it's at its fullest. */
@@ -32,23 +34,29 @@ const FRAGMENT = /* glsl */ `
 #endif`;
 
 /**
- * Gives `m` the haze `h` in place of the fog (keeping any shader patch it already has). The values are uniforms, so
- * every hazed material of a kind shares one program.
+ * Gives `m` the haze `h` in place of the fog (keeping any shader patch it already has), and dims it to the night
+ * unless it's `selfLit` (a billboard's face glows at night). The values are uniforms, so every hazed material of a
+ * kind shares one program.
  */
-export function hazed<T extends THREE.Material>(m: T, h: Haze): T {
+export function hazed<T extends THREE.Material>(m: T, h: Haze, opts: { selfLit?: boolean } = {}): T {
   const before = m.onBeforeCompile;
   const key = m.customProgramCacheKey();
   const uHaze = { value: new THREE.Vector3(h.near, h.far, h.strength) };
+  const dim = !opts.selfLit;
   if ('fog' in m) m.fog = true;
   m.onBeforeCompile = (shader, renderer) => {
     before.call(m, shader, renderer);
     shader.uniforms.uHaze = uHaze;
+    if (dim) shader.uniforms.uOutdoor = outdoor.uOutdoor;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vHazePos;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvHazePos = mvPosition.xyz;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uHaze;\nvarying vec3 vHazePos;').replace('#include <fog_fragment>', FRAGMENT);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nuniform vec3 uHaze;\nvarying vec3 vHazePos;${dim ? '\nuniform vec3 uOutdoor;' : ''}`)
+      .replace('#include <opaque_fragment>', dim ? 'outgoingLight *= uOutdoor;\n#include <opaque_fragment>' : '#include <opaque_fragment>')
+      .replace('#include <fog_fragment>', FRAGMENT);
   };
-  m.customProgramCacheKey = () => `${key}|haze`;
+  m.customProgramCacheKey = () => `${key}|haze${dim ? '|dim' : ''}`;
   return m;
 }
 

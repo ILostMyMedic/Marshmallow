@@ -4,13 +4,13 @@
 // CEO comes down to walk the floor (ceoWalk.ts); and lunch goes on and off. Everything it moved is put back when the
 // floor goes. window.__mmRituals reports it, and can force one.
 // Adapted from cubefarm client/src/world/ritualRunner.ts (MIT): Friday pizza, the evening and going home, the voice,
-// the sticky notes and the sounds are cut. Until the sky comes (the day/night clock), the
-// office runs on the real clock, so lunch agrees with the wall clock.
+// the sticky notes and the sounds are cut. Lunch and the CEO's walks go by the office's clock (dayTime.ts), the one
+// the sky follows; a forced lunch turns the sky to noon too, and gives it back after.
 import type { Moment, Worker } from '../../../shared/types';
 import { useStore } from '../store';
 import type { Gesture } from './body';
 import { tickWalkClock, walkDue, walkStarted } from './ceoWalk';
-import { dayPhase } from './dayTime';
+import { dayTime, sampleDayTime } from './dayTime';
 import { headingFor, isFree } from './errands';
 import { closeGathering, openGathering, type Gathering } from './gathering';
 import { GONG_SPOT, SEATS } from './layout';
@@ -65,6 +65,8 @@ export class OfficeRitualRunner {
   private wait = 0.5;
   /** A forced lunch holds the office's hour at lunchtime until then (the ritual clock's seconds). */
   private lunchUntil = -1;
+  /** While a forced lunch holds the sky at noon: what it held before (null: it ran), to give back after. */
+  private sky: number | null | undefined = undefined;
   private last: Moment | null = useStore.getState().moments.at(-1) ?? null;
   private log: { t: number; what: string }[] = [];
 
@@ -103,12 +105,24 @@ export class OfficeRitualRunner {
     }
     this.last = moments.at(-1) ?? null;
     const wall = Date.now();
-    const clock = officeClock(wall, dayPhase(wall, 'clock'), 'clock');
+    this.skyForLunch(now < this.lunchUntil);
+    const clock = officeClock(wall, sampleDayTime(wall), dayTime.mode);
     if (now < this.lunchUntil) clock.hour = 12.5;
     // the CEO is busy enough as it is: no stand-up while they walk the floor, no walk during a stand-up
     const decisions = schedule(this.s, { now, clock, standupOn: !!this.standup || !!this.walk });
     for (const d of decisions) this.apply(d);
-    if (!this.standup && !this.walk && walkDue(new Date(wall).getHours())) this.startWalk();
+    if (!this.standup && !this.walk && walkDue(clock.hour)) this.startWalk();
+  }
+
+  /** A forced lunch holds the sky at half past twelve, so it looks the part; the sky's own clock comes back after. */
+  private skyForLunch(on: boolean) {
+    if (on) {
+      if (this.sky === undefined) this.sky = dayTime.frozen;
+      dayTime.frozen = 12.5 / 24;
+    } else if (this.sky !== undefined) {
+      dayTime.frozen = this.sky;
+      this.sky = undefined;
+    }
   }
 
   // ---------- the CEO's walk ----------
@@ -312,6 +326,7 @@ export class OfficeRitualRunner {
       say(this.walker, null);
     }
     this.walk = null;
+    this.skyForLunch(false);
     resetMeals();
   }
 }

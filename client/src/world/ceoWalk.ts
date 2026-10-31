@@ -24,7 +24,7 @@ export const nextWalkGap = (rand: number, first = false) => between(first ? CEO_
 /** How long a walk keeps the CEO away from their desk. */
 export const awayFor = (rand: number) => between(CEO_WALK.away, rand);
 
-/** Office hours, by the local clock's hour (0-24). */
+/** Office hours, by the office clock's hour (0-24, dayTime.ts). */
 export const walkHours = (hour: number) => hour >= CEO_WALK.hours[0] && hour < CEO_WALK.hours[1];
 
 /** Moves the shared clock on (the floor's rituals call it every frame), scheduling the first walk on the first call. */
@@ -33,7 +33,7 @@ export function tickWalkClock(dt: number, rand: () => number = Math.random) {
   ceoWalks.watched += dt;
 }
 
-/** A walk is due now (`hour`: the local clock's). */
+/** A walk is due now (`hour`: the office clock's). */
 export const walkDue = (hour: number) => ceoWalks.at >= 0 && ceoWalks.watched >= ceoWalks.at && walkHours(hour);
 
 /** A walk has begun: the next one after the usual gap. */

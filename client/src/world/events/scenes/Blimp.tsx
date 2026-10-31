@@ -1,16 +1,17 @@
-// Adapted from cubefarm client/src/world/events/scenes/Blimp.tsx (MIT): its engines' drone cut; it climbs over the skyline.
+// Adapted from cubefarm client/src/world/events/scenes/Blimp.tsx (MIT): it climbs over the skyline.
 
 // A blimp cruising slowly across the view towing a banner with the office's own news ("PR #212 merged! 🎉", "Floor 2:
-// 7 merges today"), the banner rippling in the wind behind it and its propellers turning.
+// 7 merges today"), the banner rippling in the wind behind it and its propellers turning with a low drone.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../../../store';
+import { loop, placeAt } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { SANS } from '../../draw';
 import { seeded } from '../director';
 import { along, clearStretch, flightProfile } from '../flight';
-import { eyeAbove, lerp, sign, toonOut, type SceneProps } from '../kit';
+import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 import { bannerText } from '../news';
 
 const BANNER = { w: 46, h: 6, segments: 40 };
@@ -74,6 +75,11 @@ export default function Blimp({ run, elevation }: SceneProps) {
     },
     [banner],
   );
+  const sound = useMemo(() => ({ engine: null as ReturnType<typeof loop> | null }), []);
+  useEffect(() => {
+    sound.engine = loop('engine');
+    return () => sound.engine?.stop(1.2);
+  }, [sound]);
 
   useFrame(() => {
     const t = run.t;
@@ -87,6 +93,8 @@ export default function Blimp({ run, elevation }: SceneProps) {
     g.rotation.x = Math.sin(t * 0.3) * 0.02;
     const spin = props.current?.children;
     if (spin) for (let i = 0; i < spin.length; i++) spin[i].rotation.z = t * 14;
+    const heard = placeAt(p.x, y - elevation, z, 110);
+    sound.engine?.set(heard.gain * inOut(t, run.seconds, 4), heard.pan);
     // the banner ripples, more towards its tail
     const pos = banner.geo.attributes.position;
     const arr = pos.array as Float32Array;

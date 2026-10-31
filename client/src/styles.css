@@ -944,3 +944,57 @@ button.link {
   font: 700 0.75rem ui-monospace, Consolas, monospace;
   text-align: center;
 }
+
+/* the sound button over the game (ui/SoundToggle.tsx): under the debug link, the slider opening out on hover or focus */
+.sound-toggle {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 6px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(255, 253, 245, 0.92);
+  border: 2px solid #1f1d2b;
+  box-shadow: 0 2px 0 #1f1d2b;
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.sound-toggle button {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sound-toggle button:hover {
+  background: #ffe8a3;
+}
+
+.sound-toggle input[type="range"] {
+  width: 0;
+  opacity: 0;
+  margin: 0;
+  accent-color: #1f1d2b;
+  transition:
+    width 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.sound-toggle:hover input[type="range"],
+.sound-toggle:focus-within input[type="range"] {
+  width: 96px;
+  opacity: 1;
+  margin-left: 6px;
+}
+
+.sound-toggle.muted {
+  background: rgba(255, 236, 236, 0.92);
+}

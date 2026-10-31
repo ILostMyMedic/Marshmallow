@@ -56,6 +56,8 @@ interface View {
   person: Person;
   overlay: Overlay | null;
   focus: Focus | null;
+  /** In the overview: what a click would open, under the mouse (picking.ts). */
+  hover: Focus | null;
   locked: boolean;
   held: Held | null;
   /** A passing note over the view ("Put a mug under the machine first"), and when it was shown (performance.now()). */
@@ -66,6 +68,7 @@ interface View {
   openOverlay(o: Overlay): void;
   closeOverlay(): void;
   setFocus(f: Focus | null): void;
+  setHover(f: Focus | null): void;
   setLocked(locked: boolean): void;
   setHeld(h: Held | null): void;
   showToast(text: string): void;
@@ -77,6 +80,7 @@ export const useView = create<View>()((set, get) => ({
   person: typeof window === 'undefined' ? 'first' : loadPerson(),
   overlay: null,
   focus: null,
+  hover: null,
   locked: false,
   held: null,
   toast: null,
@@ -97,6 +101,11 @@ export const useView = create<View>()((set, get) => ({
     const now = get().focus;
     if (now?.id === focus?.id && now?.label === focus?.label) return;
     set({ focus });
+  },
+  setHover: (hover) => {
+    const now = get().hover;
+    if (now?.id === hover?.id && now?.label === hover?.label) return;
+    set({ hover });
   },
   setLocked: (locked) => set({ locked }),
   setHeld: (held) => set({ held }),

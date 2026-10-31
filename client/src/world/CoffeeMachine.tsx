@@ -1,14 +1,15 @@
-// The kitchenette's coffee machine: put a mug under the spout, press the button, and it grinds and pours for a few
-// seconds; then take your coffee. The rules are in coffee.ts; this draws them. There is one machine on screen (only the
-// current floor is drawn), so its state lives here and a floor change starts it afresh. Workers on a coffee break
-// (coffeeBreak.ts) use it too, through `machine`: one brew at a time, the player first. window.__mmCoffee reports it
-// and __mmCoffeeDo works it, for QA and Playwright.
-// Adapted from cubefarm client/src/world/CoffeeMachine.tsx (MIT): the sounds come with the sound effects.
+// The kitchenette's coffee machine: put a mug under the spout, press the button, and it grinds, hisses and pours for a
+// few seconds, then beeps; then take your coffee. The rules are in coffee.ts; this draws them and plays the sounds.
+// There is one machine on screen (only the current floor is drawn), so its state lives here and a floor change starts
+// it afresh. Workers on a coffee break (coffeeBreak.ts) use it too, through `machine`: one brew at a time, the player
+// first. window.__mmCoffee reports it and __mmCoffeeDo works it, for QA and Playwright.
+// Adapted from cubefarm client/src/world/CoffeeMachine.tsx (MIT).
 import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { noise, tone, type Vec3 } from '../ui/sfx';
 import { onAction } from './actions';
-import { BREW, EMPTY, canPlace, level, placeMug, pouring, pressButton, progress, takeMug, tick, FULL_SIPS, type BrewState } from './coffee';
+import { BREW, BREW_CUES, EMPTY, canPlace, cuesPassed, level, placeMug, pouring, pressButton, progress, takeMug, tick, FULL_SIPS, type BrewState } from './coffee';
 import { PLAYER, type Mug, type Slot } from './coffeeBreak';
 import { useInteractable } from './interact';
 import { glow, toon } from './materials';
@@ -19,12 +20,13 @@ import { useView } from './view';
 
 let state: BrewState = EMPTY;
 let brews = 0;
+let cue = 0; // the next of BREW_CUES to play
 // Whose mug is in the slot: PLAYER, a worker's id, or null (none, or one left behind for anyone).
 let owner: string | null = null;
 // The player is beside the machine with a mug they could put in.
 let playerNear = false;
-// Where the spout is on the floor, for who is beside it (set once it's drawn).
-const spot = { x: 0, z: 0 };
+// Where the spout is, for who is beside it and for its sounds (set once it's drawn).
+const spot: Vec3 = { x: 0, y: 0, z: 0 };
 /** Workers waiting their turn at the machine, first in line first. */
 export const line: string[] = [];
 const listeners = new Set<() => void>();
@@ -35,6 +37,32 @@ function set(next: BrewState) {
   if (state.kind === 'empty') owner = null;
   for (const fn of listeners) fn();
 }
+
+// ---------- sounds ----------
+
+const SFX = { group: 'room', pos: spot } as const;
+
+const sounds = {
+  button: () => tone({ ...SFX, name: 'coffee:button', freq: 1800, to: 1200, type: 'square', dur: 0.05, peak: 0.04 }),
+  nope: () => {
+    tone({ ...SFX, name: 'coffee:nope', freq: 240, to: 170, type: 'square', dur: 0.12, peak: 0.05 });
+    tone({ ...SFX, name: 'coffee:nope', freq: 200, to: 140, type: 'square', at: 0.14, dur: 0.14, peak: 0.05 });
+  },
+  clink: (pos: Vec3 = spot) => tone({ ...SFX, pos, name: 'coffee:mug', freq: 2400, type: 'triangle', dur: 0.08, peak: 0.04, attack: 0.003 }),
+  grind: () => {
+    noise({ ...SFX, name: 'coffee:grind', dur: 1.0, peak: 0.05, filter: 'bandpass', freq: 2400, to: 1500, q: 2.5, attack: 0.04 });
+    tone({ ...SFX, name: 'coffee:grind', freq: 118, to: 96, type: 'sawtooth', dur: 1.0, peak: 0.025, attack: 0.04 });
+  },
+  hiss: () => noise({ ...SFX, name: 'coffee:hiss', dur: 1.1, peak: 0.03, filter: 'highpass', freq: 3200, q: 0.7, attack: 0.15 }),
+  gurgle: () => {
+    for (let i = 0; i < 3; i++) tone({ ...SFX, name: 'coffee:gurgle', freq: 210 - i * 25, to: 95, type: 'sine', at: i * 0.13 + Math.random() * 0.04, dur: 0.11, peak: 0.05 });
+    noise({ ...SFX, name: 'coffee:hiss', dur: 0.7, peak: 0.02, filter: 'highpass', freq: 3000, attack: 0.1 });
+  },
+  done: () => {
+    tone({ ...SFX, name: 'coffee:ready', freq: 1318.5, type: 'triangle', dur: 0.12, peak: 0.07 });
+    tone({ ...SFX, name: 'coffee:ready', freq: 1760, type: 'triangle', at: 0.14, dur: 0.2, peak: 0.07 });
+  },
+};
 
 // ---------- the player (E on the machine) ----------
 
@@ -51,15 +79,19 @@ export function coffeeAction(op: CoffeeOp) {
     view.setHeld(null);
     set(placeMug(state, { id: held.id, sips: held.sips }));
     owner = PLAYER;
+    sounds.clink();
   } else if (op === 'brew') {
     const r = pressButton(state, now);
     if (r.result === 'busy') return; // already brewing: the button does nothing
     if (r.result !== 'started') {
+      sounds.nope();
       view.showToast(r.result === 'noMug' ? '☕ Put a mug under the machine first' : '☕ Your coffee is ready: take the mug');
       return;
     }
     set(r.state);
+    cue = 0;
     brews++;
+    sounds.button();
   } else {
     if (state.kind === 'empty') return;
     if (view.held) {
@@ -70,6 +102,7 @@ export function coffeeAction(op: CoffeeOp) {
     if (!r) return;
     set(r.state);
     view.setHeld({ kind: 'mug', id: r.mug.id, sips: r.mug.sips });
+    sounds.clink();
   }
 }
 
@@ -90,6 +123,7 @@ export const machine = {
     if (next === state) return false;
     set(next);
     owner = who;
+    sounds.clink();
     return true;
   },
   press(who: string): boolean {
@@ -98,7 +132,9 @@ export const machine = {
     if (r.result !== 'started') return false;
     owner = who;
     set(r.state);
+    cue = 0;
     brews++;
+    sounds.button();
     return true;
   },
   take(who: string): Mug | null {
@@ -106,12 +142,15 @@ export const machine = {
     const r = takeMug(state, performance.now());
     if (!r) return null;
     set(r.state);
+    sounds.clink();
     return r.mug;
   },
   /** Called back to work: their mug stays (and any brew finishes) for anyone. */
   abandon(who: string) {
     if (owner === who) owner = null;
   },
+  /** A mug clinks on the counter at `pos` (the mug stand). */
+  clink: (pos: Vec3) => sounds.clink(pos),
 };
 
 // ---------- probes ----------
@@ -160,6 +199,7 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
   useEffect(() => {
     state = EMPTY;
     brews = 0;
+    cue = 0;
     owner = null;
     line.length = 0;
     setView(state);
@@ -168,8 +208,9 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
     const g = root.current;
     if (g) {
       g.updateWorldMatrix(true, false);
-      const at = g.localToWorld(new THREE.Vector3(SLOT.x, 0, 0));
+      const at = g.localToWorld(new THREE.Vector3(SLOT.x, SPOUT_Y, 0));
       spot.x = at.x;
+      spot.y = at.y;
       spot.z = at.z;
     }
     const stop = onAction('coffee', (a) => coffeeAction(a.op));
@@ -196,9 +237,19 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
     const now = performance.now();
     const held = useView.getState().held;
     playerNear = held?.kind === 'mug' && canPlace(state, held.sips) && Math.hypot(playerAt.x - spot.x, playerAt.z - spot.z) < 2.6;
-    if (state.kind === 'brewing') set(tick(state, now));
+    if (state.kind === 'brewing') {
+      const doneAt = state.start + BREW.ms;
+      const next = tick(state, now);
+      set(next);
+      if (next.kind === 'ready' && now - doneAt < 1500) sounds.done(); // not when it finished while the view was paused
+    }
     const brewing = state.kind === 'brewing';
     const p = progress(state, now);
+    if (brewing) {
+      // Play each sound as the brew passes it; ones missed while the view was paused are skipped.
+      const upto = cuesPassed(cue, p);
+      for (; cue < upto; cue++) if (p - BREW_CUES[cue].at < 0.3) sounds[BREW_CUES[cue].name]();
+    }
     const t = now / 1000;
     if (body.current) {
       const shake = brewing ? (p < BREW.grind ? 0.003 : 0.0012) : 0;

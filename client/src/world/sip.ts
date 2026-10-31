@@ -1,7 +1,7 @@
 // Drinking your coffee and eating a snack from the fridge, as pure rules: what E does with something in your hands,
 // the timeline of a sip and of the big last gulp (when the coffee goes down), a snack's sips or bites (the first opens
 // it, the last finishes it and it leaves your hand), and the pose along the way. sipping.ts plays them; the player's
-// body draws them. The cues keep their sounds' names for when sound effects come.
+// body draws them. The cues are named for their sounds (ui/sipSfx.ts plays them).
 // Adapted from cubefarm client/src/world/toys/sip.ts (MIT): the roof's sausage and the dropped mug's clunk are cut,
 // and the last gulp keeps the empty mug in your hand (it's refilled at the machine) instead of dropping it.
 
@@ -30,7 +30,7 @@ export function sipLabel(held: { kind: string; snack?: SnackId } | null): string
   return 'Sip coffee';
 }
 
-/** `drink` takes a sip (or bite) off what you hold; `drop` lets a finished snack go; the rest are sounds to come. */
+/** `drink` takes a sip (or bite) off what you hold; `drop` lets a finished snack go; the rest are sounds. */
 export type SipCue = 'drink' | 'drop' | SnackCue;
 
 export interface SipPlan {

@@ -2,12 +2,13 @@
 // the floor's gong when a merge strikes it (gongState.ts). One pooled InstancedMesh per floor: a few slots of flat
 // paper bits, hidden and skipped entirely while no burst is flying. window.__mmConfetti bursts one by hand, for QA.
 // Adapted from cubefarm client/src/world/MergeConfetti.tsx (MIT): the reduced-motion glow, holiday themes, Friday's
-// pizza colours and the bloom are cut, and merges come from the server's moments.
+// pizza colours and the bloom are cut, merges come from the server's moments, and a burst pops (new).
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Moment, Worker } from '../../../shared/types';
 import { useStore } from '../store';
+import { confettiPop } from '../ui/sfx';
 import { onGongParty } from './gongState';
 import { BOARD, deskPosition, GONG, SEATS } from './layout';
 import { momentsSince } from './reactions';
@@ -87,6 +88,7 @@ export function MergeConfetti({ floorId, color, workers }: { floorId: string; co
       if (s < 0) return; // full: dropped, never queued
       const at = author ? { ...deskPosition(author.desk % SEATS), y: 1.5 } : gong ? { x: GONG.x, z: GONG.z + 0.3, y: GONG.h + 0.1 } : { x: 0, z: BOARD.z + 1.2, y: BOARD.y + BOARD.h * 0.6 };
       sim.slots[s] = { key: slotKey, age: 0 };
+      confettiPop(at);
       for (let k = 0; k < PIECES; k++) {
         const i = s * PIECES + k;
         const a = Math.random() * Math.PI * 2;

@@ -1,19 +1,20 @@
-// Adapted from cubefarm client/src/world/events/scenes/Skywriting.tsx (MIT): the engine's buzz cut; it writes above the
-// tallest roof in the way.
+// Adapted from cubefarm client/src/world/events/scenes/Skywriting.tsx (MIT): it writes above the tallest roof in the
+// way.
 
 // A little stunt plane writing the floor's name across the sky in puffs of smoke, letter by letter, left to right as
 // you read it from the windows; then it flies off and the writing slowly spreads, drifts and fades. The letters are
-// sampled from the name drawn on a canvas, so any name works; the puffs are one instanced mesh.
-import { useLayoutEffect, useMemo, useRef } from 'react';
+// sampled from the name drawn on a canvas, so any name works; the puffs are one instanced mesh. Its engine buzzes.
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../../../store';
+import { loop, placeAt } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { SANS } from '../../draw';
 import { useView } from '../../view';
 import { seeded } from '../director';
 import { flightProfile } from '../flight';
-import { clamp01, eyeAbove, sign, smooth, toonOut, type SceneProps } from '../kit';
+import { clamp01, eyeAbove, inOut, sign, smooth, toonOut, type SceneProps } from '../kit';
 import { skyText } from '../news';
 
 const MAX_PUFFS = 460;
@@ -70,6 +71,11 @@ export default function Skywriting({ run, elevation }: SceneProps) {
     for (let i = 0; i < MAX_PUFFS; i++) mesh.setMatrixAt(i, m.mat);
     mesh.instanceMatrix.needsUpdate = true;
   }, [m]);
+  const sound = useMemo(() => ({ engine: null as ReturnType<typeof loop> | null }), []);
+  useEffect(() => {
+    sound.engine = loop('engine');
+    return () => sound.engine?.stop(1);
+  }, [sound]);
 
   useFrame(() => {
     const t = run.t;
@@ -116,6 +122,8 @@ export default function Skywriting({ run, elevation }: SceneProps) {
     g.position.set(x, y, z);
     m.last.set(x, y, z);
     g.visible = t < WRITE.to + 12;
+    const heard = placeAt(x, y - elevation, z, 120);
+    sound.engine?.set(heard.gain * 0.7 * inOut(t, WRITE.to + 12, 3), heard.pan, 1.7);
   });
 
   return (

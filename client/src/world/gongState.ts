@@ -1,6 +1,7 @@
 // The merge gong's live state, shared by gongRunner.ts (a merge on this floor), Gong.tsx (drawing the swing),
 // Character.tsx (cheering) and MergeConfetti.tsx (the burst over it). No three.js here.
-// Adapted from cubefarm client/src/world/gongState.ts (MIT): the boom and its volume come with the sound effects.
+// Adapted from cubefarm client/src/world/gongState.ts (MIT): the time-lapse's quieter boom is cut.
+import { gong as boom } from '../ui/sfx';
 import { celebrating, createGong, strike, type Strike } from './gongRules';
 
 export const gongState = createGong();
@@ -19,11 +20,12 @@ export function onGongParty(fn: (floorId: string) => void) {
 }
 
 /**
- * Strike the gong on `floorId`'s floor (default: the one on screen): it swings and, with `celebrate`, everyone on the
- * floor cheers and confetti bursts over it. 'absent' when that floor's gong isn't on screen.
+ * Strike the gong on `floorId`'s floor (default: the one on screen): it booms, swings and, with `celebrate`, everyone
+ * on the floor cheers and confetti bursts over it. 'absent' when that floor's gong isn't on screen.
  */
 export function hitGong(opts: { floorId?: string | null; celebrate?: boolean } = {}): Strike {
   const result = strike(gongState, performance.now(), opts);
+  if (result === 'boom') boom();
   if (result !== 'absent' && opts.celebrate && gongState.celebrateFloor) for (const fn of partyListeners) fn(gongState.celebrateFloor);
   return result;
 }

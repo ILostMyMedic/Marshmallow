@@ -1,4 +1,4 @@
-// Adapted from cubefarm client/src/world/Shell.tsx (MIT), without the sky's lamp halos and sun patches.
+// Adapted from cubefarm client/src/world/Shell.tsx (MIT).
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { look, Part } from './Batched';
@@ -9,9 +9,12 @@ import { drawGlass } from './draw';
 import { Elevator } from './Elevator';
 import { shade, toon } from './materials';
 import { boxesGeometry, merged, type BoxSpec } from './shapes';
+import { LampHalos } from './sky/lamps';
+import { SunPatches } from './sky/SunPatches';
 import type { Cut } from './cutaway';
 
-// A floor's room: the planked floor, the ceiling and its lights, the outer walls with their windows, side doors and the
+// A floor's room: the planked floor, the ceiling and its lights (with their halos at night, sky/lamps.tsx), the
+// sunlight through the windows (sky/SunPatches.tsx), the outer walls with their windows, side doors and the
 // elevator's doorway and the elevator itself (Elevator.tsx), and the skirting and accent stripe in the floor's colour.
 
 const WALL = '#fbf3e4';
@@ -196,6 +199,8 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
       {lights.map((p) => (
         <CeilingLight key={p.join()} position={p} />
       ))}
+      <LampHalos positions={lights} />
+      <SunPatches kind={kind} />
 
       {/* walls */}
       <mesh position={[0, WALL_H / 2, -HALF_D - t / 2]} material={wall} receiveShadow>

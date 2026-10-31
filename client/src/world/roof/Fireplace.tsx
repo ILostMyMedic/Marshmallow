@@ -1,7 +1,7 @@
 // The fireplace in the middle of the west half's lounge: a round stone fire pit with logs in it and toon flames that
 // lick and flicker, sparks drifting up, a warm glow over it and on the stones round it, and wooden benches with
-// cushions on three sides (roofLayout.ts has the numbers; people on a roof break sit on them, RoofPeople.tsx). Faked
-// light only (a real one would recompile every material in view). New in Marshmallow.
+// cushions on three sides (roofLayout.ts has the numbers; people on a roof break sit on them, RoofPeople.tsx). The
+// glow grows at night. Faked light only (a real one would recompile every material in view). New in Marshmallow.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -9,6 +9,7 @@ import { glow, toon } from '../materials';
 import { INK, Outlines } from '../Outlines';
 import { merged } from '../shapes';
 import { FIRE, FIRE_BENCH, FIRE_BENCHES } from './roofLayout';
+import { lampsOn } from '../sky/lamps';
 import { glowTexture } from './textures';
 
 /** The flames, round the middle of the pit: where (from its middle), how big, and their colour; the bigger the further out. */
@@ -113,6 +114,7 @@ function fireMaterials() {
 function Fire() {
   const flames = useRef<(THREE.Mesh | null)[]>([]);
   const halo = useRef<THREE.Sprite>(null);
+  const ground = useRef<THREE.Mesh>(null);
   const built = useMemo(() => {
     const sparks = new THREE.BufferGeometry();
     sparks.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(SPARKS * 3), 3));
@@ -123,7 +125,7 @@ function Fire() {
         PROFILE.map(([px, py]) => new THREE.Vector2(px, py)),
         10,
       ),
-      ground: new THREE.CircleGeometry(2.4, 32).rotateX(-Math.PI / 2).translate(FIRE.x, 0.02, FIRE.z),
+      ground: new THREE.CircleGeometry(2.4, 32).rotateX(-Math.PI / 2).translate(0, 0.02, 0),
       sparks,
       // each spark: its bearing, how far out it rises, how fast, and where in its rise it starts
       paths: Array.from({ length: SPARKS }, () => ({ a: r() * Math.PI * 2, out: 0.05 + r() * 0.2, speed: 0.35 + r() * 0.4, phase: r() })),
@@ -144,9 +146,12 @@ function Fire() {
       mesh.rotation.set(0.1 * Math.sin(t * 4.1 + ph * 1.3), 0, 0.12 * Math.sin(t * 3.7 + ph));
     }
     const flicker = 0.8 + 0.12 * Math.sin(t * 9.1) + 0.08 * Math.sin(t * 23.7);
-    if (halo.current) halo.current.scale.setScalar(1.9 * (0.94 + 0.06 * flicker));
-    m.halo.opacity = 0.5 * flicker;
-    m.ground.opacity = 0.22 * flicker;
+    // after dusk (the lamps' level, sky/lamps.tsx) the fire is the brightest thing up here: a bigger, stronger glow
+    const night = lampsOn();
+    if (halo.current) halo.current.scale.setScalar(1.9 * (1 + 0.35 * night) * (0.94 + 0.06 * flicker));
+    if (ground.current) ground.current.scale.setScalar(1 + 0.45 * night);
+    m.halo.opacity = (0.5 + 0.3 * night) * flicker;
+    m.ground.opacity = (0.22 + 0.33 * night) * flicker;
     const pos = built.sparks.attributes.position as THREE.BufferAttribute;
     const col = built.sparks.attributes.color as THREE.BufferAttribute;
     for (let k = 0; k < SPARKS; k++) {
@@ -170,7 +175,9 @@ function Fire() {
         ))}
       </group>
       <sprite ref={halo} material={m.halo} position={[FIRE.x, BASE + 0.5, FIRE.z]} scale={1.9} renderOrder={2} />
-      <mesh geometry={built.ground} material={m.ground} renderOrder={2} />
+      <group position={[FIRE.x, 0, FIRE.z]}>
+        <mesh ref={ground} geometry={built.ground} material={m.ground} renderOrder={2} />
+      </group>
       <points geometry={built.sparks} material={m.sparks} frustumCulled={false} renderOrder={2} />
     </group>
   );

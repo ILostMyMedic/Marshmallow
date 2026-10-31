@@ -1,11 +1,15 @@
-// Adapted from cubefarm client/src/world/events/WorldEvents.tsx (MIT): the event sounds cut, and the elevation comes
-// from Game.tsx.
+// Adapted from cubefarm client/src/world/events/WorldEvents.tsx (MIT): the elevation comes from Game.tsx.
 
 // World events outside (director.ts picks them, eventsState.ts runs them): each running event's scene, loaded lazily
 // the first time it's needed and torn down when it ends, in a group at street level. Nothing is drawn while no event
-// runs. Stepped in the frame loop, so the events stop with the render (a hidden tab).
-import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react';
+// runs. Stepped in the frame loop, so the events stop with the render (a hidden tab). While any runs, their sounds
+// (ui/eventSfx.ts) follow you: through the glass indoors, quiet behind a panel and while the elevator carries you.
+import { lazy, Suspense, useEffect, type ComponentType, type LazyExoticComponent } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { eventSoundsOff, eventSoundsOn, setEventsQuiet } from '../../ui/eventSfx';
+import { useRide } from '../elevatorRide';
+import { kindOf } from '../floors';
+import { useView } from '../view';
 import type { EventId } from './director';
 import { stepEvents, useEventRuns } from './eventsState';
 import type { SceneProps } from './kit';
@@ -26,8 +30,19 @@ const SCENES: Record<EventId, LazyExoticComponent<ComponentType<SceneProps>>> = 
 /** The events outside, at street level: `elevation` is how high the floor you're on stands (the city's, City.tsx). */
 export function WorldEvents({ elevation }: { elevation: number }) {
   const runs = useEventRuns();
+  const floor = useView((s) => s.floor);
+  const panel = useView((s) => s.overlay !== null);
+  const riding = useRide((s) => s.phase === 'dark');
   useFrame((_, delta) => stepEvents(Math.min(delta, 0.1)));
-  if (!runs.length) return null;
+  useEffect(() => setEventsQuiet(panel || riding), [panel, riding]);
+  const any = runs.length > 0;
+  const kind = floor === null ? 'office' : kindOf(floor);
+  useEffect(() => {
+    if (!any) return;
+    eventSoundsOn(kind);
+    return eventSoundsOff;
+  }, [any, kind]);
+  if (!any) return null;
   return (
     <group position={[0, -elevation, 0]}>
       {runs.map((r) => {

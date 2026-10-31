@@ -1,14 +1,15 @@
-// Adapted from cubefarm client/src/world/events/scenes/Balloon.tsx (MIT): the burner's roar cut; it rises over the skyline.
+// Adapted from cubefarm client/src/world/events/scenes/Balloon.tsx (MIT): it rises over the skyline.
 
 // A hot-air balloon drifting slowly across the view, rising a little as it goes, its striped envelope swaying gently
-// over the basket, and every few seconds the burner flaring with a lick of flame.
+// over the basket, and every few seconds the burner roaring with a lick of flame.
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { placeAt, play } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { seeded } from '../director';
 import { along, clearStretch, flightProfile } from '../flight';
-import { eyeAbove, glowOut, lerp, sign, toonOut, type SceneProps } from '../kit';
+import { eyeAbove, glowOut, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 
 const GORES = 10;
 const REACH = 160;
@@ -47,6 +48,8 @@ export default function Balloon({ run, elevation }: SceneProps) {
     if (t >= p.burns.next) {
       p.burns.until = t + 1.4;
       p.burns.next = t + 6 + Math.random() * 5;
+      const heard = placeAt(x, y - elevation, z, 90);
+      play('burner', { gain: heard.gain * inOut(t, run.seconds, 4), pan: heard.pan });
     }
     if (flame.current) {
       const on = t < p.burns.until;

@@ -2,8 +2,9 @@
 // floor on its panel (ui/ElevatorPanel.tsx), the doors shut, the view goes dark for a moment, and you're in the cabin
 // on that floor as its doors open. Elevator.tsx draws the doors from `doors` and steps the ride; Player.tsx lets you
 // through the doorway only while they're open (elevatorShut), and starts you in the cabin on arrival (takeArrival).
-// The floor picker still jumps straight to a floor.
+// The floor picker still jumps straight to a floor. The car whooshes while it's dark, and dings as you arrive.
 import { create } from 'zustand';
+import { ding, elevatorDoors, whoosh } from '../ui/sfx';
 import { elevatorDoorway, HALF_D, type Rect } from './layout';
 import { useView } from './view';
 
@@ -56,9 +57,13 @@ export function tickRide(now = performance.now()) {
   const { phase, to, at } = useRide.getState();
   if (!phase) return;
   const s = (now - at) / 1000;
-  if (phase === 'closing' && s >= RIDE.closing) useRide.setState({ phase: 'dark', at: now });
-  else if (phase === 'dark' && s >= RIDE.dark) {
+  if (phase === 'closing' && s >= RIDE.closing) {
+    useRide.setState({ phase: 'dark', at: now });
+    whoosh(RIDE.dark + 0.4);
+  } else if (phase === 'dark' && s >= RIDE.dark) {
     arrival = CABIN_SPOT;
+    ding();
+    elevatorDoors({ x: 0, y: 1.3, z: HALF_D }, true); // the new floor's doors open on you
     useRide.setState({ phase: 'opening', at: now });
     useView.getState().setFloor(to);
   } else if (phase === 'opening' && s >= RIDE.opening) useRide.setState({ phase: null, at: now });

@@ -1,11 +1,12 @@
-// Adapted from cubefarm client/src/world/events/scenes/Rainbow.tsx (MIT): its chime cut, and without the weather it
-// comes now and then just because.
+// Adapted from cubefarm client/src/world/events/scenes/Rainbow.tsx (MIT): without the weather it comes now and then just
+// because.
 
 // A rainbow: a soft seven-band arc over the city on one side, fading in, lingering and fading out, its feet lost in
-// the haze. One mesh and a shader.
+// the haze. One mesh and a shader; a little rising chime as it appears.
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { placeAt, play } from '../../../ui/eventSfx';
 import { seeded } from '../director';
 import { inOut, sign, type SceneProps } from '../kit';
 
@@ -40,7 +41,7 @@ void main() {
   gl_FragColor = vec4(band(k), 0.5 * edge * feet * uFade);
 }`;
 
-export default function Rainbow({ run }: SceneProps) {
+export default function Rainbow({ run, elevation }: SceneProps) {
   const s = sign(run.side);
   const bow = useMemo(() => {
     const r = seeded(run.seed);
@@ -61,7 +62,7 @@ export default function Rainbow({ run }: SceneProps) {
     mesh.rotation.y = (-s * Math.PI) / 2;
     mesh.renderOrder = 2;
     mesh.frustumCulled = false;
-    return { geo, mat, mesh };
+    return { geo, mat, mesh, chimed: false };
   }, [run.seed, s]);
   useEffect(
     () => () => {
@@ -72,7 +73,13 @@ export default function Rainbow({ run }: SceneProps) {
   );
 
   useFrame(() => {
-    bow.mat.uniforms.uFade.value = inOut(run.t, run.seconds, 9);
+    const t = run.t;
+    bow.mat.uniforms.uFade.value = inOut(t, run.seconds, 9);
+    if (!bow.chimed && t > 1.5) {
+      bow.chimed = true;
+      const heard = placeAt(bow.mesh.position.x, 60 - elevation, bow.mesh.position.z, 400);
+      play('chime', { gain: Math.max(0.5, heard.gain), pan: heard.pan });
+    }
   });
 
   return <primitive object={bow.mesh} />;

@@ -1,12 +1,19 @@
 // The snack break errand: snackBreak.ts's actor wired to the kitchenette fridge (fridgeState.ts) and the people's
 // hands and speech bubbles (people.ts); nobody goes to the door while the player stands at it. Imported by
-// ErrandDirector.tsx, which registers it.
-// Adapted from cubefarm client/src/world/fridgeErrand.ts (MIT): the sounds are cut.
+// ErrandDirector.tsx, which registers it. The snacks make their sounds from the worker's hands.
+// Adapted from cubefarm client/src/world/fridgeErrand.ts (MIT).
+import { sipSound } from '../ui/sipSfx';
 import { BREAK } from './coffeeBreak';
 import { isFree, registerErrand } from './errands';
 import { fridge, fridgeAt } from './fridgeState';
-import { say, setHandSnack } from './people';
+import { bodyState, say, setHandSnack } from './people';
 import { fanciesSnack, SNACK, SNACK_SPOTS, SnackBreak, type FridgeWorld } from './snackBreak';
+
+/** Where someone's hands are, for their sounds. */
+const at = (who: string) => {
+  const s = bodyState(who);
+  return { x: s?.x ?? 0, y: 1.2, z: s?.z ?? 0 };
+};
 
 const world: FridgeWorld = {
   playerBusy: fridge.playerBusy,
@@ -18,7 +25,7 @@ const world: FridgeWorld = {
   stock: fridge.stock,
   take: (_, snack) => fridge.take(snack),
   hold: (who, s) => setHandSnack(who, s),
-  sound: () => {},
+  sound: (who, cue) => sipSound(cue, at(who)),
   say: (who, text) => say(who, text, 1.6),
   line: new Map(),
   seats: new Map(),

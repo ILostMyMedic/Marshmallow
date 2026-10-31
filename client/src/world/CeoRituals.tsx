@@ -6,6 +6,7 @@ import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useStore } from '../store';
 import { awayFor, ceoWalks, tickWalkClock, walkDue, walkStarted } from './ceoWalk';
+import { dayTime } from './dayTime';
 import { isFree } from './errands';
 import { isSeated, onErrand, seatBody, setHidden } from './people';
 import { CABIN, DOORS_SECONDS } from './socials';
@@ -37,7 +38,7 @@ export function CeoRituals() {
     const w = walkways('ceo');
     const lift = spot(w, 'elevator')!;
     if (run.phase === 'here') {
-      if (!walkDue(new Date().getHours()) || !isFree(ceo.status) || !isSeated(ceo.id) || onErrand(ceo.id)) return;
+      if (!walkDue(dayTime.t * 24) || !isFree(ceo.status) || !isSeated(ceo.id) || onErrand(ceo.id)) return;
       walkStarted();
       run.who = ceo.id;
       run.p = new Performer(ceo.id, w, [{ walk: lift, speed: BRISK }, { walk: CABIN, straight: true, face: NORTH }]);

@@ -1,9 +1,9 @@
-// Adapted from cubefarm client/src/world/sky/time.ts and sky/useDayTime.ts (MIT): the clock, without the sky's
-// colours, the sun or the React hooks.
+// Adapted from cubefarm client/src/world/sky/time.ts and sky/useDayTime.ts (MIT): the clock. The sky's colours and the
+// sun are in sky/palette.ts, DayClock and the probe in sky/DayClock.tsx; the React hooks are cut.
 
-// The office's time of day: one clock the rituals (ritualSchedule.ts) and, later, the light follow. A phase t in
-// [0, 1): 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset. Pure apart from `dayTime`, the live clock, whose mode
-// is remembered per browser. `?daytime=0.73` freezes the phase (QA).
+// The office's time of day: one clock the rituals (ritualSchedule.ts), the sky and the light (sky/) follow. A phase t
+// in [0, 1): 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset. Pure apart from `dayTime`, the live clock, whose
+// mode is remembered per browser (and followed from another tab). `?daytime=0.73` freezes the phase (QA).
 
 export const DAY_MODES = ['cycle', 'clock', 'day'] as const;
 /** 'cycle': a full day every 30 minutes; 'clock': the viewer's local time; 'day': always mid-afternoon. */
@@ -126,3 +126,11 @@ export function setDayMode(mode: DayMode) {
   }
   sampleDayTime();
 }
+
+// The debug page picks the mode, often in another tab: the office follows it there too.
+if (typeof window !== 'undefined')
+  window.addEventListener('storage', (e) => {
+    if (e.key !== MODE_KEY) return;
+    dayTime.mode = parseDayMode(e.newValue);
+    sampleDayTime();
+  });

@@ -2,14 +2,16 @@
 // every face, roofs, parks and trees, downtown's skyline, the outskirts, the billboards on the nearer roofs
 // (Billboards.tsx), the bay and its red bridge far to the west (Bridge.tsx), and a dozen cars driving the nearer
 // streets. Every kind of thing is one instanced or merged mesh, so the whole city costs a handful of draw calls. It
-// fades into the haze on its own long curve (haze.ts), and sits `elevation` below the floor you're on.
+// fades into the haze on its own long curve (haze.ts), dims to the night and lights its windows after dusk (the
+// clock's uniforms, sky/outdoor.ts), and sits `elevation` below the floor you're on.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Billboards } from './Billboards';
 import { Bridge } from './Bridge';
-import { carPose, carRoutes, CITY, CORRIDOR_HALF, GROUND, theCity, type CityBox } from './cityLayout';
+import { carPose, carRoutes, CITY, CORRIDOR_HALF, GROUND, theCity, type CityBox, type CityBuilding } from './cityLayout';
 import { CITY_HAZE, hazed, hazedToon } from './haze';
+import { outdoor } from './sky/outdoor';
 
 const GROUND_COLOR = '#d9d2c4'; // pavements and plazas
 const ROAD = '#5b5f6b';
@@ -26,29 +28,42 @@ const unit = {
 
 /**
  * A white toon material that takes each instance's colour, and paints a grid of windows on the sides when asked
- * (fading them out far off, where they'd shimmer). Hazed like the rest of the city.
+ * (fading them out far off, where they'd shimmer). After dusk a share of each building's windows lights up (its `lit`,
+ * each window at its own threshold, sky/outdoor.ts's uLights), added after the night's dimming so they glow. Hazed
+ * like the rest of the city.
  */
 function cityMaterial(windows: boolean) {
   const m = new THREE.MeshToonMaterial({ color: '#ffffff' });
   if (windows)
     m.onBeforeCompile = (shader) => {
+      shader.uniforms.uLights = outdoor.uLights;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec3 aSize;\nvarying vec3 vCity;\nvarying vec3 vCityN;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCity = position * aSize;\nvCityN = normal;');
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vCity;\nvarying vec3 vCityN;').replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        {
-          // in metres along the face: a window every 2.8 m across and 3.3 m up, none on the roof or the ground floor's base
-          float side = step(abs(vCityN.y), 0.5);
-          float u = abs(vCityN.x) > 0.5 ? vCity.z : vCity.x;
-          float v = vCity.y;
-          float wx = step(0.22, fract(u / 2.8)) * step(fract(u / 2.8), 0.78);
-          float wy = step(0.3, fract(v / 3.3)) * step(fract(v / 3.3), 0.78) * step(1.4, v);
-          float near = 1.0 - smoothstep(320.0, 560.0, length(vViewPosition));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.76, 0.88), side * wx * wy * 0.85 * near);
-        }`,
-      );
+        .replace('#include <common>', '#include <common>\nattribute vec3 aSize;\nattribute vec2 aWin;\nvarying vec3 vCity;\nvarying vec3 vCityN;\nvarying vec2 vWin;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCity = position * aSize;\nvCityN = normal;\nvWin = aWin;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uLights;\nvarying vec3 vCity;\nvarying vec3 vCityN;\nvarying vec2 vWin;')
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          vec3 cityGlow = vec3(0.0);
+          {
+            // in metres along the face: a window every 2.8 m across and 3.3 m up, none on the roof or the ground floor's base
+            float side = step(abs(vCityN.y), 0.5);
+            float u = abs(vCityN.x) > 0.5 ? vCity.z : vCity.x;
+            float v = vCity.y;
+            float wx = step(0.22, fract(u / 2.8)) * step(fract(u / 2.8), 0.78);
+            float wy = step(0.3, fract(v / 3.3)) * step(fract(v / 3.3), 0.78) * step(1.4, v);
+            float near = 1.0 - smoothstep(320.0, 560.0, length(vViewPosition));
+            float pane = side * wx * wy * near;
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.76, 0.88), pane * 0.85);
+            // each window comes on at its own share of the lights (a hash of its cell, its face and the building's pattern)
+            vec3 cell = vec3(floor(u / 2.8), floor(v / 3.3), vCityN.x * 3.0 + vCityN.z * 7.0 + vWin.y * 13.0);
+            float h = fract(sin(dot(cell, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+            float on = clamp((vWin.x * uLights - h) * 6.0, 0.0, 1.0) * pane;
+            cityGlow = mix(vec3(1.0, 0.62, 0.28), vec3(0.95, 0.86, 0.66), step(0.55, fract(h * 7.31))) * on * 0.85;
+          }`,
+        )
+        .replace('#include <tonemapping_fragment>', 'gl_FragColor.rgb += cityGlow;\n#include <tonemapping_fragment>');
     };
   return hazed(m, CITY_HAZE);
 }
@@ -61,6 +76,7 @@ function Instances({ items, geometry, windows = false, shadows = false }: { item
     if (!windows) return geometry;
     const g = geometry.clone();
     g.setAttribute('aSize', new THREE.InstancedBufferAttribute(new Float32Array(items.flatMap((b) => [b.w, b.h, b.d])), 3));
+    g.setAttribute('aWin', new THREE.InstancedBufferAttribute(new Float32Array(items.flatMap((b: Partial<CityBuilding>) => [b.lit ?? 0, b.pattern ?? 0])), 2));
     return g;
   }, [geometry, items, windows]);
   useEffect(() => {

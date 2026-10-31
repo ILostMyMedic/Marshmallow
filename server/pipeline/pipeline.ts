@@ -4,9 +4,11 @@
 // Adapted from cubefarm server/swarm.ts (MIT): reconcilePulls, stopAgent, resetAgent.
 import type { Backend } from '../backend/backend.ts';
 import type { Floors } from '../floors.ts';
+import type { ReconnectedCli } from '../sessions/cliRunner.ts';
 import type { Terminals } from '../sessions/terminals.ts';
 import type { Store } from '../store.ts';
 import { Ceo } from '../team/ceo/jobs.ts';
+import { CloudOffice } from '../team/cloud.ts';
 import { Team, type TeamTiming } from '../team/workers.ts';
 import { Build } from './build.ts';
 import { clearTask, type Ctx } from './context.ts';
@@ -31,10 +33,12 @@ export interface Pipeline {
   stopAll(): void;
   /** Tidies workers' machines: finished branches, and the machines of workers who left. */
   sweep(): Promise<void>;
+  /** After a restart: Box workers whose CLIs carried on are back on their tasks' sessions. */
+  reattach(back: ReconnectedCli[]): void;
 }
 
 /** `terminals`: each worker's terminal, which their sessions run in (null in tests that don't watch them). */
-export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null, o: { teamTiming?: TeamTiming } = {}): Pipeline {
+export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null, o: { teamTiming?: TeamTiming; cloud?: ConstructorParameters<typeof CloudOffice>[1] } = {}): Pipeline {
   const usage = new Usage(store);
   const sessions = new Sessions(store, backend, { limited: (at) => usage.limited(at), usageWarning: (info) => usage.warned(info) }, terminals);
   const ctx = { store, backend, sessions, floors, usage, prepStrikes: new Map(), soon: (ms?: number) => scheduler.soon(ms) } as Ctx;
@@ -45,6 +49,8 @@ export function createPipeline(store: Store, backend: Backend, floors: Floors, t
   ctx.questions = new Questions(ctx);
   ctx.team = new Team(ctx, (id) => stopWorker(id), o.teamTiming);
   ctx.ceo = new Ceo(ctx);
+  ctx.cloud = new CloudOffice(ctx, o.cloud);
+  sessions.onSignedOut = (id) => ctx.cloud.needSignIn(id);
   const scheduler = new Scheduler(ctx);
   ctx.ceo.onboardUnknown();
 
@@ -77,6 +83,14 @@ export function createPipeline(store: Store, backend: Backend, floors: Floors, t
     },
     stopAll: () => sessions.stopAll(),
     sweep: () => sweepMachines(ctx),
+    reattach: (back) => {
+      for (const r of back) {
+        if (!r.busy || !store.hasWorker(r.workerId)) continue;
+        const kind = store.worker(r.workerId).task?.kind;
+        const ok = kind === 'issue' ? ctx.build.reattach(r.workerId) : kind === 'qa' ? ctx.qa.reattach(r.workerId) : kind === 'fix' ? ctx.fix.reattach(r.workerId) : false;
+        if (!ok) store.appendLog(r.workerId, [{ kind: 'system', text: 'My cloud machine kept working while the office was closed; its task is over, so the terminal waits.' }]);
+      }
+    },
   };
 }
 

@@ -1,8 +1,9 @@
 // Adapted from cubefarm server/clis.test.ts (MIT): the Claude Code parts.
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { claudeCommand, CROSS_TURN_TOOLS, interruptions, launchArgs, localUrl, modelEnv, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
+import { boxVersions, claudeCommand, CROSS_TURN_TOOLS, interruptions, launchArgs, localUrl, modelEnv, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 
 const dir = path.join(os.tmpdir(), 'npm-global');
 
@@ -10,6 +11,13 @@ describe('claudeCommand', () => {
   it("is the Claude Code the Agent SDK bundles, so the hooks match what the office was written against", () => {
     const cmd = claudeCommand();
     expect(cmd?.file).toMatch(/claude-agent-sdk-[\w-]+[\\/]claude(\.exe)?$/);
+  });
+});
+
+describe('boxVersions', () => {
+  it('pins a Box to the Claude Code the Agent SDK bundles and the Playwright MCP in package.json', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'package.json'), 'utf8')) as { dependencies: Record<string, string> };
+    expect(boxVersions()).toEqual({ claude: expect.stringMatching(/^\d+\.\d+\.\d+$/), playwrightMcp: pkg.dependencies['@playwright/mcp'] });
   });
 });
 

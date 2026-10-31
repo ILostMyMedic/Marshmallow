@@ -73,6 +73,7 @@ export class Build {
       floorId,
       sessionOptions(this.ctx, w, floor, {
         cwd: desk.cwd,
+        box: desk.box,
         prompt,
         systemAppend,
         task: 'issue',
@@ -83,16 +84,32 @@ export class Build {
     );
   }
 
+  /**
+   * The office restarted while the worker built this issue in their Box, and their CLI carried on: back on that same
+   * session, so its end (the PR it opened meanwhile) is handled as usual. False when there's nothing to go back to.
+   */
+  reattach(workerId: string): boolean {
+    const { store } = this.ctx;
+    const w = store.worker(workerId);
+    const task = w.task;
+    if (task?.kind !== 'issue' || task.issueNumber == null || !store.hasFloor(w.floorId)) return false;
+    const floor = store.floor(w.floorId);
+    const cwd = this.ctx.cloud.machinesFor(w).deskDir(machineName(workerId), floor.fullName);
+    const opts = sessionOptions(this.ctx, w, floor, { cwd, prompt: '', systemAppend: '', task: 'issue', subject: { issueNumber: task.issueNumber, prNumber: null, title: task.title }, keepAlive: true, label: `${w.name} · #${task.issueNumber} ${task.title}` });
+    this.start(workerId, floor.id, { ...opts, reattach: true });
+    return true;
+  }
+
   private start(workerId: string, floorId: string, opts: SessionOptions) {
     this.ctx.sessions.start(workerId, opts, (end) => {
       releaseDesk(this.ctx, workerId, floorId);
-      void this.finished(workerId, floorId, end)
+      void this.finished(workerId, floorId, end, opts)
         .catch((err) => console.warn(`  the end of a build went wrong: ${oneLine(err)}`))
         .finally(() => afterSession(this.ctx, floorId));
     });
   }
 
-  private async finished(workerId: string, floorId: string, end: SessionEnd) {
+  private async finished(workerId: string, floorId: string, end: SessionEnd, opts: SessionOptions) {
     const { store, backend } = this.ctx;
     if (!store.hasWorker(workerId) || !store.hasFloor(floorId)) return;
     const floor = store.floor(floorId);
@@ -118,7 +135,7 @@ export class Build {
     if (question && (await this.asked(workerId, floor, n, question))) return;
     store.patchWorker(workerId, { status: 'done' });
     store.appendLog(workerId, [{ kind: 'done', text: `✔ Finished in ${minutesSince(w.startedAt)}m · ${w.turns} turns · ${pr ? `PR #${pr.number}` : 'no PR found'}` }]);
-    if (!pr) return this.noPullRequest(workerId, floor, n);
+    if (!pr) return this.noPullRequest(workerId, floor, n, opts);
     store.moment({ type: 'prOpened', at: Date.now(), floorId, prNumber: pr.number, workerId, issueNumber: n });
     const rec = store.findQa(floorId, pr.number);
     // QA can fail a PR the worker opened mid-session before the session ends: its fix waited for them.
@@ -142,7 +159,7 @@ export class Build {
   }
 
   /** A build that ended without a PR: asked once to finish it, else the issue goes back on the board. */
-  private noPullRequest(workerId: string, floor: Floor, n: number) {
+  private noPullRequest(workerId: string, floor: Floor, n: number, opts: SessionOptions) {
     const { store } = this.ctx;
     const key = `${floor.id}#${n}`;
     const w = store.worker(workerId);
@@ -151,13 +168,13 @@ export class Build {
       const text = `You finished without opening a pull request for #${n}. Finish the remaining steps now: commit, push your branch and open the PR with "Closes #${n}". If the issue can't be done, open a draft PR that explains why.`;
       store.appendLog(workerId, [{ kind: 'manager', text: `▶ Office: ${text}` }]);
       store.patchWorker(workerId, { startedAt: Date.now(), lastError: null });
-      const cwd = this.ctx.backend.machines.deskDir(machineName(workerId), floor.fullName);
+      const cwd = this.ctx.cloud.machinesFor(store.worker(workerId)).deskDir(machineName(workerId), floor.fullName);
       const systemAppend = devSystemPrompt({ worker: w, repo: promptFloor(floor), port: devPort(workerId), cwd, branch: w.task.branch });
       try {
         this.start(
           workerId,
           floor.id,
-          sessionOptions(this.ctx, w, floor, { cwd, prompt: text, systemAppend, task: 'issue', subject: { issueNumber: n, prNumber: null, title: w.task.title }, resumeSessionId: w.sessionId, keepAlive: true }),
+          sessionOptions(this.ctx, w, floor, { cwd, box: opts.box, prompt: text, systemAppend, task: 'issue', subject: { issueNumber: n, prNumber: null, title: w.task.title }, resumeSessionId: w.sessionId, keepAlive: true }),
         );
         return;
       } catch {

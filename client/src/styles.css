@@ -234,3 +234,17 @@ button.link {
   font-size: 0.8rem;
   margin: 6px 0;
 }
+
+.cloud {
+  margin: 12px 0 20px;
+  font-size: 0.9rem;
+}
+
+.cloud summary {
+  cursor: pointer;
+}
+
+.cloud form,
+.cloud p {
+  margin: 6px 0;
+}

@@ -45,6 +45,39 @@ export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 /** Where a worker's machine is: a folder on this computer, or an Upstash Box. */
 export type MachineHost = 'local' | 'box';
 
+/** An Upstash Box's size. */
+export type BoxSize = 'small' | 'medium' | 'large';
+
+/** The cloud settings: where new workers work, and the Upstash Box size and limit. */
+export interface CloudSettings {
+  machineKind: MachineHost; // where new workers work ('local' unless the manager turns the cloud on)
+  boxSize: BoxSize;
+  boxLimit: number; // the Upstash plan's most Boxes (the free plan's 10), counted before a Box worker is hired
+}
+
+/** How a Box worker's machine is doing. */
+export type CloudMachineState = 'none' | 'creating' | 'setting-up' | 'ready' | 'paused' | 'disconnected' | 'error';
+
+/** Where a cloud credential comes from (never its value). 'login': each Box worker signs in in their own terminal. */
+export type CloudCredentialSource = 'token' | 'gh' | 'subscription' | 'apiKey' | 'login' | null;
+
+/** One credential Box workers use: whether it's there and where it comes from. */
+export interface CloudCredentialView {
+  ready: boolean;
+  source: CloudCredentialSource;
+  hint: string; // the last 4 characters of a saved key or token, '' otherwise
+}
+
+/** The cloud account as the manager sees it. Keys and tokens never leave the server. */
+export interface CloudView {
+  keySet: boolean; // an Upstash Box API key is saved
+  keyHint: string;
+  keyError: string | null; // Upstash turned the key away, or couldn't be reached, at the last check
+  github: CloudCredentialView;
+  claude: CloudCredentialView;
+  boxes: { total: number; running: number; paused: number; orphans: number } | null; // null until counted
+}
+
 /** Building an issue, testing a pull request, or fixing one after QA or failing checks. */
 export type TaskKind = 'issue' | 'qa' | 'fix';
 
@@ -79,6 +112,8 @@ export interface Worker {
   lastError: string | null;
   sessionId: string | null; // their latest session, resumed for a follow-up (a nudge, a fix of their own PR)
   leaving: boolean; // asked to leave while busy: gets no new work, and goes when their task ends
+  cloud?: CloudMachineState; // their Box's state (absent for local workers)
+  needsSignIn?: boolean; // a Box worker whose Claude Code waits for the manager to sign it in, in their terminal
 }
 
 export interface IssueInfo {
@@ -180,6 +215,7 @@ export interface Settings {
   pacingSessions: number; // after Claude's usage warning, new issues start only while fewer sessions than this run
   maxWorkers: number; // most workers on a floor
   autoscale: boolean; // the rules grow and shrink floors to fit the work (floors held at a size excepted)
+  cloud: CloudSettings;
   defaultModel: string; // a Claude model, or `ollama/<name>`
   defaultEffort: EffortLevel;
 }
@@ -192,6 +228,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pacingSessions: 3,
   maxWorkers: 10,
   autoscale: true,
+  cloud: { machineKind: 'local', boxSize: 'small', boxLimit: 10 },
   defaultModel: 'claude-opus-5-5',
   defaultEffort: 'medium',
 };
@@ -251,6 +288,7 @@ export interface Snapshot {
   messages: OfficeMessage[]; // the latest, oldest first
   questions: Question[];
   usage: UsageView;
+  cloud: CloudView;
 }
 
 /** Changes to the state: the snapshot with these folded in is what the server has. */
@@ -267,7 +305,8 @@ export type StateEvent =
   | { type: 'message'; message: OfficeMessage }
   | { type: 'question'; question: Question }
   | { type: 'questionRemoved'; id: number }
-  | { type: 'usage'; usage: UsageView };
+  | { type: 'usage'; usage: UsageView }
+  | { type: 'cloud'; cloud: CloudView };
 
 /**
  * Things that happened, for the game's moments (arrivals, celebrations) and the debug page's feed. They change no

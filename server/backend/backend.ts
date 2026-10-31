@@ -4,7 +4,10 @@
 // Adapted from cubefarm server/backend.ts (MIT).
 import type { GhRepoSummary, IssueInfo, PullInfo } from '../../shared/types.ts';
 import type { MachineProvider } from '../machines/machines.ts';
+import type { BoxApi } from '../machines/box/box.ts';
+import type { BoxSignIn, KeptBoxCli, ReconnectedCli } from '../sessions/cliRunner.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
+import type { WorkerTerminal } from '../sessions/terminal.ts';
 
 export interface RepoMeta {
   nameWithOwner: string;
@@ -87,4 +90,26 @@ export interface Backend {
   machines: MachineProvider;
   /** A Claude Code session on a worker's desk. */
   startSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle;
+  /** Box workers' cloud: Upstash, the manager's gh and git, and their CLIs in the Boxes. */
+  cloud: CloudBackend;
+}
+
+/** What Box workers need from the world: the real one, or the demo's fakes. Adapted from cubefarm server/backend.ts (MIT). */
+export interface CloudBackend {
+  /** The Box API behind an Upstash Box API key. */
+  boxes(key: string): BoxApi;
+  /** The environment cloud credentials are read from (MARSHMALLOW_CLAUDE_TOKEN): the office's own, or the demo's. */
+  env(): Record<string, string | undefined>;
+  /** The manager's gh login token ('' when gh isn't signed in), for Box workers' GitHub when no token is saved. */
+  ghToken(): Promise<string>;
+  /** Who Box workers' commits are by: the manager's git identity, else their GitHub login. */
+  gitIdentity(login: string | null): Promise<{ name: string; email: string }>;
+  /** The office started: Box workers' CLIs that kept working in their Boxes, back in their terminals. */
+  reconnect(kept: KeptBoxCli[], terminalFor: (workerId: string) => WorkerTerminal | null): Promise<ReconnectedCli[]>;
+  /** The office is stopping: stop following Box workers' CLIs, which carry on. */
+  detach(): void;
+  /** A Box worker's Claude Code signing in with its own login, in their terminal. */
+  signIn(o: { api: BoxApi; boxId: string; term: WorkerTerminal }, exited: (code: number) => void): BoxSignIn;
+  /** The demo only: every Box's sign-in expires, as a login Anthropic turned away would. */
+  expireSignIns?(): void;
 }

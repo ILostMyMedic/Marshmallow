@@ -132,6 +132,14 @@ Every ported file gets the header `Adapted from cubefarm <path> (MIT).`; the fir
 
 ## Phase 7: the Upstash Box option
 
+**Done** (on a fake Upstash account; the real run waits for a key). Things that differ from cubefarm:
+- **Claude Code only:** Codex, OpenCode, linked repos, `trimDesk` and the notify and Codex hook programs are cut. Box names are `marshmallow-<office>-<machine>`, labels `marshmallow`, `mm:<office>`, `m:<machine>`; tmux sockets `mm-…`; markers `MARSHMALLOW_*`; the launcher's exit event `MarshmallowExit`.
+- **The seam:** `Backend.cloud: CloudBackend` (real: Upstash, `gh auth token`, git identity, the runner's reconnect, detach and sign-in; demo: `server/backend/demoCloud.ts`, a fake account whose Boxes note each desk's branch so the demo's fake sessions open PRs, and a fake sign-in drawn in the worker's terminal).
+- **`server/team/cloud.ts`** replaces swarm.ts's cloud sections: where hires work (a Box only with a key, room under the plan's limit, and a model that isn't local), bring-up, moving, the Box a session runs in, signing in, pausing idle Boxes (any free Box worker idle 5 minutes with no CLI left), and the restart pick-up. A sign-in that's needed gives the work back instead of failing it.
+- **Restarts:** a Box worker's live CLI record is saved server-only (`SavedState.boxClis`). At start the office reconnects (`reconnectBoxClis`), `Pipeline.reattach` puts each busy one back on its task's session (`Build`, `Qa` and `Fix` each have a `reattach`), and only then does `hooksReady()` let the events in. Full restart reconciliation for local workers stays in phase 8.
+- **Shutdown** detaches Box CLIs instead of killing them, before the last save.
+- **Tested:** the ported script, helper, CLI-events, machines and cloud tests; the demo scenarios (`server/team/cloud.test.ts`); and the done-when on the real runner with a fake Box (`server/team/cloudRestart.test.ts`: still running, finished and exited, gone mid-turn).
+
 | Marshmallow | cubefarm | Verdict | Notes |
 | --- | --- | --- | --- |
 | `server/machines/box/box.ts` | `server/box.ts` | Copy | The only importer of `@upstash/box`. |

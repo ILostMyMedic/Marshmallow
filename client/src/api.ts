@@ -12,7 +12,7 @@ async function send(method: string, url: string, body?: unknown): Promise<unknow
 }
 
 /** Sends a command; throws the server's { error } message when it refuses. */
-export const command = (method: 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown) => send(method, url, body);
+export const command = (method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown) => send(method, url, body);
 
 /** Asks for something that isn't part of the office's state, such as the repositories you could connect. */
 export const query = <T>(url: string) => send('GET', url) as Promise<T>;

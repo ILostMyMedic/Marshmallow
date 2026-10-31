@@ -1,7 +1,8 @@
 // The office as this tab knows it: the server's snapshot with its events folded in, plus the connection's state.
 // Adapted from cubefarm client/src/store.ts (MIT).
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS, isMoment, type Floor, type LogLine, type Moment, type OfficeMessage, type QaRecord, type Question, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
+import { EMPTY_CLOUD } from '../../shared/cloud';
+import { DEFAULT_SETTINGS, isMoment, type CloudView, type Floor, type LogLine, type Moment, type OfficeMessage, type QaRecord, type Question, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
 const LOG_KEEP = 200;
@@ -21,6 +22,7 @@ export interface Office {
   messages: OfficeMessage[]; // oldest first
   questions: Question[]; // oldest first
   usage: UsageView;
+  cloud: CloudView;
 }
 
 export const EMPTY_OFFICE: Office = {
@@ -36,6 +38,7 @@ export const EMPTY_OFFICE: Office = {
   messages: [],
   questions: [],
   usage: { state: 'normal', until: null, warning: null },
+  cloud: EMPTY_CLOUD,
 };
 
 /** Office messages a tab keeps. */
@@ -64,6 +67,7 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         messages: d.messages,
         questions: d.questions,
         usage: d.usage,
+        cloud: d.cloud,
       };
     }
     case 'settings':
@@ -97,6 +101,8 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
       return { ...o, questions: o.questions.filter((q) => q.id !== ev.id) };
     case 'usage':
       return { ...o, usage: ev.usage };
+    case 'cloud':
+      return { ...o, cloud: ev.cloud };
   }
 }
 

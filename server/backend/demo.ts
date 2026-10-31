@@ -1,5 +1,5 @@
-// `--demo`: the backend with a fake GitHub, fake machines and fake Claude Code sessions, so the whole office runs
-// with no GitHub, git, npm or Claude usage. The fake GitHub is saved in the office's home; desks start over on each
+// `--demo`: the backend with a fake GitHub, fake machines, a fake Upstash account and fake Claude Code sessions, so the
+// whole office runs with no GitHub, git, npm, Upstash or Claude usage. The fake GitHub is saved in the office's home; desks start over on each
 // start.
 // Adapted from cubefarm server/demo.ts (MIT).
 import path from 'node:path';
@@ -7,6 +7,7 @@ import type { LogEntry } from '../../shared/types.ts';
 import type { MachineProvider } from '../machines/machines.ts';
 import type { SessionCallbacks, SessionOptions } from '../sessions/session.ts';
 import type { Backend } from './backend.ts';
+import { demoCloud } from './demoCloud.ts';
 import { FakeGitHub } from './demoGithub.ts';
 import { fakeSession } from './demoSessions.ts';
 
@@ -18,6 +19,8 @@ export interface DemoTiming {
   cloneMs: number;
   checksMs(): number;
   closeAfterMergeMs: number;
+  /** The fake Upstash account's base delay (creating a Box takes 2.5 of these). */
+  boxMs: number;
 }
 
 const DEFAULT_TIMING: DemoTiming = {
@@ -27,6 +30,7 @@ const DEFAULT_TIMING: DemoTiming = {
   cloneMs: 400,
   checksMs: () => 12_000 + Math.random() * 10_000,
   closeAfterMergeMs: 5_000,
+  boxMs: 1000,
 };
 
 // How each kind of log line looks in the worker's terminal.
@@ -118,7 +122,9 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
     ensureClone: () => wait(timing.cloneMs),
     mainDir: (fullName) => `/demo/${fullName}/main`,
     machines,
-    startSession: (o, cb) => fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.cwd) ?? null, rand, stepMs: timing.stepMs }),
+    // A Box worker's desk is known by their Box: every Box keeps a repo's worktree at the same path.
+    startSession: (o, cb) => fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.box ? `box:${o.box.boxId}` : o.cwd) ?? null, rand, stepMs: timing.stepMs }),
+    cloud: demoCloud((boxId, desk) => desks.set(`box:${boxId}`, desk), timing.boxMs),
     reset: () => {
       github.reset();
       desks.clear();

@@ -3,7 +3,10 @@
 // Adapted from cubefarm server/swarm.ts (MIT): its persisted shape, persistence and clients sections.
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
+import { cloudSettings, DEFAULT_CLOUD, EMPTY_CLOUD } from '../shared/cloud.ts';
+import type { BoxCliRecord } from './sessions/boxCli.ts';
 import {
+  type CloudView,
   DEFAULT_SETTINGS,
   isBusy,
   type Floor,
@@ -59,6 +62,8 @@ export interface SavedState {
   logs: Record<string, LogLine[]>;
   messages: OfficeMessage[];
   questions: Question[];
+  officeId?: string; // this office's id on a shared Upstash account (Box names and labels)
+  boxClis?: Record<string, BoxCliRecord>; // Box workers' live CLIs, by worker: picked up again after a restart
 }
 
 /** Log lines per worker in state.json, and in a tab's snapshot (memory keeps LOG_BUFFER). */
@@ -92,6 +97,9 @@ export class Store {
   private messages: OfficeMessage[] = [];
   private questions = new Map<number, Question>();
   private usage: UsageView = { state: 'normal', until: null, warning: null };
+  private cloud: CloudView = EMPTY_CLOUD;
+  private office = '';
+  private boxClis = new Map<string, BoxCliRecord>();
   private clients = new Set<WebSocket>();
   private logSeq = 0;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -120,7 +128,8 @@ export class Store {
       console.warn(`  ${this.file} isn't valid JSON: kept as ${aside}, starting afresh`);
       return;
     }
-    this.settings = { ...DEFAULT_SETTINGS, ...saved.settings };
+    this.settings = { ...DEFAULT_SETTINGS, ...saved.settings, cloud: cloudSettings(DEFAULT_CLOUD, saved.settings?.cloud) };
+    this.office = saved.officeId ?? '';
     for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, teamSize: f.teamSize ?? null, cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
     for (const w of saved.workers ?? []) this.workers.set(w.id, { ...w, activity: null, sessionId: w.sessionId ?? null, leaving: w.leaving ?? false });
     for (const q of saved.qa ?? []) this.qa.set(qaKey(q.floorId, q.prNumber), q);
@@ -130,6 +139,7 @@ export class Store {
       for (const l of lines) this.logSeq = Math.max(this.logSeq, l.id + 1);
     }
     this.messages = (saved.messages ?? []).map((m) => ({ ...m, from: m.from ?? 'office' }));
+    for (const [id, rec] of Object.entries(saved.boxClis ?? {})) if (this.workers.has(id)) this.boxClis.set(id, rec);
     for (const q of saved.questions ?? []) this.questions.set(q.id, q);
   }
 
@@ -146,6 +156,7 @@ export class Store {
       messages: this.messages,
       questions: this.questionList(),
       usage: this.usage,
+      cloud: this.cloud,
     };
   }
 
@@ -256,6 +267,7 @@ export class Store {
   }
 
   removeWorker(id: string) {
+    this.boxClis.delete(id);
     if (!this.workers.delete(id)) return;
     this.logs.delete(id);
     this.emit({ type: 'workerRemoved', workerId: id });
@@ -315,6 +327,37 @@ export class Store {
   }
 
   /** Claude's usage as the pacing sees it; tabs hear only of changes. It lives in memory. */
+  /** The cloud account's view (keys never in it): sent to the tabs, not saved. */
+  setCloud(cloud: CloudView) {
+    if (JSON.stringify(cloud) === JSON.stringify(this.cloud)) return;
+    this.cloud = cloud;
+    this.broadcast({ type: 'cloud', cloud });
+  }
+
+  /** A Box worker's live CLI record (null: it's gone). Saved, never sent to the tabs. */
+  setBoxCli(workerId: string, rec: BoxCliRecord | null) {
+    if (rec) this.boxClis.set(workerId, rec);
+    else if (!this.boxClis.delete(workerId)) return;
+    this.save();
+  }
+
+  boxCli(workerId: string): BoxCliRecord | null {
+    return this.boxClis.get(workerId) ?? null;
+  }
+
+  boxCliList(): [string, BoxCliRecord][] {
+    return [...this.boxClis];
+  }
+
+  /** This office's id on the Upstash account, made the first time it's needed. */
+  officeId(make: () => string): string {
+    if (!this.office) {
+      this.office = make();
+      this.save();
+    }
+    return this.office;
+  }
+
   setUsage(usage: UsageView) {
     if (JSON.stringify(usage) === JSON.stringify(this.usage)) return;
     this.usage = usage;
@@ -362,7 +405,7 @@ export class Store {
     const logs: Record<string, LogLine[]> = {};
     for (const [id, lines] of this.logs) logs[id] = lines.slice(-LOG_SAVED);
     const floors = this.floorList().map(({ cloneStatus: _s, cloneError: _e, issues: _i, pulls: _p, lastSync: _l, syncError: _y, ...saved }) => saved);
-    const state: SavedState = { settings: this.settings, floors, workers: this.workerList(), qa: this.qaList(), logs, messages: this.messages, questions: this.questionList() };
+    const state: SavedState = { settings: this.settings, floors, workers: this.workerList(), qa: this.qaList(), logs, messages: this.messages, questions: this.questionList(), ...(this.office && { officeId: this.office }), ...(this.boxClis.size && { boxClis: Object.fromEntries(this.boxClis) }) };
     await writeJsonAtomic(this.file, state);
   }
 }

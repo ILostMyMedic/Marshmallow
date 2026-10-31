@@ -75,6 +75,7 @@ export class Fix {
       n,
       sessionOptions(this.ctx, w, floor, {
         cwd: desk.cwd,
+        box: desk.box,
         prompt,
         systemAppend,
         task: 'fix',
@@ -132,6 +133,19 @@ export class Fix {
       .join('\n');
   }
 
+  /** The office restarted while the worker fixed this PR in their Box: back on that session, whose push follows. */
+  reattach(workerId: string): boolean {
+    const { store } = this.ctx;
+    const w = store.worker(workerId);
+    const n = w.task?.kind === 'fix' ? w.task.prNumber : null;
+    if (n == null || !store.hasFloor(w.floorId) || !store.findQa(w.floorId, n)) return false;
+    const floor = store.floor(w.floorId);
+    const cwd = this.ctx.cloud.machinesFor(w).deskDir(machineName(workerId), floor.fullName);
+    const opts = sessionOptions(this.ctx, w, floor, { cwd, prompt: '', systemAppend: '', task: 'fix', subject: { issueNumber: w.task!.issueNumber, prNumber: n, title: w.task!.title }, keepAlive: true, label: `${w.name} · fixing #${n} ${w.task!.title}` });
+    this.start(workerId, floor.id, n, { ...opts, reattach: true });
+    return true;
+  }
+
   private start(workerId: string, floorId: string, n: number, opts: SessionOptions) {
     this.ctx.sessions.start(workerId, opts, (end) => {
       releaseDesk(this.ctx, workerId, floorId);
@@ -182,7 +196,7 @@ export class Fix {
         const text = noPushNudge(n, store.floor(floorId).defaultBranch);
         store.appendLog(workerId, [{ kind: 'manager', text: `▶ Office: ${text}` }]);
         try {
-          const cwd = this.ctx.backend.machines.deskDir(machineName(workerId), store.floor(floorId).fullName);
+          const cwd = this.ctx.cloud.machinesFor(store.worker(workerId)).deskDir(machineName(workerId), store.floor(floorId).fullName);
           this.start(workerId, floorId, n, { ...opts, cwd, prompt: text, resumeSessionId: end.sessionId });
           return;
         } catch {

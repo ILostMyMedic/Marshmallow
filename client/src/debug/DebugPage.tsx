@@ -3,16 +3,17 @@
 // workers, and fake Claude's usage warning or limit (server/demoRoutes.ts).
 import { Fragment, useEffect, useState } from 'react';
 import { isBusy, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
+import { BOX_SIZE_INFO, BOX_SIZES } from '../../../shared/cloud';
 import { CLAUDE_MODELS } from '../../../shared/models';
 import { command, floorPath, query } from '../api';
 import { qaKey, useStore } from '../store';
 import { activityIcon, momentText, taskText } from './describe';
 import { LiveTerminal } from './LiveTerminal';
 
-type Run = (method: 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown) => void;
+type Run = (method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown) => void;
 
 const time = (t: number) => new Date(t).toLocaleTimeString();
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 export function DebugPage() {
   const connected = useStore((s) => s.connected);
@@ -65,7 +66,10 @@ export function DebugPage() {
       {!loaded ? (
         <p className="muted">Waiting for the snapshot…</p>
       ) : (
-        <CeoSection run={run} />
+        <>
+          <CeoSection run={run} />
+          <CloudSection run={run} />
+        </>
       )}
       {!loaded ? null : floors.length === 0 ? (
         <p className="muted">No floors yet. Connect a repository to start.</p>
@@ -265,6 +269,19 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                   <td>
                     <span className={`status status-${w.status}`}>{w.status}</span>
                     {w.leaving && <span className="muted"> · 🧳 leaving</span>}
+                    {w.host === 'box' && <span className="muted"> · ☁ {w.cloud ?? 'cloud'}</span>}
+                    {w.needsSignIn && (
+                      <div>
+                        <button
+                          onClick={() => {
+                            run('POST', `/api/workers/${w.id}/sign-in`);
+                            setOpenTerm(w.id);
+                          }}
+                        >
+                          🔑 Sign in
+                        </button>
+                      </div>
+                    )}
                     {!isBusy(w.status) && w.idleSince && <span className="muted"> since {time(w.idleSince)}</span>}
                     {w.status === 'error' && w.lastError && <div className="error">{w.lastError}</div>}
                   </td>
@@ -276,6 +293,9 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                   </td>
                   <td className="actions">
                     <button onClick={() => setOpenTerm(openTerm === w.id ? null : w.id)}>{openTerm === w.id ? 'Hide terminal' : 'Terminal'}</button>
+                    <button title={w.host === 'box' ? 'Move to this computer' : 'Move to a cloud machine (an Upstash Box)'} onClick={() => run('POST', `/api/workers/${w.id}/move`, { host: w.host === 'box' ? 'local' : 'box' })}>
+                      {w.host === 'box' ? '🖥 Move here' : '☁ Move'}
+                    </button>
                     <button disabled={!isBusy(w.status)} onClick={() => run('POST', `/api/workers/${w.id}/stop`)}>
                       Stop
                     </button>
@@ -505,6 +525,88 @@ function FloorBrief({ floor, run }: { floor: Floor; run: Run }) {
           Plan it with the CEO
         </button>
       </form>
+    </details>
+  );
+}
+
+/** A secret field: saved with only its last characters shown, never sent back by the server. */
+function SecretField({ label, set, hint, placeholder, onSave }: { label: string; set: boolean; hint: string; placeholder: string; onSave: (value: string) => void }) {
+  const [draft, setDraft] = useState('');
+  return (
+    <form
+      className="connect"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(draft);
+        setDraft('');
+      }}
+    >
+      {label} {set ? <span className="pill pill-ok">saved ••••{hint}</span> : <span className="pill">not set</span>}
+      <input type="password" autoComplete="off" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder} size={28} />
+      <button type="submit" disabled={!draft.trim()}>
+        Save
+      </button>
+      {set && (
+        <button type="button" onClick={() => onSave('')}>
+          Remove
+        </button>
+      )}
+    </form>
+  );
+}
+
+const CREDENTIAL_SOURCE: Record<string, string> = {
+  token: 'a token you saved',
+  gh: 'your gh login',
+  subscription: 'MARSHMALLOW_CLAUDE_TOKEN from your environment',
+  apiKey: 'an Anthropic API key you saved',
+  login: "each Box's own sign-in, in the worker's terminal",
+};
+
+/** Box workers: the Upstash account, where new workers work, and what Box workers sign in with. */
+function CloudSection({ run }: { run: Run }) {
+  const cloud = useStore((s) => s.cloud);
+  const settings = useStore((s) => s.settings.cloud);
+  const demo = useStore((s) => s.demo);
+  const patch = (c: Partial<typeof settings>) => run('PATCH', '/api/settings', { cloud: { ...settings, ...c } });
+  const source = (s: string | null) => (s ? CREDENTIAL_SOURCE[s] : 'missing');
+  return (
+    <details className="cloud">
+      <summary>
+        <strong>Cloud workers</strong> <span className="muted">· {settings.machineKind === 'box' && cloud.keySet ? 'new workers get an Upstash Box' : 'new workers work on this computer'}</span>
+      </summary>
+      <SecretField label="Upstash Box API key" set={cloud.keySet} hint={cloud.keyHint} placeholder="from console.upstash.com → Box" onSave={(key) => run('PUT', '/api/cloud/key', { key })} />
+      {cloud.keyError && <p className="error">{cloud.keyError}</p>}
+      {cloud.keySet && (
+        <p className="connect">
+          {cloud.boxes ? `${plural(cloud.boxes.total, 'Box', 'Boxes')} on the account · ${cloud.boxes.running} running · ${cloud.boxes.paused} paused` : 'Boxes not counted yet'}
+          <button onClick={() => run('POST', '/api/cloud/test')}>Test</button>
+          {!!cloud.boxes?.orphans && <button onClick={() => run('POST', '/api/cloud/orphans')}>Delete {plural(cloud.boxes.orphans, 'orphan')}</button>}
+          {demo && <button onClick={() => run('POST', '/api/demo/expire-sign-ins')}>Expire sign-ins (demo)</button>}
+        </p>
+      )}
+      <p className="connect">
+        New workers work
+        <select value={settings.machineKind} disabled={!cloud.keySet} onChange={(e) => patch({ machineKind: e.target.value as 'local' | 'box' })}>
+          <option value="local">on this computer</option>
+          <option value="box">in an Upstash Box each</option>
+        </select>
+        Box size
+        <select value={settings.boxSize} onChange={(e) => patch({ boxSize: e.target.value as (typeof BOX_SIZES)[number] })}>
+          {BOX_SIZES.map((s) => (
+            <option key={s} value={s}>
+              {s} ({BOX_SIZE_INFO[s].spec}, ${BOX_SIZE_INFO[s].usdPerCpuHour.toFixed(2)}/CPU hour)
+            </option>
+          ))}
+        </select>
+        your plan's Box limit
+        <input type="number" min={1} max={1000} value={settings.boxLimit} onChange={(e) => patch({ boxLimit: Number(e.target.value) })} style={{ width: '6ch' }} />
+      </p>
+      <p className="muted">GitHub in Boxes: {source(cloud.github.source)}. Claude in Boxes: {source(cloud.claude.source)}.</p>
+      <SecretField label="GitHub token for Boxes" set={cloud.github.source === 'token'} hint={cloud.github.hint} placeholder="fine-grained, your floors' repos only" onSave={(value) => run('PUT', '/api/cloud/token', { kind: 'github', value })} />
+      {cloud.claude.source !== 'subscription' && (
+        <SecretField label="Anthropic API key" set={cloud.claude.source === 'apiKey'} hint={cloud.claude.hint} placeholder="sk-ant-… (billed per token)" onSave={(value) => run('PUT', '/api/cloud/token', { kind: 'anthropic', value })} />
+      )}
     </details>
   );
 }

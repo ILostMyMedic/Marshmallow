@@ -61,7 +61,7 @@ export class Team {
       desk,
       model: o.model ?? '',
       effort: o.effort ?? '',
-      host: 'local',
+      host: this.ctx.cloud.hostForHire(o.model ?? ''),
       status: 'idle',
       task: null,
       activity: null,
@@ -77,6 +77,7 @@ export class Team {
     store.putWorker(worker);
     store.appendLog(worker.id, [{ kind: 'system', text: `Joined ${floor.fullName}` }], now);
     store.moment({ type: 'hired', at: now, worker });
+    if (worker.host === 'box') this.ctx.cloud.bringUp(worker.id);
     this.ctx.soon(200);
     return worker;
   }
@@ -167,12 +168,13 @@ export class Team {
 
   /** The worker goes: their session stops, and their machine goes (work on no remote branch is saved first). */
   private depart(w: Worker) {
-    const { store, backend, sessions } = this.ctx;
+    const { store, sessions, cloud } = this.ctx;
     if (isBusy(w.status) || sessions.isRunning(w.id)) this.stopWorker(w.id);
+    cloud.left(w.id);
     store.removeWorker(w.id);
     sessions.forget(w.id);
     store.moment({ type: 'left', at: Date.now(), worker: w });
-    void backend.machines.remove(machineName(w.id)).then(
+    void cloud.machinesFor(w).remove(machineName(w.id)).then(
       (r) => r.patches.length && store.say(`🧳 ${w.name} left work that was on no GitHub branch: saved as ${r.patches.join(', ')}.`),
       () => undefined,
     );

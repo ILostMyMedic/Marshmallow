@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_SETTINGS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
 import { EMPTY_OFFICE, qaKey, reduce, type Office } from './store';
 
@@ -49,6 +50,7 @@ const floor = (id: string, n: number): Floor => ({
 });
 
 const snapshot: Snapshot = {
+  cloud: EMPTY_CLOUD,
   version: '0.1.0',
   demo: true,
   settings: DEFAULT_SETTINGS,

@@ -49,6 +49,14 @@ export class Sessions {
     return this.running.has(workerId);
   }
 
+  /** Heard when a Box's Claude Code turned out not to be signed in (the worker then waits for the manager). */
+  onSignedOut: ((workerId: string) => void) | null = null;
+
+  /** The worker's terminal, made when first needed (null in tests without terminals). */
+  terminal(workerId: string) {
+    return this.terminals?.for(workerId) ?? null;
+  }
+
   /** The worker left: their terminal goes, with its saved screen. */
   forget(workerId: string) {
     this.terminals?.remove(workerId);
@@ -104,6 +112,7 @@ export class Sessions {
               const w = this.store.worker(workerId);
               this.store.patchWorker(workerId, { costUsd: w.costUsd + result.costUsd, turns: w.turns + result.turns, activity: null, endedAt: Date.now() });
             }
+            if (result.signedOut) this.onSignedOut?.(workerId);
             onEnd({ result, sessionId: rt.sessionId, shots: rt.shots });
           },
         },

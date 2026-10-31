@@ -4,6 +4,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CeoJobKind, EffortLevel, LogEntry, TaskKind } from '../../shared/types.ts';
 import type { UsageWarning } from '../pipeline/pacing.ts';
+import type { BoxTarget } from './boxCli.ts';
 import type { WorkerTerminal } from './terminal.ts';
 
 export interface SessionOptions {
@@ -38,6 +39,10 @@ export interface SessionOptions {
   addDirs?: string[];
   /** What the CEO's job is: the demo's scripted CEO acts on it. */
   ceoJob?: { kind: CeoJobKind; floorId: string | null; text: string };
+  /** A Box worker's session: where its CLI runs (absent: on this computer). */
+  box?: BoxTarget;
+  /** Pick up the worker's CLI that kept working while the office restarted, instead of starting one. */
+  reattach?: boolean;
 }
 
 /** The office's tools for the CEO. */
@@ -59,6 +64,8 @@ export interface SessionResult {
   structured?: unknown;
   /** The manager interrupted the turn in the worker's terminal (Esc). */
   interrupted?: boolean;
+  /** A Box's Claude Code isn't signed in: the worker waits for the manager to sign it in. */
+  signedOut?: boolean;
 }
 
 export interface SessionCallbacks {

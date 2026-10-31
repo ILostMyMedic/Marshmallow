@@ -15,6 +15,7 @@ import type { Merge } from './merge.ts';
 import type { Qa } from './qa.ts';
 import type { Questions } from './questions.ts';
 import type { Ceo } from '../team/ceo/jobs.ts';
+import type { CloudOffice } from '../team/cloud.ts';
 import type { Team } from '../team/workers.ts';
 import { prepFailure, type PrepStrikes } from './rules/handOut.ts';
 import type { Sessions } from './sessions.ts';
@@ -33,6 +34,7 @@ export interface Ctx {
   questions: Questions;
   team: Team;
   ceo: Ceo;
+  cloud: CloudOffice;
   /** Failed desk preparations per PR and task (`${floorId}#${pr}:${task}`), in memory. */
   prepStrikes: Map<string, PrepStrikes>;
   /** Asks the scheduler for a pass shortly. */
@@ -62,7 +64,7 @@ export function sessionOptions(ctx: Ctx, w: Worker, floor: Floor, o: Pick<Sessio
     effort: w.effort || s.defaultEffort,
     browserTesting: floor.browserTesting,
     role: 'worker',
-    env: ctx.backend.machines.env(machineName(w.id)),
+    env: ctx.cloud.machinesFor(w).env(machineName(w.id)),
     ...o,
   };
 }
@@ -114,8 +116,8 @@ export function jobDeskFailed(ctx: Ctx, workerId: string, rec: QaState, task: 'q
 
 /** A session ended: what the worker left running stops (their dev server). */
 export function releaseDesk(ctx: Ctx, workerId: string, floorId: string) {
-  if (!ctx.store.hasFloor(floorId)) return;
-  void ctx.backend.machines.release(machineName(workerId), ctx.store.floor(floorId).fullName, devPort(workerId)).catch(() => undefined);
+  if (!ctx.store.hasFloor(floorId) || !ctx.store.hasWorker(workerId)) return;
+  void ctx.cloud.machinesFor(ctx.store.worker(workerId)).release(machineName(workerId), ctx.store.floor(floorId).fullName, devPort(workerId)).catch(() => undefined);
 }
 
 /** A session's outcome is handled: the floor syncs (it lists the new PR, and auto-merge looks again), then the next work. */

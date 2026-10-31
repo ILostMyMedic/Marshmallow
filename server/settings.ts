@@ -1,4 +1,5 @@
 // The office's settings as the manager changes them (PATCH /api/settings): each field checked, the rest left alone.
+import { cloudSettings } from '../shared/cloud.ts';
 import type { EffortLevel, Settings } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 
@@ -10,8 +11,8 @@ const whole = (v: unknown, name: string, lo: number, hi: number) => {
   return n;
 };
 
-/** The changes a request asks for, checked; throws HttpError(400) for anything out of shape. */
-export function settingsPatch(body: unknown): Partial<Settings> {
+/** The changes a request asks for, checked; throws HttpError(400) for anything out of shape. `now`: the cloud settings it changes. */
+export function settingsPatch(body: unknown, now?: Settings): Partial<Settings> {
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
   const patch: Partial<Settings> = {};
   if (b.sessionLimit !== undefined) patch.sessionLimit = whole(b.sessionLimit, 'sessionLimit', 0, 64);
@@ -32,5 +33,6 @@ export function settingsPatch(body: unknown): Partial<Settings> {
   }
   if (b.setupDone !== undefined) patch.setupDone = b.setupDone === true;
   if (b.autoscale !== undefined) patch.autoscale = b.autoscale === true;
+  if (b.cloud !== undefined && now) patch.cloud = cloudSettings(now.cloud, b.cloud);
   return patch;
 }

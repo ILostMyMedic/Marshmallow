@@ -4,7 +4,7 @@
 // Adapted from cubefarm server/swarm.ts (MIT): queueQa, runQa, onQaFinished, renderQaComment.
 import type { Floor } from '../../shared/types.ts';
 import type { PrDetails } from '../backend/backend.ts';
-import { depsPromptLine, devPort } from '../machines/machines.ts';
+import { depsPromptLine, devPort, machineName } from '../machines/machines.ts';
 import { qaBranch, qaSystemPrompt } from '../prompts/prompts.ts';
 import { qaInstructions } from '../prompts/qaPrompt.ts';
 import type { SessionOptions } from '../sessions/session.ts';
@@ -183,6 +183,7 @@ export class Qa {
       n,
       sessionOptions(this.ctx, w, floor, {
         cwd: desk.cwd,
+        box: desk.box,
         prompt,
         systemAppend,
         task: 'qa',
@@ -192,6 +193,19 @@ export class Qa {
         label: `${w.name} · QA #${n} ${pr.title}`,
       }),
     );
+  }
+
+  /** The office restarted while the worker tested this PR in their Box: back on that session, whose report follows. */
+  reattach(workerId: string): boolean {
+    const { store } = this.ctx;
+    const w = store.worker(workerId);
+    const n = w.task?.kind === 'qa' ? w.task.prNumber : null;
+    if (n == null || !store.hasFloor(w.floorId) || !store.findQa(w.floorId, n)) return false;
+    const floor = store.floor(w.floorId);
+    const cwd = this.ctx.cloud.machinesFor(w).deskDir(machineName(workerId), floor.fullName);
+    const opts = sessionOptions(this.ctx, w, floor, { cwd, prompt: '', systemAppend: '', task: 'qa', outputSchema: QA_SCHEMA, subject: { issueNumber: w.task!.issueNumber, prNumber: n, title: w.task!.title }, keepAlive: false, label: `${w.name} · QA #${n} ${w.task!.title}` });
+    this.start(workerId, floor.id, n, { ...opts, reattach: true });
+    return true;
   }
 
   private start(workerId: string, floorId: string, n: number, opts: SessionOptions) {

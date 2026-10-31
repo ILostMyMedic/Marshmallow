@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { WebSocketServer } from 'ws';
+import { localModel } from '../shared/models.ts';
 import { createDemoBackend } from './backend/demo.ts';
 import { realBackend } from './backend/real.ts';
 import { DEMO, DESK_SWEEP_INTERVAL_MS, HOME_DIR, homeProblem, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
@@ -13,7 +14,7 @@ import { demoRoutes } from './demoRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
 import { createPipeline } from './pipeline/pipeline.ts';
-import { handleHook, handleMcp, releaseClis, setOfficeUrl } from './sessions/cliRunner.ts';
+import { handleHook, handleMcp, hooksReady, releaseClis, setOfficeUrl } from './sessions/cliRunner.ts';
 import { Terminals } from './sessions/terminals.ts';
 import { route } from './route.ts';
 import { EFFORTS, settingsPatch } from './settings.ts';
@@ -32,6 +33,11 @@ const backend = demo ?? realBackend;
 const floors = new Floors(store, backend);
 const terminals = new Terminals(path.join(HOME_DIR, 'terminals'));
 const pipeline = createPipeline(store, backend, floors, terminals);
+// The cloud: saved keys, then Box workers' CLIs that kept working while the office was closed, back on their tasks.
+// Their events wait until then (hooksReady), so a turn that finished meanwhile finishes its task now.
+await pipeline.ctx.cloud.init().catch((err) => console.warn(`  the cloud account couldn't be read: ${(err as Error).message}`));
+pipeline.reattach(await pipeline.ctx.cloud.reconnect().catch(() => []));
+hooksReady();
 void floors.syncAll();
 setInterval(() => void floors.syncAll(), SYNC_INTERVAL_MS).unref();
 pipeline.scheduler.start(SCHEDULER_INTERVAL_MS);
@@ -130,6 +136,7 @@ app.patch(
     const w = store.worker(String(req.params.id));
     const patch: { model?: string; effort?: (typeof EFFORTS)[number] | '' } = {};
     if (req.body?.model !== undefined) patch.model = str(req.body.model).trim();
+    if (w.host === 'box' && patch.model !== undefined && localModel(patch.model || store.getSettings().defaultModel)) throw new HttpError(400, `${w.name} works in a cloud machine, which can't reach a model on this computer. Move them to this computer first.`);
     if (req.body?.effort !== undefined) {
       const effort = str(req.body.effort);
       if (effort !== '' && !EFFORTS.includes(effort as (typeof EFFORTS)[number])) throw new HttpError(400, `effort must be one of ${EFFORTS.join(', ')}, or empty`);
@@ -138,9 +145,31 @@ app.patch(
     return store.patchWorker(w.id, patch);
   }),
 );
-app.patch('/api/settings', route((req) => store.updateSettings(settingsPatch(req.body))));
+app.patch('/api/settings', route((req) => store.updateSettings(settingsPatch(req.body, store.getSettings()))));
 app.post('/api/workers/:id/stop', route((req) => pipeline.stopWorker(String(req.params.id))));
 app.post('/api/workers/:id/reset', route((req) => pipeline.resetWorker(String(req.params.id))));
+// Box workers: the Upstash key and tokens (kept in secrets.json, never sent back), moving a worker, signing one in
+app.put('/api/cloud/key', route((req) => pipeline.ctx.cloud.account.setKey(str(req.body?.key))));
+app.put(
+  '/api/cloud/token',
+  route((req) => {
+    const kind = str(req.body?.kind);
+    if (kind !== 'github' && kind !== 'anthropic') throw new HttpError(400, 'kind must be github or anthropic');
+    return pipeline.ctx.cloud.account.setToken(kind, str(req.body?.value));
+  }),
+);
+app.post('/api/cloud/test', route(() => pipeline.ctx.cloud.account.test()));
+app.post('/api/cloud/orphans', route(() => pipeline.ctx.cloud.account.deleteOrphans()));
+app.post(
+  '/api/workers/:id/move',
+  route((req) => {
+    const host = str(req.body?.host);
+    if (host !== 'local' && host !== 'box') throw new HttpError(400, 'host must be local or box');
+    return pipeline.ctx.cloud.move(String(req.params.id), host);
+  }),
+);
+app.post('/api/workers/:id/sign-in', route((req) => pipeline.ctx.cloud.startSignIn(String(req.params.id))));
+if (demo) app.post('/api/demo/expire-sign-ins', route(() => pipeline.ctx.cloud.expireSignIns()));
 if (demo) app.use('/api/demo', demoRoutes(store, demo, pipeline));
 app.use(
   '/api',
@@ -201,7 +230,9 @@ const shutdown = (signal: string) => {
   closing = true;
   console.log(`\n  ${signal}: saving and closing…`);
   setTimeout(() => process.exit(0), 5_000).unref();
+  // Box workers' CLIs carry on in their Boxes: the office lets go of them before its last save.
   releaseClis();
+  backend.cloud.detach();
   for (const ws of [...wss.clients, ...terms.clients]) ws.terminate();
   server.close();
   void Promise.all([store.flush(), demo?.github.flush(), terminals.saveAll()])

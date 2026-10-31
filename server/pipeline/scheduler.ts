@@ -14,9 +14,12 @@ export const ERROR_COOLDOWN_MS = 2 * 60_000;
 /** Issues with one of these labels are never picked up; mm:needs-answer waits for the manager's reply (questions.ts). */
 const SKIP_LABELS = /^(skip|mm:skip|wontfix|question|mm:needs-answer)$/i;
 
-/** Free for a task: idle or done, or errored a while ago. Stopped workers wait for the manager; leavers get nothing new. */
+/**
+ * Free for a task: idle or done, or errored a while ago. Stopped workers wait for the manager; leavers, and Box workers
+ * whose Claude Code needs signing in, get nothing new.
+ */
 export function isFree(w: Worker, now: number): boolean {
-  if (w.role !== 'worker' || w.leaving) return false;
+  if (w.role !== 'worker' || w.leaving || w.needsSignIn) return false;
   return w.status === 'idle' || w.status === 'done' || (w.status === 'error' && now - (w.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
 }
 
@@ -71,6 +74,7 @@ export class Scheduler {
     usage.tick();
     // Before handing out work, so workers on their way out get none.
     team.applyLeaving();
+    this.ctx.cloud.pauseIdle();
     if (usage.paused()) return;
     team.autoscale();
     // The CEO's jobs count toward the session limit like anyone's.

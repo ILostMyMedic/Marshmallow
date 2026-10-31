@@ -10,7 +10,7 @@ Teams grow and shrink on their own (autospawning). Workers run on this computer 
 
 The code lives in [Mallowy-tv/TheMarshmallow](https://github.com/Mallowy-tv/TheMarshmallow) (private). Marshmallow acts on GitHub as the manager through their `gh` login.
 
-**Status: Phases 0 to 6 are done (skeleton, contract and state, the Backend seam with a full demo, the build → QA → fix → merge pipeline, real GitHub, workers' machines, questions to the manager, real Claude Code sessions on Claude or Ollama, and autospawning with the rules and the CEO); Phase 7 (the Upstash Box option) is next.** Real-mode testing happens on [Mallowy-tv/marshmallow-sandbox](https://github.com/Mallowy-tv/marshmallow-sandbox). The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
+**Status: Phases 0 to 6 are done (skeleton, contract and state, the Backend seam with a full demo, the build → QA → fix → merge pipeline, real GitHub, workers' machines, questions to the manager, real Claude Code sessions on Claude or Ollama, autospawning with the rules and the CEO, and workers in Upstash Boxes); Phase 8 (hardening) is next.** The Box option is proven on a fake Upstash account; its real run (on Opus 5.5, with your `gh` login) waits for an Upstash key. Real-mode testing happens on [Mallowy-tv/marshmallow-sandbox](https://github.com/Mallowy-tv/marshmallow-sandbox). The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
 
 ## The reference implementation: cubefarm
 
@@ -70,11 +70,12 @@ Rules for using it:
 - Workers get only the office's MCP servers (`--strict-mcp-config`): never the manager's own servers or claude.ai connectors.
 - Try real sessions on a local Ollama model before spending Claude usage.
 - Never copy, collect or store claude.ai logins. A cloud worker signs in with its CLI's own login in its terminal, or uses a key or token the manager provides.
-- Keys and tokens live in `secrets.json`: never in the state file, the logs or anything sent to the browser.
+- Keys and tokens live in `secrets.json`: never in the state file, the logs or anything sent to the browser. A Box gets each credential only as one command's environment; a `claude setup-token` token stays in your environment as `MARSHMALLOW_CLAUDE_TOKEN`, never written down.
+- A Box can't reach Ollama on this computer: Box workers run Claude, and the office refuses a local model for them.
 
 ## Scripts
 
-- `npm run dev -- --demo`: the server from source (tsx watch) on 4600, plus Vite on 5600 (`MARSHMALLOW_CLIENT_PORT`) proxying `/api` and `/ws` to it. Open http://localhost:5600 for the debug page: connect a fake repo with auto-assign on, hire workers (or let autoscale size the floor), and the scheduler builds, tests, fixes and merges its issues. Each worker's Terminal button shows their session. Hire a CEO to onboard floors, plan a floor's brief into issues, and chat. The fake GitHub lives in `<home>/demo-github.json`, and the debug page's Reset seeds it again. Ctrl+C stops both. Set the isolated home first: `$env:MARSHMALLOW_HOME='./.mm-home'` in PowerShell, or a `MARSHMALLOW_HOME=./.mm-home` prefix in bash.
+- `npm run dev -- --demo`: the server from source (tsx watch) on 4600, plus Vite on 5600 (`MARSHMALLOW_CLIENT_PORT`) proxying `/api` and `/ws` to it. Open http://localhost:5600 for the debug page: connect a fake repo with auto-assign on, hire workers (or let autoscale size the floor), and the scheduler builds, tests, fixes and merges its issues. Each worker's Terminal button shows their session. Hire a CEO to onboard floors, plan a floor's brief into issues, and chat. Under Cloud workers, any Upstash key works in the demo: new workers then get a fake Box, and each one's 🔑 Sign in runs a fake sign-in in their terminal. The fake GitHub lives in `<home>/demo-github.json`, and the debug page's Reset seeds it again. Ctrl+C stops both. Set the isolated home first: `$env:MARSHMALLOW_HOME='./.mm-home'` in PowerShell, or a `MARSHMALLOW_HOME=./.mm-home` prefix in bash.
 - `npm run dev` (no `--demo`): real mode, acting on GitHub through your `gh` login. It needs a home outside this project: leave `MARSHMALLOW_HOME` unset (`~/.marshmallow`), and the server refuses to start otherwise. A worker's model is the office default (`claude-opus-5-5`) unless set on the debug page; `ollama/gpt-oss:20b` runs on the local Ollama server.
 - `npm test` (Vitest), `npm run typecheck`, `npm run build` (typecheck, then the client into `dist/`).
 - `npm start`: the server alone, serving `dist/` on 4600.

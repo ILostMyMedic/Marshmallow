@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { localModel, LOCAL_SERVERS } from '../../shared/models.ts';
 import type { EffortLevel } from '../../shared/types.ts';
+import type { BoxVersions } from '../machines/box/boxScripts.ts';
 
 const WIN = process.platform === 'win32';
 
@@ -220,3 +221,32 @@ process.stdin.on('end', async () => {
   }
 });
 `;
+
+/** A field of an installed package's package.json, found from its entry file (its exports may not offer package.json). */
+function packageField(pkg: string, field: string): string | null {
+  try {
+    let dir = path.dirname(createRequire(import.meta.url).resolve(pkg));
+    for (let i = 0; i < 6; i++) {
+      const file = path.join(dir, 'package.json');
+      if (fs.existsSync(file)) {
+        const json = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+        if (json.name === pkg) return typeof json[field] === 'string' ? (json[field] as string) : null;
+      }
+      dir = path.dirname(dir);
+    }
+  } catch {
+    // not installed
+  }
+  return null;
+}
+
+/**
+ * The CLI versions a Box installs: the Claude Code the Agent SDK bundles, and the pinned Playwright MCP, so a Box
+ * worker runs what a local one does. Adapted from cubefarm server/clis.ts (MIT): boxVersions.
+ */
+export function boxVersions(): BoxVersions {
+  return {
+    claude: packageField('@anthropic-ai/claude-agent-sdk', 'claudeCodeVersion') ?? 'latest',
+    playwrightMcp: packageField('@playwright/mcp', 'version') ?? 'latest',
+  };
+}

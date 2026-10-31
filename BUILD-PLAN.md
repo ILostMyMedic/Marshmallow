@@ -148,7 +148,7 @@ marshmallow/
    - passed only as one command's environment
    - sign-in run in the worker's terminal (`cloud.ts`)
 
-**Done when:** a worker set to "Box" starts an issue, you stop the server mid-task and start it again, and the server catches up with the PR the worker opened meanwhile.
+**Done when:** a worker set to "Box" starts an issue, you stop the server mid-task and start it again, and the server catches up with the PR the worker opened meanwhile. (Proven on a fake Upstash account in `server/team/cloudRestart.test.ts`; the real run waits for an Upstash key.)
 
 ## Phase 8: hardening
 

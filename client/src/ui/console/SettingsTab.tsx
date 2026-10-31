@@ -6,9 +6,8 @@
 // and the profile, voice, outside, notification, theme and accessibility settings.
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { BOX_SIZE_INFO, BOX_SIZES } from '../../../../shared/cloud';
-import type { BoxSize, CloudCredentialSource } from '../../../../shared/types';
+import { DAY_MODES, type BoxSize, type CloudCredentialSource, type DayMode } from '../../../../shared/types';
 import { useStore } from '../../store';
-import { dayTime, DAY_MODES, setDayMode, type DayMode } from '../../world/dayTime';
 import { ConfirmButton, Field, ModelPick, SecretField } from './fields';
 import { EFFORTS, LIMITS, pruneEdits, settingsForm, settingsPatch, type FormEdits, type SettingsForm } from './forms';
 import { run, useBusy } from './run';
@@ -132,21 +131,13 @@ function CloudCard({ form, set }: { form: SettingsForm; set: <K extends keyof Se
   );
 }
 
-/** The office clock is this browser's own (world/dayTime.ts): the sky, the light and lunch follow it. */
-function BrowserCard() {
-  const [mode, setMode] = useState<DayMode>(dayTime.mode);
+/** The office clock (world/dayTime.ts follows it): the sky, the light and lunch, the same in every tab. */
+function ClockCard({ form, set }: { form: SettingsForm; set: <K extends keyof SettingsForm>(k: K, v: SettingsForm[K]) => void }) {
   return (
     <section className="console-card">
-      <h3 className="console-h">🕐 In this browser</h3>
-      <Field label="The office clock" hint="The sky, the lamps and lunch follow it. Kept in this browser only.">
-        <select
-          value={mode}
-          onChange={(e) => {
-            const m = e.target.value as DayMode;
-            setDayMode(m);
-            setMode(m);
-          }}
-        >
+      <h3 className="console-h">🕐 Time</h3>
+      <Field label="The office clock" hint="The sky, the lamps and lunch follow it, in every tab.">
+        <select value={form.dayMode} onChange={(e) => set('dayMode', e.target.value as DayMode)}>
           {DAY_MODES.map((m) => (
             <option key={m} value={m}>
               {DAY_MODE_NAMES[m]}
@@ -239,7 +230,7 @@ export function SettingsTab() {
           </label>
         </section>
         <CloudCard form={form} set={set} />
-        <BrowserCard />
+        <ClockCard form={form} set={set} />
       </div>
       {(changes > 0 || blocked) && (
         <div className="console-save" role="status">

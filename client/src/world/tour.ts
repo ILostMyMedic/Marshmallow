@@ -1,13 +1,16 @@
 // What the guide at the front desk tells you: today's status in a few numbers, and a tour of the building, a stop per
-// floor (each repo floor, then the CEO's office and the roof terrace), each with a card for your screen and short
-// lines for the guide's speech bubbles. Pure: from the office's state, so it's tested; TourGuide.tsx runs the tour.
-import type { Floor, QaRecord, Worker } from '../../../shared/types';
+// floor (each repo floor, then the CEO's office and the roof terrace, then back in the lobby with what the office has
+// shipped and won), each with a card for your screen and short lines for the guide's speech bubbles. Pure: from the
+// office's state, so it's tested; TourGuide.tsx runs the tour.
+import type { Floor, QaRecord, RecordsView, Worker } from '../../../shared/types';
 import { CEO_FLOOR, LOBBY, ROOF } from './floors';
 
 export interface Office {
   floors: readonly Floor[];
   workers: Record<string, Worker>;
   qa: Record<string, QaRecord>;
+  /** From the office database: the company's total and the trophies, for the lobby. */
+  records?: Pick<RecordsView, 'total' | 'trophies'>;
 }
 
 export interface Today {
@@ -99,14 +102,20 @@ export function tourStops(o: Office, now: number): TourStop[] {
   const ceo = Object.values(o.workers).find((w) => w.role === 'ceo');
   const floors = [...o.floors].sort((a, b) => a.floor - b.floor).map((f) => floorStop(f, o, now));
   const today = todayStatus(o, now);
+  const total = o.records?.total ?? 0;
+  const newest = o.records?.trophies.at(-1);
+  const company = o.records?.trophies.filter((t) => !t.floorId).length ?? 0;
   return [
     ...floors,
     {
       floor: CEO_FLOOR,
       title: "The CEO's office",
-      card: ceo
-        ? [`${ceo.name} runs the company from up here: onboarding new floors, turning briefs into issues and sizing the teams.`, busy(ceo) ? `${ceo.name} is busy right now.` : `${ceo.name} has a moment, if you want to say hi.`]
-        : ["The CEO's office, waiting for a CEO. Hire one in the manager's console (O) and they'll plan the floors' work."],
+      card: [
+        ...(ceo
+          ? [`${ceo.name} runs the company from up here: onboarding new floors, turning briefs into issues and sizing the teams.`, busy(ceo) ? `${ceo.name} is busy right now.` : `${ceo.name} has a moment, if you want to say hi.`]
+          : ["The CEO's office, waiting for a CEO. Hire one in the manager's console (O) and they'll plan the floors' work."]),
+        ...(company ? [`By the meeting table: the company's milestones, and its ${company} troph${company === 1 ? 'y' : 'ies'} on the cabinet under them.`] : []),
+      ],
       say: ceo ? [`The corner office!`, `${ceo.name} runs things from here.`] : ['The corner office…', "We haven't hired a CEO yet."],
     },
     {
@@ -121,9 +130,17 @@ export function tourStops(o: Office, now: number): TourStop[] {
       card: [
         `${today.floors} floor${today.floors === 1 ? '' : 's'}, ${today.team} on the team, ${today.working} at work right now.`,
         `Today: ${today.merged} merged, ${today.opened} PRs opened, ${today.filed} issues filed.`,
+        total
+          ? `${total} PR${total === 1 ? '' : 's'} shipped in all (the shipped wall lists the latest)${newest ? `, and the newest trophy in the cabinet: ${newest.icon} ${newest.title}` : ''}.`
+          : 'Nothing shipped yet: the first merge puts the first trophy in the cabinet.',
         'Come back to the front desk any time.',
       ],
-      say: ["That's the tour!", 'Come back any time. 👋'],
+      say: [
+        "That's the tour!",
+        ...(total ? [`${total} PR${total === 1 ? '' : 's'} shipped so far! 🚢`] : []),
+        ...(newest ? [clip(`Our newest trophy: ${newest.icon} ${newest.title}`, 52)] : []),
+        'Come back any time. 👋',
+      ],
     },
   ];
 }

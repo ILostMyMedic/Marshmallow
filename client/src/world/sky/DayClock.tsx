@@ -5,7 +5,7 @@
 // that follows the time of day reads one `dayTime.t` that frame. window.__mmSky reads it and moves it, for QA.
 import { useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { DAY_MODES, dayTime, nightFactor, sampleDayTime, setDayMode, type DayMode } from '../dayTime';
+import { DAY_MODES, dayTime, nightFactor, sampleDayTime, type DayMode } from '../dayTime';
 import { lampsOn } from './lamps';
 import { outdoor } from './outdoor';
 
@@ -23,8 +23,11 @@ const probe = {
   get mode(): DayMode {
     return dayTime.mode;
   },
+  /** This tab only, until the office's setting changes (the setting itself: PATCH /api/settings { dayMode }). */
   set mode(m: DayMode) {
-    if (DAY_MODES.includes(m)) setDayMode(m);
+    if (!DAY_MODES.includes(m)) return;
+    dayTime.mode = m;
+    sampleDayTime();
   },
   /** The phase the clock is held at, or null while it runs. */
   get frozen() {
@@ -47,7 +50,7 @@ const probe = {
     dayTime.frozen = t - Math.floor(t);
     sampleDayTime();
   },
-  /** Holds the current phase (true) or lets the viewer's mode drive it again (false). */
+  /** Holds the current phase (true) or lets the office's mode drive it again (false). */
   freeze(on: boolean) {
     dayTime.frozen = on ? sampleDayTime() : null;
     sampleDayTime();

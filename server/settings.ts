@@ -1,6 +1,6 @@
 // The office's settings as the manager changes them (PATCH /api/settings): each field checked, the rest left alone.
 import { cloudSettings } from '../shared/cloud.ts';
-import type { EffortLevel, Settings } from '../shared/types.ts';
+import { DAY_MODES, type DayMode, type EffortLevel, type Settings } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 
 export const EFFORTS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -30,6 +30,10 @@ export function settingsPatch(body: unknown, now?: Settings): Partial<Settings> 
     if (b[key] === undefined) continue;
     if (typeof b[key] !== 'string') throw new HttpError(400, `${key} must be text`);
     patch[key] = (b[key] as string).trim().slice(0, 80);
+  }
+  if (b.dayMode !== undefined) {
+    if (!DAY_MODES.includes(b.dayMode as DayMode)) throw new HttpError(400, `dayMode must be one of ${DAY_MODES.join(', ')}`);
+    patch.dayMode = b.dayMode as DayMode;
   }
   if (b.setupDone !== undefined) patch.setupDone = b.setupDone === true;
   if (b.autoscale !== undefined) patch.autoscale = b.autoscale === true;

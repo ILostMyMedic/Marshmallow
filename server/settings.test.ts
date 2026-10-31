@@ -10,6 +10,7 @@ describe('settingsPatch', () => {
       companyName: 'Fluff',
     });
     expect(settingsPatch(null)).toEqual({});
+    expect(settingsPatch({ dayMode: 'clock' })).toEqual({ dayMode: 'clock' });
   });
 
   it('refuses what is out of shape', () => {
@@ -17,5 +18,6 @@ describe('settingsPatch', () => {
     expect(() => settingsPatch({ maxWorkers: 2.5 })).toThrow(/whole number/);
     expect(() => settingsPatch({ defaultModel: '  ' })).toThrow(/model name/);
     expect(() => settingsPatch({ defaultEffort: 'turbo' })).toThrow(/defaultEffort/);
+    expect(() => settingsPatch({ dayMode: 'night' })).toThrow(/dayMode/);
   });
 });

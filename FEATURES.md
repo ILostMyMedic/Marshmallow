@@ -12,7 +12,9 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [x] **TypeScript monorepo**: `server/`, `shared/`, `client/`; ESM, strict, Vitest · S
 - [x] **Node server**: Express REST for commands, one WebSocket for state · S → `server/index.ts`
 - [x] **Shared contract**: a snapshot on connect, then typed events · S → `shared/types.ts`
-- [x] **State file**, written atomically (temp + rename); no database, GitHub is the source of truth · S
+- [x] **State file**, written atomically (temp + rename): the live office (floors, workers, tasks, QA); GitHub is the source of truth for the work · S
+- [x] **The office database**: Postgres built in (PGlite, running inside the server, no install), in `<home>/db` (`demo-db` for the demo), for what keeps growing: shipped work, trophies, floor plans, coins and purchases, your look, the environment's state. Numbered migrations; tests on an in-memory database · M → `server/db/` (new: not in cubefarm)
+- [ ] **A Postgres server instead**: `MARSHMALLOW_DATABASE_URL` points the same tables at a server you run · S
 - [x] **Config**: home folder, port, host (127.0.0.1 only), `--demo` · S → `server/config.ts`
 - [x] **Backend interface**: every GitHub, git, disk and session call behind one seam · S → `server/backend.ts`
 - [x] **Demo mode**: fake GitHub, fake sessions, fake Upstash; no Claude usage · M → `server/demo.ts`
@@ -174,9 +176,14 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 
 ## 10. Game: progression
 
-- [ ] **Coins** from merges and first-time QA passes · M → `server/ledger.ts`
-- [ ] **Decorations kiosk** to spend them · L → `decor/`
-- [ ] **Achievements** on a trophy shelf · M
+- [x] **Shipped work**: every merged PR kept (floor, title, who built and tested it, when), backfilled from GitHub when a floor connects; the lobby shows a shipped wall and the floors' totals · M (new: not in cubefarm)
+- [x] **Achievements** on a trophy shelf: the company's and each floor's milestones (first merge, 10, 50, 100 merges, a floor's first week…), in the lobby's trophy cabinet and on the CEO's floor · M
+- [x] **Your look on the server**: the same in every browser, kept in the database · S
+- [x] **The environment's state, office-wide**: the office clock's mode as an office setting, and the world events chosen by the server and kept in the database, so every tab sees the same sky and a reload doesn't start it over · M (new)
+- [x] **Floor plans**: each floor's items and the spots they stand in, starting with what every floor has today · M (new)
+- [x] **Coins** per floor from merges, first-time QA passes and fixes · M → `server/ledger.ts`
+- [x] **The shop** to spend them, per floor: extras and upgrades snapping into a floor's fixed spots (a vending machine, a beer fridge, a better coffee machine, a nicer ping-pong table, plants, rugs, posters); floors keep what they have · L → `decor/`
+- [x] **Posters with art from each repo**: generated from the repository (its name, languages, colour), unique to every floor · M (new)
 - [ ] **Career cards**: rank, badges, last merged PRs · M
 - [ ] **Desks that tell a story**: PR plaques, a plant that grows with tenure · M → `desk/DeskStory.tsx`
 - [ ] **Ping-pong leaderboard** · S

@@ -32,6 +32,8 @@ export function momentCue(type: Moment['type']): Cue {
       return 'joined';
     case 'left':
       return 'notice';
+    case 'trophy':
+      return 'merged';
   }
 }
 

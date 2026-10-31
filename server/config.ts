@@ -24,6 +24,11 @@ export function stateFile(home: string, demo: boolean): string {
   return path.join(home, demo ? 'demo-state.json' : 'state.json');
 }
 
+/** The office database's folder (server/db/): the demo keeps its own, as it does its state. */
+export function dbDir(home: string, demo: boolean): string {
+  return path.join(home, demo ? 'demo-db' : 'db');
+}
+
 /**
  * Why the real office can't use this home, or null when it can. Workers clone repositories into it and run Claude
  * Code there, which walks up the folders for instructions: a home inside a project (this one's .mm-home) would hand
@@ -46,6 +51,7 @@ export const VERSION: string = JSON.parse(fs.readFileSync(path.resolve(import.me
 export const HOME_DIR = homeDir(process.env);
 export const DEMO = isDemo(process.argv, process.env);
 export const STATE_FILE = stateFile(HOME_DIR, DEMO);
+export const DB_DIR = dbDir(HOME_DIR, DEMO);
 /** Floors' own checkouts: <WORKSPACE_ROOT>/<owner>__<repo>/main. */
 export const WORKSPACE_ROOT = path.join(HOME_DIR, 'workspaces');
 /** Workers' machines: <MACHINES_DIR>/<machine>/ (server/machines/workspace.ts). */

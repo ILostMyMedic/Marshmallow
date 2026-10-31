@@ -7,7 +7,7 @@ import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { placeAt, play } from '../../../ui/eventSfx';
-import { seeded } from '../director';
+import { seeded } from '../../../../../shared/worldEvents';
 import { inOut, sign, type SceneProps } from '../kit';
 
 const VERT = /* glsl */ `

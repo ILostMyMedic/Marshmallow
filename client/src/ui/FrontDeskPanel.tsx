@@ -1,15 +1,17 @@
-// The front desk (E on it in the lobby): Mia says hello, shows today in numbers (world/tour.ts todayStatus), offers
-// the tour (world/TourGuide.tsx), lists every floor with what it's building and who's on it, each a ride away, and
-// points the way to the manager's console.
+// The front desk (E on it in the lobby): Mia says hello, shows today in numbers (world/tour.ts todayStatus) and what
+// the office has shipped and won (ui/TrophiesPanel.tsx), offers the tour (world/TourGuide.tsx), lists every floor with
+// what it's building and who's on it, each a ride away, and points the way to the manager's console.
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { rideTo } from '../world/elevatorRide';
 import { CEO_FLOOR, ROOF } from '../world/floors';
+import { dateLabel, prs } from '../world/shipped';
 import { clip, names, todayStatus, tourStops } from '../world/tour';
 import { useTour } from '../world/tourState';
 import { useView } from '../world/view';
 import { showTab } from './console/nav';
 import { Panel } from './Panel';
+import { TrophyList } from './TrophiesPanel';
 
 export function FrontDeskPanel() {
   const company = useStore((s) => s.settings.companyName) || 'Marshmallow';
@@ -17,6 +19,8 @@ export function FrontDeskPanel() {
   const floors = useStore((s) => s.floors);
   const workers = useStore((s) => s.workers);
   const qa = useStore((s) => s.qa);
+  const records = useStore((s) => s.records);
+  const newest = records.trophies.at(-1);
   const close = useView((s) => s.closeOverlay);
   const go = (floor: number) => {
     close();
@@ -50,6 +54,22 @@ export function FrontDeskPanel() {
             </div>
           ))}
         </div>
+        <p className="frontdesk-records">
+          <span>
+            🚢 <b>{prs(records.total)}</b> shipped in all
+          </span>
+          {newest ? (
+            <span>
+              🏆 Newest trophy: {newest.icon} <b>{newest.title}</b> · {dateLabel(newest.earnedAt)}
+            </span>
+          ) : (
+            <span>🏆 The trophy cabinet is waiting for your first merge</span>
+          )}
+        </p>
+        <details className="frontdesk-trophies">
+          <summary>Every trophy, and what we shipped lately</summary>
+          <TrophyList />
+        </details>
         <button className="frontdesk-tour" onClick={tour}>
           🧭 Take the tour: every floor, the CEO's office and the roof
         </button>

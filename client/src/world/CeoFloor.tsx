@@ -1,10 +1,12 @@
 // The CEO's floor, the storey under the roof terrace: an executive office. The CEO's walnut desk faces the room from
 // the north side, a credenza and the company's name on the wall behind it; a lounge with a long sofa and armchairs in
-// the west half, a meeting table in the east, a bar cart, a globe, a floor lamp and plants. The CEO works and strolls
-// here (the errand director), and now and then rides down to walk a floor (the rituals).
+// the west half, a meeting table in the east under the company's milestones (CeoMilestones.tsx), a bar cart, a globe,
+// a floor lamp and plants. The CEO works and strolls here (the errand director), and now and then rides down to walk a
+// floor (the rituals).
 import { memo, useMemo } from 'react';
 import { useStore } from '../store';
 import { useCanvasTexture } from './canvasTexture';
+import { CeoMilestones } from './CeoMilestones';
 import { CeoRituals } from './CeoRituals';
 import { Desk } from './Desk';
 import { drawSign } from './draw';
@@ -172,6 +174,7 @@ export const CeoFloor = memo(function CeoFloor({ top }: { top: number }) {
       <CoffeeTable position={[EXEC_COFFEE.x, 0, EXEC_COFFEE.z]} rotationY={Math.PI / 2} />
       <FloorLamp position={[-HALF_W + 0.7, 0, 6.2]} />
       <MeetingTable />
+      <CeoMilestones />
       <BarCart />
       <Globe />
       {EXEC_PLANTS.map(([x, z, s]) => (

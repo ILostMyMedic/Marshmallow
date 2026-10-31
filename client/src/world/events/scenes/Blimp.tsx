@@ -9,7 +9,7 @@ import { useStore } from '../../../store';
 import { loop, placeAt } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { SANS } from '../../draw';
-import { seeded } from '../director';
+import { seeded } from '../../../../../shared/worldEvents';
 import { along, clearStretch, flightProfile } from '../flight';
 import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 import { bannerText } from '../news';
@@ -47,7 +47,8 @@ export default function Blimp({ run, elevation }: SceneProps) {
   const p = useMemo(() => {
     const r = seeded(run.seed);
     const st = useStore.getState();
-    const text = bannerText(st.floors, Date.now(), st.settings.companyName, r());
+    // the news as of its start, so a tab that joins later reads the same banner
+    const text = bannerText(st.floors, run.startedAt, st.settings.companyName, r());
     const dir = r() < 0.5 ? 1 : -1;
     // the banner lies along the flight, turned to face the building so it reads left to right from the windows
     const turn = (-s * dir * Math.PI) / 2;
@@ -59,7 +60,7 @@ export default function Blimp({ run, elevation }: SceneProps) {
     const [z0, z1] = dir > 0 ? [a, b] : [b, a];
     const profile = flightProfile(theCity(), { x0: x, z0, x1: x, z1 }, { base, margin: 14, pad: 14, slope: 0.3 });
     return { dir, x, z0, z1, profile, text, turn, along: -Math.sin(turn) };
-  }, [run.seed, s, elevation]);
+  }, [run.seed, run.startedAt, s, elevation]);
   const banner = useMemo(() => {
     const geo = new THREE.PlaneGeometry(BANNER.w, BANNER.h, BANNER.segments, 1);
     const base = Float32Array.from(geo.attributes.position.array as Float32Array);

@@ -2,7 +2,8 @@
 // Adapted from cubefarm client/src/store.ts (MIT).
 import { create } from 'zustand';
 import { EMPTY_CLOUD } from '../../shared/cloud';
-import { DEFAULT_SETTINGS, isMoment, type CloudView, type Floor, type LogLine, type Moment, type OfficeMessage, type QaRecord, type Question, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
+import { EMPTY_WORLD, type WorldView } from '../../shared/worldEvents';
+import { DEFAULT_SETTINGS, EMPTY_RECORDS, isMoment, type CloudView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
 const LOG_KEEP = 200;
@@ -23,6 +24,11 @@ export interface Office {
   questions: Question[]; // oldest first
   usage: UsageView;
   cloud: CloudView;
+  // from the office database
+  records: RecordsView;
+  look: PlayerLook | null;
+  floorPlans: Record<string, FloorItem[]>;
+  world: WorldView; // the world events on now
 }
 
 export const EMPTY_OFFICE: Office = {
@@ -39,6 +45,10 @@ export const EMPTY_OFFICE: Office = {
   questions: [],
   usage: { state: 'normal', until: null, warning: null },
   cloud: EMPTY_CLOUD,
+  records: EMPTY_RECORDS,
+  look: null,
+  floorPlans: {},
+  world: EMPTY_WORLD,
 };
 
 /** Office messages a tab keeps. */
@@ -68,6 +78,10 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         questions: d.questions,
         usage: d.usage,
         cloud: d.cloud,
+        records: d.records ?? EMPTY_RECORDS,
+        look: d.look ?? null,
+        floorPlans: d.floorPlans ?? {},
+        world: d.world ?? EMPTY_WORLD,
       };
     }
     case 'settings':
@@ -103,6 +117,14 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
       return { ...o, usage: ev.usage };
     case 'cloud':
       return { ...o, cloud: ev.cloud };
+    case 'records':
+      return { ...o, records: ev.records };
+    case 'look':
+      return { ...o, look: ev.look };
+    case 'floorPlan':
+      return { ...o, floorPlans: { ...o.floorPlans, [ev.floorId]: ev.items } };
+    case 'world':
+      return { ...o, world: ev.world };
   }
 }
 

@@ -1,37 +1,36 @@
-// Adapted from cubefarm client/src/world/events/eventsState.ts (MIT): the weather, the time of day and Settings are cut
-// (the director keeps one pace), and the rare ones' note goes to view.ts's toast.
+// Adapted from cubefarm client/src/world/events/eventsState.ts (MIT): the weather, the time of day and Settings are cut,
+// the director moved to the office (server/db/world.ts), and the rare ones' note goes to view.ts's toast.
 
-// The world events that are on now: the director (director.ts) stepped with the render, so nothing happens while the
-// office isn't on screen, each running event's own clock (scenes read `run.t` in their frame loop), and what ran
-// before. React sees the list change only when an event starts or ends (WorldEvents.tsx mounts a scene per run).
-// QA: `?event=blimp` starts one a couple of seconds in; window.__mmEvents shows the schedule and can trigger() one.
+// The world events on now, as the office runs them for every tab (the snapshot's `world`, then its 'world' events). A
+// run's clock is the wall clock since it started (the server only takes connections from this machine, so tab and
+// server share a clock): a tab that joins mid-event joins it at that point, and a hidden tab finds it moved on. Scenes
+// read `run.t` in their frame loop; React sees the list change only when an event starts or ends (WorldEvents.tsx
+// mounts a scene per run).
+// QA: `?event=blimp` asks the office for one a couple of seconds in; window.__mmEvents shows what's on and can
+// trigger() one for every tab.
 import { create } from 'zustand';
+import { EVENTS, parseEventId, parseEventParam, type EventId, type WorldRun } from '../../../../shared/worldEvents';
+import { command, query } from '../../api';
+import { useStore } from '../../store';
 import type { Side } from '../layout';
 import { useView } from '../view';
-import { EVENTS, newDirector, parseEventId, parseEventParam, startRunning, stepDirector, stopRunning, type EventId } from './director';
 
-/** One event as it plays out. */
-export interface EventRun {
-  key: number;
-  id: EventId;
-  /** The side of the building it's on (where the windows to watch it from are). */
-  side: Side;
-  /** Fixed for the run: its own randomness (paths, colours). */
-  seed: number;
-  seconds: number;
-  /** Seconds since it started, render time. */
+/** One event as this tab draws it. */
+export interface EventRun extends WorldRun {
+  /** Seconds since it started, moved on every frame. */
   t: number;
-  forced: boolean;
+  /** Seconds __mmEvents.seek moved it on, in this tab only. */
+  skew: number;
 }
 
-const HISTORY = 20;
+/** A rare one's note shows only while there's this much of it left to see. */
+const TOAST_LEFT_S = 10;
 
 const state = {
-  director: newDirector((Date.now() ^ 0x5eed) >>> 0),
   runs: [] as EventRun[],
-  history: [] as { id: EventId; side: Side; at: number; forced: boolean }[],
-  seq: 0,
-  /** ?event=: started once the office has rendered a couple of seconds. */
+  /** Render seconds since the office came up on screen. */
+  shown: 0,
+  /** ?event=: asked for once the office has rendered a couple of seconds. */
   pending: (() => {
     try {
       return parseEventParam(window.location.search);
@@ -54,51 +53,47 @@ export const bigEvent = (): EventRun | null => state.runs.find((r) => EVENTS[r.i
 /** Every event running now. */
 export const runningEvents = (): readonly EventRun[] => state.runs;
 
-/** Starts `id` now (on `side`, or a random one). A big event first ends any other big one, so two never overlap. */
-export function triggerEvent(id: EventId, side?: Side, forced = true): EventRun {
-  if (EVENTS[id].big) for (const r of state.runs.filter((x) => EVENTS[x.id].big)) endEvent(r.key);
-  const same = state.runs.find((r) => r.id === id);
-  if (same) endEvent(same.key);
-  const run: EventRun = {
-    key: ++state.seq,
-    id,
-    side: side ?? (Math.random() < 0.5 ? 'west' : 'east'),
-    seed: Math.floor(Math.random() * 2 ** 31),
-    seconds: EVENTS[id].seconds,
-    t: 0,
-    forced,
-  };
-  state.runs.push(run);
-  startRunning(state.director, run.key, id, run.seconds);
-  state.history.push({ id, side: run.side, at: Date.now(), forced });
-  if (state.history.length > HISTORY) state.history.splice(0, state.history.length - HISTORY);
-  if (EVENTS[id].toast) useView.getState().showToast(`👀 Something's happening outside, ${run.side} side!`);
-  publish();
-  return run;
-}
+const elapsed = (r: Pick<EventRun, 'startedAt'> & { skew?: number }, now: number) => (now - r.startedAt) / 1000 + (r.skew ?? 0);
 
-/** Ends an event (its time is up, or it was replaced): its scene unmounts and tears itself down. */
-export function endEvent(key: number) {
-  const i = state.runs.findIndex((r) => r.key === key);
-  if (i < 0) return;
-  state.runs.splice(i, 1);
-  stopRunning(state.director, key);
+/**
+ * Draws what the office says is on: a run this tab hasn't drawn joins at its point (a rare one with its note), and one
+ * no longer on goes. The store's world changing calls it; tests call it directly.
+ */
+export function showRuns(world: readonly WorldRun[], now = Date.now()) {
+  const kept = state.runs.filter((r) => world.some((w) => w.key === r.key));
+  const fresh: EventRun[] = world
+    .filter((w) => !state.runs.some((r) => r.key === w.key) && elapsed(w, now) < w.seconds)
+    .map((w) => ({ key: w.key, id: w.id, side: w.side, seed: w.seed, startedAt: w.startedAt, seconds: w.seconds, forced: w.forced, t: elapsed(w, now), skew: 0 }));
+  if (kept.length === state.runs.length && !fresh.length) return;
+  state.runs = [...kept, ...fresh];
+  for (const r of fresh) if (EVENTS[r.id].toast && r.seconds - r.t > TOAST_LEFT_S) useView.getState().showToast(`👀 Something's happening outside, ${r.side} side!`);
   publish();
 }
 
-/** Moves the events on by dt seconds of render time (WorldEvents.tsx, every frame). */
-export function stepEvents(dt: number) {
+let world = useStore.getState().world.running;
+showRuns(world);
+useStore.subscribe((s) => {
+  if (s.world.running === world) return;
+  world = s.world.running;
+  showRuns(world);
+});
+
+/** Moves each run to now (WorldEvents.tsx, every frame); one whose time is up goes without waiting for the office's word. */
+export function stepEvents(dt: number, now = Date.now()) {
+  let ended = false;
   for (let i = state.runs.length - 1; i >= 0; i--) {
     const r = state.runs[i];
-    r.t += dt;
-    if (r.t >= r.seconds) endEvent(r.key);
+    r.t = elapsed(r, now);
+    if (r.t < r.seconds) continue;
+    state.runs.splice(i, 1);
+    ended = true;
   }
-  const id = stepDirector(state.director, dt);
-  if (id) triggerEvent(id, undefined, false);
-  if (state.pending && state.director.clock > 2) {
-    const p = state.pending;
+  if (ended) publish();
+  state.shown += dt;
+  if (state.pending && state.shown > 2 && useStore.getState().loaded) {
+    const id = state.pending;
     state.pending = null;
-    triggerEvent(p);
+    void command('POST', '/api/world/trigger', { event: id }).catch((err: Error) => console.warn(`?event=${id}: ${err.message}`));
   }
 }
 
@@ -106,11 +101,11 @@ export function stepEvents(dt: number) {
 
 const view = (r: EventRun) => ({ key: r.key, id: r.id, side: r.side, t: Math.round(r.t * 10) / 10, seconds: r.seconds, big: EVENTS[r.id].big, forced: r.forced });
 
-/** For QA and headless checks: what's on, what's next and what ran, and trigger('blimp', 'west') starts one now. */
+/** For QA and headless checks: what's on, what's next and what ran, and trigger('blimp', 'west') starts one for every tab. */
 export const eventsProbe: Record<string, unknown> = {
+  /** When the office's director picks the next event. */
   get schedule() {
-    const d = state.director;
-    return { clock: Math.round(d.clock), nextIn: Math.max(0, Math.round(d.nextAt - d.clock)) };
+    return { nextIn: Math.max(0, Math.round((useStore.getState().world.nextAt - Date.now()) / 1000)) };
   },
   get current() {
     return state.runs.map(view);
@@ -119,30 +114,34 @@ export const eventsProbe: Record<string, unknown> = {
   list() {
     return state.runs.map(view);
   },
-  get history() {
-    return state.history.map((h) => ({ ...h }));
+  /** What ran lately, newest first, from the office's log (a promise). */
+  history() {
+    return query('/api/world/log');
   },
   get catalog() {
     return Object.values(EVENTS).map((e) => ({ id: e.id, label: e.label, tier: e.tier, big: e.big, seconds: e.seconds }));
   },
-  /** Starts an event now ('plane', 'blimp', 'duck'…), on 'west' or 'east' (random by default). Null for an unknown name. */
-  trigger(name: string, side?: Side) {
+  /** Starts an event now for every tab ('plane', 'blimp', 'duck'…), on 'west' or 'east' (either by default): a promise of it, or null for an unknown name. */
+  async trigger(name: string, side?: Side) {
     const id = parseEventId(name);
-    return id ? view(triggerEvent(id, side === 'west' || side === 'east' ? side : undefined)) : null;
+    return id ? command('POST', '/api/world/trigger', { event: id, side: side === 'west' || side === 'east' ? side : undefined }) : null;
   },
-  /** Ends the running event with this name (or all of them). */
+  /** Ends the running event with this name (or all of them), for every tab. */
   end(name?: string) {
-    for (const r of state.runs.filter((x) => !name || x.id === parseEventId(name))) endEvent(r.key);
+    return command('POST', '/api/world/end', name ? { event: name } : {});
   },
-  /** Jumps a running event to `t` seconds in (to see its middle without waiting for it). */
+  /** Jumps a running event to `t` seconds in, in this tab only (to see its middle without waiting for it). */
   seek(name: string, t: number) {
     const r = state.runs.find((x) => x.id === parseEventId(name));
-    if (r && Number.isFinite(t)) r.t = Math.max(0, Math.min(r.seconds - 0.5, t));
+    if (r && Number.isFinite(t)) {
+      r.t = Math.max(0, Math.min(r.seconds - 0.5, t));
+      r.skew = r.t - (Date.now() - r.startedAt) / 1000;
+    }
     return r ? view(r) : null;
   },
-  /** Moves the next scheduled event this many seconds from now (watch the director pick one). */
+  /** Has the office's director pick the next event this many seconds from now (watch it choose). */
   soon(seconds = 1) {
-    state.director.nextAt = state.director.clock + Math.max(0, seconds);
+    return command('POST', '/api/world/soon', { seconds });
   },
 };
 

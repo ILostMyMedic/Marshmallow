@@ -12,7 +12,7 @@ import { loop, placeAt } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
 import { SANS } from '../../draw';
 import { useView } from '../../view';
-import { seeded } from '../director';
+import { seeded } from '../../../../../shared/worldEvents';
 import { flightProfile } from '../flight';
 import { clamp01, eyeAbove, inOut, sign, smooth, toonOut, type SceneProps } from '../kit';
 import { skyText } from '../news';

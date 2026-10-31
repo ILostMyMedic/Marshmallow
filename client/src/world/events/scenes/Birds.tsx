@@ -9,7 +9,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { loop, placeAt, play } from '../../../ui/eventSfx';
 import { CITY, CORRIDOR_HALF } from '../../cityLayout';
-import { seeded } from '../director';
+import { seeded } from '../../../../../shared/worldEvents';
 import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 
 const BIRDS = 26;

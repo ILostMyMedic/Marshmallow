@@ -4,10 +4,22 @@ import { errandNamed, errands, wanted, type ErrandState } from '../errands';
 import { HALF_W } from '../layout';
 import { setErrand } from '../people';
 import { standable, walkways } from '../walkways';
-import { EVENT_IDS } from './director';
-import { endEvent, runningEvents, triggerEvent } from './eventsState';
+import { EVENT_IDS, EVENTS, type EventId } from '../../../../shared/worldEvents';
+import { runningEvents, showRuns } from './eventsState';
 import './watch';
 import { watchBeats, watchSpots } from './watchPlan';
+
+let key = 0;
+/** The office starts `id` now, alongside what's on (a big one replacing any other big one); returns this tab's run. */
+function triggerEvent(id: EventId, side: 'west' | 'east') {
+  const now = Date.now();
+  const others = runningEvents().filter((r) => r.id !== id && !(EVENTS[id].big && EVENTS[r.id].big));
+  const run = { key: ++key, id, side, seed: 1, startedAt: now, seconds: EVENTS[id].seconds, forced: true };
+  showRuns([...others, run], now);
+  return runningEvents().find((r) => r.key === run.key)!;
+}
+/** The office says nothing is on. */
+const endAll = () => showRuns([]);
 
 const state = (floor: 'office' | 'lobby' = 'office'): ErrandState => ({ floor, statusFor: 0, seatedFor: 0, restless: 1000, roll: 0.5, home: { id: 'desk-0', x: -10.5, z: 4.5, facing: 0 }, others: [] });
 
@@ -67,7 +79,7 @@ describe('the watch errand', () => {
     expect(wanted(errands(), busy, state()).map((e) => e.name)).not.toContain('watch');
     blimp.t = blimp.seconds - 5;
     expect(watch.when(idle, state())).toBe(false); // too late to go
-    for (const r of [...runningEvents()]) endEvent(r.key);
+    endAll();
   });
 
   it('sends each watcher to their own spot on the event side', () => {
@@ -82,7 +94,7 @@ describe('the watch errand', () => {
     expect(a!.x).toBeGreaterThan(0);
     expect(b!.x).toBeGreaterThan(0);
     setErrand('ada', null);
-    endEvent(run.key);
+    endAll();
   });
 
   it('has them watch an event once, cheering at the blimp, then head back', () => {
@@ -101,6 +113,6 @@ describe('the watch errand', () => {
     act.end(true);
     expect(watch.when(idle, state())).toBe(false); // seen it
     expect(watch.when({ ...idle, id: 'grace' }, state())).toBe(true);
-    endEvent(run.key);
+    endAll();
   });
 });

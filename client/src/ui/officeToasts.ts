@@ -52,6 +52,8 @@ export function momentToast(m: Moment, floors: Floor[], workers: Record<string, 
       return { level: 'info', text: m.worker.role === 'ceo' ? `👔 ${m.worker.name} is your CEO` : `👋 ${m.worker.name} joined ${floorName(floors, m.worker.floorId)}` };
     case 'left':
       return { level: 'info', text: m.worker.role === 'ceo' ? `👔 ${m.worker.name} left the company` : `📦 ${m.worker.name} left ${floorName(floors, m.worker.floorId)}` };
+    case 'trophy':
+      return { level: 'good', text: `🏆 Trophy: ${m.trophy.icon} ${m.trophy.title}` };
   }
 }
 

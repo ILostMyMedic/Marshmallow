@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { loop, placeAt, play } from '../../../ui/eventSfx';
 import { CITY, CORRIDOR_HALF, LANE, theCity } from '../../cityLayout';
-import { seeded } from '../director';
+import { seeded } from '../../../../../shared/worldEvents';
 import { clamp01, glowOut, lerp, sign, smooth, span, toonOut, type SceneProps } from '../kit';
 
 const T = { arrive: 4, hover: 12, glide: 16, beam: 17.5, lift: 19, gone: 28, leave: 30, away: 34 };

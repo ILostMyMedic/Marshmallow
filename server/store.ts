@@ -4,10 +4,12 @@
 import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
 import { cloudSettings, DEFAULT_CLOUD, EMPTY_CLOUD } from '../shared/cloud.ts';
+import { EMPTY_WORLD } from '../shared/worldEvents.ts';
 import type { BoxCliRecord } from './sessions/boxCli.ts';
 import {
   type CloudView,
   DEFAULT_SETTINGS,
+  EMPTY_RECORDS,
   isBusy,
   type Floor,
   type LogEntry,
@@ -66,6 +68,10 @@ export interface SavedState {
   boxClis?: Record<string, BoxCliRecord>; // Box workers' live CLIs, by worker: picked up again after a restart
 }
 
+/** What the office database adds to a tab's snapshot (server/db/office.ts keeps it in memory). */
+export type DbView = Pick<Snapshot, 'records' | 'look' | 'floorPlans' | 'world'>;
+const NO_DB: DbView = { records: EMPTY_RECORDS, look: null, floorPlans: {}, world: EMPTY_WORLD };
+
 /** Log lines per worker in state.json, and in a tab's snapshot (memory keeps LOG_BUFFER). */
 const LOG_SAVED = 200;
 const LOG_SNAPSHOT = 50;
@@ -101,6 +107,8 @@ export class Store {
   private office = '';
   private boxClis = new Map<string, BoxCliRecord>();
   private clients = new Set<WebSocket>();
+  private dbView: () => DbView = () => NO_DB;
+  private momentListeners: ((m: Moment) => void)[] = [];
   private logSeq = 0;
   private saveTimer: NodeJS.Timeout | null = null;
   private writing: Promise<void> = Promise.resolve();
@@ -157,7 +165,13 @@ export class Store {
       questions: this.questionList(),
       usage: this.usage,
       cloud: this.cloud,
+      ...this.dbView(),
     };
+  }
+
+  /** The office database's part of the snapshot (server/db/office.ts). */
+  attachDb(view: () => DbView) {
+    this.dbView = view;
   }
 
   /** A tab connected: it gets the snapshot now and every change from here on. */
@@ -301,9 +315,20 @@ export class Store {
     if (this.qa.delete(qaKey(floorId, prNumber))) this.emit({ type: 'qaRemoved', floorId, prNumber });
   }
 
-  /** Tells every tab something happened (the game's moments). Nothing changes, so nothing is saved. */
+  /** Tells every tab something happened (the game's moments), and whoever listens (the office's records). Nothing changes, so nothing is saved. */
   moment(m: Moment) {
     this.broadcast(m);
+    for (const fn of this.momentListeners) fn(m);
+  }
+
+  /** Hears every moment (the office database records merges). */
+  onMoment(fn: (m: Moment) => void) {
+    this.momentListeners.push(fn);
+  }
+
+  /** Sends tabs a change that lives outside state.json (the office database's), so nothing is saved here. */
+  publish(ev: ServerEvent) {
+    this.broadcast(ev);
   }
 
   /** A message from the office to the manager's phone. */

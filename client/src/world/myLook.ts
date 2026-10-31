@@ -1,6 +1,10 @@
-// You: how your character looks (the look editor, ui/LookPanel.tsx, changes it), kept in this browser. A look read
-// back from storage is checked field by field, so an old or hand-edited one can't break the figure.
+// You: how your character looks (the look editor, ui/LookPanel.tsx, changes it), kept in the office database so every
+// browser shows the same one (the server sends it in the snapshot and on each change), with this browser's copy for a
+// quick start. A browser with a look from before the database sends it up once. A look read back from anywhere is
+// checked field by field, so an old or hand-edited one can't break the figure.
 import { create } from 'zustand';
+import { command } from '../api';
+import { useStore } from '../store';
 import { hashId, seededAppearance, type Appearance } from './appearance';
 import { ACCENT_COLORS, BUILDS, FACIAL_HAIR, GLASSES, HAIR_STYLES, HEADWEAR, OUTFITS } from './looks';
 
@@ -52,15 +56,46 @@ interface Me {
   setLook(patch: Partial<Appearance>): void;
 }
 
+/** How long (ms) after the last change in the editor the look goes up to the server. */
+const SAVE_AFTER_MS = 600;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function keepHere(look: Appearance) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(look));
+  } catch {
+    // not kept in this browser: the server has it
+  }
+}
+
+function sendUp(look: Appearance) {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => void command('PUT', '/api/look', { look }).catch(() => undefined), SAVE_AFTER_MS);
+}
+
 export const useMe = create<Me>()((set, get) => ({
   ...(typeof window === 'undefined' ? { look: DEFAULT_LOOK, chosen: false } : load()),
   setLook: (patch) => {
     const look = sanitizeLook({ ...get().look, ...patch }, get().look);
     set({ look, chosen: true });
-    try {
-      localStorage.setItem(KEY, JSON.stringify(look));
-    } catch {
-      // not saved: it still holds for this visit
-    }
+    keepHere(look);
+    sendUp(look);
   },
 }));
+
+// The server's look wins whenever it arrives or changes (the snapshot, or another browser saving one); with none there
+// yet, a look chosen in this browser goes up.
+if (typeof window !== 'undefined') {
+  let seen: unknown = undefined;
+  const follow = (o: ReturnType<typeof useStore.getState>) => {
+    if (!o.loaded || o.look === seen) return;
+    seen = o.look;
+    if (o.look) {
+      const look = sanitizeLook(o.look);
+      useMe.setState({ look, chosen: true });
+      keepHere(look);
+    } else if (useMe.getState().chosen) sendUp(useMe.getState().look);
+  };
+  useStore.subscribe(follow);
+  follow(useStore.getState()); // the game loads after the first snapshot (App.tsx's lazy Game): what's there already counts
+}

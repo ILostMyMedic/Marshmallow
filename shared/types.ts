@@ -1,6 +1,7 @@
 // The contract between the server and the browser: a snapshot when a tab connects, then typed events folded into it.
 // The game reads the same stream later, so workers carry what it needs from day one: status, activity, idleSince, seed.
 // Adapted from cubefarm shared/types.ts (MIT).
+import type { WorldView } from './worldEvents.ts';
 
 /** Where a worker stands, as far as the pipeline is concerned. */
 export type WorkerStatus =
@@ -225,7 +226,12 @@ export interface Settings {
   cloud: CloudSettings;
   defaultModel: string; // a Claude model, or `ollama/<name>`
   defaultEffort: EffortLevel;
+  dayMode: DayMode; // the office clock, which the game's sky, light and rituals follow in every tab
 }
+
+export const DAY_MODES = ['cycle', 'clock', 'day'] as const;
+/** 'cycle': a whole day every 30 minutes; 'clock': each viewer's own local time; 'day': always mid-afternoon. */
+export type DayMode = (typeof DAY_MODES)[number];
 
 export const DEFAULT_SETTINGS: Settings = {
   managerName: '',
@@ -238,6 +244,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cloud: { machineKind: 'local', boxSize: 'small', boxLimit: 10 },
   defaultModel: 'claude-opus-5-5',
   defaultEffort: 'medium',
+  dayMode: 'cycle',
 };
 
 /** The last usage warning Claude gave: which limit ("weekly limit"), how full it was (0-100), when it resets, and when it came. */
@@ -283,6 +290,50 @@ export interface OfficeMessage {
   from: 'office' | 'ceo' | 'manager'; // the office's own notices, the CEO's replies, or what the manager told the CEO
 }
 
+// ---------- what the office database keeps (server/db/) ----------
+
+/** A merged PR: the shipped wall and the trophies come from these. */
+export interface ShippedWork {
+  floorId: string;
+  prNumber: number;
+  title: string;
+  url: string;
+  builtBy: string | null; // the worker's name; null for a PR from outside the office
+  testedBy: string | null; // the QA worker's name, when the office tested it
+  mergedAt: number;
+}
+
+/** A milestone the office or a floor reached (server/db/trophies.ts has the list). */
+export interface Trophy {
+  id: string;
+  floorId: string | null; // null: the company's
+  icon: string;
+  title: string;
+  detail: string;
+  earnedAt: number;
+}
+
+/** What the office has shipped and won: the latest merges, each floor's total and the company's, and every trophy. */
+export interface RecordsView {
+  recent: ShippedWork[]; // newest first
+  totals: Record<string, number>; // by floor id
+  total: number;
+  trophies: Trophy[]; // oldest first
+}
+
+export const EMPTY_RECORDS: RecordsView = { recent: [], totals: {}, total: 0, trophies: [] };
+
+/** Something standing in one of a floor's spots: the default kit, and later what the shop sells. */
+export interface FloorItem {
+  spot: string;
+  item: string;
+  tier: number; // 1, or higher for an upgrade
+  since: number;
+}
+
+/** The manager's look in the game, as the client keeps it (client/src/world/appearance.ts); stored as it comes. */
+export type PlayerLook = Record<string, unknown>;
+
 /** What a tab needs to draw everything, sent when it connects. */
 export interface Snapshot {
   version: string;
@@ -296,6 +347,11 @@ export interface Snapshot {
   questions: Question[];
   usage: UsageView;
   cloud: CloudView;
+  // from the office database
+  records: RecordsView;
+  look: PlayerLook | null;
+  floorPlans: Record<string, FloorItem[]>; // by floor id
+  world: WorldView; // the world events on now (shared/worldEvents.ts)
 }
 
 /** Changes to the state: the snapshot with these folded in is what the server has. */
@@ -313,7 +369,11 @@ export type StateEvent =
   | { type: 'question'; question: Question }
   | { type: 'questionRemoved'; id: number }
   | { type: 'usage'; usage: UsageView }
-  | { type: 'cloud'; cloud: CloudView };
+  | { type: 'cloud'; cloud: CloudView }
+  | { type: 'records'; records: RecordsView }
+  | { type: 'look'; look: PlayerLook | null }
+  | { type: 'floorPlan'; floorId: string; items: FloorItem[] }
+  | { type: 'world'; world: WorldView }; // a world event started or ended, or the next one moved
 
 /**
  * Things that happened, for the game's moments (arrivals, celebrations) and the debug page's feed. They change no
@@ -326,7 +386,8 @@ export type Moment =
   | { type: 'prOpened'; at: number; floorId: string; prNumber: number; workerId: string; issueNumber: number | null }
   | { type: 'qaPassed'; at: number; floorId: string; prNumber: number; qaWorkerId: string | null }
   | { type: 'qaFailed'; at: number; floorId: string; prNumber: number; qaWorkerId: string | null }
-  | { type: 'merged'; at: number; floorId: string; prNumber: number; devWorkerId: string | null };
+  | { type: 'merged'; at: number; floorId: string; prNumber: number; devWorkerId: string | null; qaWorkerId?: string | null } // the QA record is gone by then
+  | { type: 'trophy'; at: number; trophy: Trophy };
 
 /** Server to browser on /ws/term: a worker's terminal. */
 export type TermServerMessage =
@@ -341,5 +402,5 @@ export type TermClientMessage = { t: 'input'; data: string } | { t: 'resize'; co
 /** Everything the server sends over /ws. */
 export type ServerEvent = StateEvent | Moment;
 
-const MOMENT_TYPES = new Set<string>(['hired', 'left', 'issuesFiled', 'prOpened', 'qaPassed', 'qaFailed', 'merged'] satisfies Moment['type'][]);
+const MOMENT_TYPES = new Set<string>(['hired', 'left', 'issuesFiled', 'prOpened', 'qaPassed', 'qaFailed', 'merged', 'trophy'] satisfies Moment['type'][]);
 export const isMoment = (ev: ServerEvent): ev is Moment => MOMENT_TYPES.has(ev.type);

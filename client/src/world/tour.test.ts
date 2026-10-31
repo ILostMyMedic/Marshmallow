@@ -46,6 +46,19 @@ describe('the tour', () => {
   it('says so when there is no CEO yet', () => {
     expect(tourStops(office([], []), NOW).find((s) => s.floor === CEO_FLOOR)!.say[1]).toBe("We haven't hired a CEO yet.");
   });
+
+  it('ends in the lobby with how much the office has shipped and its newest trophy', () => {
+    const trophies = [
+      { id: 'company:1', floorId: null, icon: '🚀', title: 'First ship', detail: '', earnedAt: 1 },
+      { id: 'floor:o/app:10', floorId: 'o/app', icon: '⭐', title: 'app: 10 merged', detail: '', earnedAt: 2 },
+    ];
+    const stops = tourStops({ ...office([floor()], []), records: { total: 12, trophies } }, NOW);
+    const lobby = stops.at(-1)!;
+    expect(lobby.say).toEqual(["That's the tour!", '12 PRs shipped so far! 🚢', 'Our newest trophy: ⭐ app: 10 merged', 'Come back any time. 👋']);
+    expect(lobby.card[2]).toBe('12 PRs shipped in all (the shipped wall lists the latest), and the newest trophy in the cabinet: ⭐ app: 10 merged.');
+    expect(stops.find((s) => s.floor === CEO_FLOOR)!.card.at(-1)).toContain("its 1 trophy on the cabinet");
+    expect(tourStops(office([], []), NOW).at(-1)!.say).toEqual(["That's the tour!", 'Come back any time. 👋']);
+  });
 });
 
 describe('words', () => {

@@ -27,5 +27,7 @@ export function momentText(m: Moment, name: (workerId: string | null) => string)
       return `PR #${m.prNumber} on ${m.floorId} failed QA (tested by ${name(m.qaWorkerId)})`;
     case 'merged':
       return `PR #${m.prNumber} merged on ${m.floorId}`;
+    case 'trophy':
+      return `Trophy: ${m.trophy.icon} ${m.trophy.title}`;
   }
 }

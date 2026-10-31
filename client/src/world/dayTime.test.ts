@@ -1,5 +1,7 @@
 // Adapted from cubefarm client/src/world/sky/time.test.ts (MIT): the clock's cases.
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_SETTINGS } from '../../../shared/types';
+import { useStore } from '../store';
 import { AFTERNOON_T, CYCLE_MS, dayPhase, nightFactor, parseDaytimeParam, parseDayMode, sampleDayTime, dayTime, SUNRISE_T, SUNSET_T } from './dayTime';
 
 const MIN = 60_000;
@@ -68,12 +70,20 @@ describe('nightFactor', () => {
 });
 
 describe('the live clock', () => {
-  it('starts in the 30-minute day (no browser to remember a mode) and follows it, unless frozen', () => {
+  it("starts in the office's default, the 30-minute day, and follows it, unless frozen", () => {
     expect(dayTime.mode).toBe('cycle');
     expect(sampleDayTime(10 * MIN)).toBe(dayPhase(10 * MIN, 'cycle'));
     dayTime.frozen = 0.3;
     expect(sampleDayTime(10 * MIN)).toBe(0.3);
     dayTime.frozen = null;
+  });
+
+  it("follows the office's mode as the manager changes it", () => {
+    useStore.getState().apply({ type: 'settings', settings: { ...DEFAULT_SETTINGS, dayMode: 'day' } });
+    expect(dayTime.mode).toBe('day');
+    expect(sampleDayTime(10 * MIN)).toBe(AFTERNOON_T);
+    useStore.getState().apply({ type: 'settings', settings: DEFAULT_SETTINGS });
+    expect(dayTime.mode).toBe('cycle');
   });
 });
 

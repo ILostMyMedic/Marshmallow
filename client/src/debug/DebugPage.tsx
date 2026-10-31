@@ -2,14 +2,13 @@
 // latest moments. It stays on as the admin view once the game exists. In the demo it can also hire and let go of pretend
 // workers, and fake Claude's usage warning or limit (server/demoRoutes.ts).
 import { Fragment, useEffect, useState } from 'react';
-import { isBusy, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
+import { DAY_MODES, isBusy, type DayMode, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
 import { BOX_SIZE_INFO, BOX_SIZES } from '../../../shared/cloud';
 import { CLAUDE_MODELS } from '../../../shared/models';
 import { command, floorPath, query } from '../api';
 import { qaKey, useStore } from '../store';
 import { activityIcon, momentText, taskText } from './describe';
 import { LiveTerminal } from '../ui/LiveTerminal';
-import { dayTime, setDayMode, type DayMode } from '../world/dayTime';
 
 type Run = (method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown) => void;
 
@@ -50,7 +49,7 @@ export function DebugPage() {
         <label className="connect" title="The rules grow and shrink floors to fit the work, except floors held at a size">
           <input type="checkbox" checked={settings.autoscale} onChange={(e) => run('PATCH', '/api/settings', { autoscale: e.target.checked })} /> autoscale
         </label>
-        <OfficeClockPicker />
+        <OfficeClockPicker run={run} />
         <ModelField label="default model" value={settings.defaultModel} placeholder="claude-opus-5-5" onCommit={(v) => v && run('PATCH', '/api/settings', { defaultModel: v })} />
         <ConnectRepo run={run} />
         {demo && (
@@ -88,21 +87,14 @@ export function DebugPage() {
 
 const DAY_MODE_NAMES: Record<DayMode, string> = { cycle: '30-minute day', clock: 'your clock', day: 'always day' };
 
-/** The office's clock, kept in this browser: the game's sky, light, lamps and lunch follow it (world/dayTime.ts). */
-function OfficeClockPicker() {
-  const [mode, setMode] = useState<DayMode>(dayTime.mode);
+/** The office's clock, an office setting: the game's sky, light, lamps and lunch follow it in every tab (world/dayTime.ts). */
+function OfficeClockPicker({ run }: { run: Run }) {
+  const mode = useStore((s) => s.settings.dayMode);
   return (
-    <label className="connect" title="What time it is in the office: a whole day every 30 minutes, your computer's clock, or always mid-afternoon. Kept in this browser.">
+    <label className="connect" title="What time it is in the office: a whole day every 30 minutes, each viewer's own clock, or always mid-afternoon. The same in every tab.">
       office clock
-      <select
-        value={mode}
-        onChange={(e) => {
-          const m = e.target.value as DayMode;
-          setDayMode(m);
-          setMode(m);
-        }}
-      >
-        {(Object.keys(DAY_MODE_NAMES) as DayMode[]).map((m) => (
+      <select value={mode} onChange={(e) => run('PATCH', '/api/settings', { dayMode: e.target.value as DayMode })}>
+        {DAY_MODES.map((m) => (
           <option key={m} value={m}>
             {DAY_MODE_NAMES[m]}
           </option>

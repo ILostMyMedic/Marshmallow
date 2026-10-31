@@ -3,12 +3,12 @@
 
 // The office's time of day: one clock the rituals (ritualSchedule.ts), the sky and the light (sky/) follow. A phase t
 // in [0, 1): 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset. Pure apart from `dayTime`, the live clock, whose
-// mode is remembered per browser (and followed from another tab). `?daytime=0.73` freezes the phase (QA).
+// mode is the office's setting (Settings.dayMode), the same in every tab. `?daytime=0.73` freezes the phase (QA).
+import { DAY_MODES, DEFAULT_SETTINGS, type DayMode } from '../../../shared/types';
+import { useStore } from '../store';
 
-export const DAY_MODES = ['cycle', 'clock', 'day'] as const;
-/** 'cycle': a full day every 30 minutes; 'clock': the viewer's local time; 'day': always mid-afternoon. */
-export type DayMode = (typeof DAY_MODES)[number];
-export const DEFAULT_DAY_MODE: DayMode = 'cycle';
+export { DAY_MODES, type DayMode };
+export const DEFAULT_DAY_MODE: DayMode = DEFAULT_SETTINGS.dayMode;
 
 export const CYCLE_MS = 30 * 60_000;
 /** The phase in 'day' mode: mid-afternoon. */
@@ -77,23 +77,12 @@ export function parseDaytimeParam(search: string): number | null {
   return frac(t);
 }
 
-/** A saved mode, or the default when it's missing or unknown. */
+/** The office's mode, or the default when it's missing or unknown (an older server). */
 export function parseDayMode(raw: unknown): DayMode {
   return DAY_MODES.includes(raw as DayMode) ? (raw as DayMode) : DEFAULT_DAY_MODE;
 }
 
 // ---------- the live clock ----------
-
-const MODE_KEY = 'marshmallow:daytime';
-
-function loadMode(): DayMode {
-  if (typeof window === 'undefined') return DEFAULT_DAY_MODE;
-  try {
-    return parseDayMode(window.localStorage.getItem(MODE_KEY));
-  } catch {
-    return DEFAULT_DAY_MODE;
-  }
-}
 
 function urlFrozen(): number | null {
   if (typeof window === 'undefined') return null;
@@ -104,8 +93,8 @@ function urlFrozen(): number | null {
   }
 }
 
-/** The live clock (a mutable ref): `t` is the phase as last sampled, `frozen` holds it still when set. */
-export const dayTime: { t: number; mode: DayMode; frozen: number | null } = { t: 0, mode: loadMode(), frozen: urlFrozen() };
+/** The live clock (a mutable ref): `t` is the phase as last sampled, `mode` the office's, `frozen` holds it still when set. */
+export const dayTime: { t: number; mode: DayMode; frozen: number | null } = { t: 0, mode: parseDayMode(useStore.getState().settings.dayMode), frozen: urlFrozen() };
 
 /** Moves `dayTime.t` to now (or the frozen phase) and returns it. Call it once a frame, or whenever the time is needed. */
 export function sampleDayTime(now = Date.now()): number {
@@ -114,23 +103,11 @@ export function sampleDayTime(now = Date.now()): number {
 }
 sampleDayTime();
 
-/** The viewer picks a mode; it's remembered in this browser. */
-export function setDayMode(mode: DayMode) {
-  dayTime.mode = mode;
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(MODE_KEY, mode);
-    } catch {
-      // storage may be unavailable (private mode); the setting just won't be remembered
-    }
-  }
+// The manager picks the mode (the debug page, the console's Settings): every tab follows the office's as it changes.
+let officeMode = useStore.getState().settings.dayMode;
+useStore.subscribe((s) => {
+  if (s.settings.dayMode === officeMode) return;
+  officeMode = s.settings.dayMode;
+  dayTime.mode = parseDayMode(officeMode);
   sampleDayTime();
-}
-
-// The debug page picks the mode, often in another tab: the office follows it there too.
-if (typeof window !== 'undefined')
-  window.addEventListener('storage', (e) => {
-    if (e.key !== MODE_KEY) return;
-    dayTime.mode = parseDayMode(e.newValue);
-    sampleDayTime();
-  });
+});

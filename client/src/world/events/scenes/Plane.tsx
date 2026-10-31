@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { loop, placeAt } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
-import { seeded } from '../director';
+import { seeded } from '../../../../../shared/worldEvents';
 import { along, flightProfile } from '../flight';
 import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 

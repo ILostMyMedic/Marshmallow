@@ -1,10 +1,11 @@
 // The lobby: the way in. The front desk faces you as you step out of the elevator, with Mia the guide behind it
 // (TourGuide.tsx; E on the desk talks to her: ui/FrontDeskPanel.tsx); the company's name and a screen with today's
-// news on the wall behind her; the floor directory by the elevator (E: the elevator's buttons); a trophy cabinet with
-// a cup for each merge; a corner to sit in; rugs and plants.
-// Adapted from cubefarm client/src/world/Lobby.tsx (MIT): the front desk, the directory and the trophy cabinet; the CEO's
-// office (they have a floor of their own), mission control, the time-lapse screen, the kiosk, the waiting room and the
-// jukebox are cut.
+// news on the wall behind her; the floor directory by the elevator (E: the elevator's buttons); the trophy cabinet
+// (TrophyCabinet.tsx) and, facing it across the room, the shipped wall (ShippedWall.tsx); a corner to sit in; rugs and
+// plants.
+// Adapted from cubefarm client/src/world/Lobby.tsx (MIT): the front desk and the directory (its trophy cabinet grew into
+// TrophyCabinet.tsx); the CEO's office (they have a floor of their own), mission control, the time-lapse screen, the
+// kiosk, the waiting room and the jukebox are cut.
 import { memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
@@ -12,14 +13,16 @@ import { useCanvasTexture } from './canvasTexture';
 import { roundRect, SANS } from './draw';
 import { kindOf, LOBBY, stops } from './floors';
 import { useInteractable } from './interact';
-import { DIRECTORY, HALF_D, LOBBY_COUCH, LOBBY_PLANTS, LOBBY_RUG, LOBBY_TABLE, RECEPTION, RECEPTION_CHAIR, TODAY_BOARD, TROPHIES } from './layout';
-import { glow, shade, toon } from './materials';
+import { DIRECTORY, HALF_D, LOBBY_COUCH, LOBBY_PLANTS, LOBBY_RUG, LOBBY_TABLE, RECEPTION, RECEPTION_CHAIR, TODAY_BOARD } from './layout';
+import { glow, toon } from './materials';
 import { INK } from './Outlines';
 import { Outside } from './Outside';
 import { CoffeeTable, Couch, Plant, Rug } from './Props';
 import { Shell } from './Shell';
+import { ShippedWall } from './ShippedWall';
 import { Ball, Box, Cyl } from './Toon';
 import { todayStatus } from './tour';
+import { TrophyCabinet } from './TrophyCabinet';
 import type * as THREE from 'three';
 
 const ACCENT = '#ff8a5b';
@@ -221,55 +224,6 @@ function Directory() {
   );
 }
 
-/** The trophy cabinet against the west wall: a gold cup for each merge on the floors' boards, up to eight. */
-function TrophyCabinet() {
-  const merged = useStore((s) => s.floors.reduce((n, f) => n + f.pulls.filter((p) => p.state === 'MERGED').length, 0));
-  const { x, z, w, l, h } = TROPHIES;
-  const label = useCanvasTexture(
-    512,
-    96,
-    (ctx) => {
-      ctx.fillStyle = INK;
-      roundRect(ctx, 0, 0, 512, 96, 30);
-      ctx.fill();
-      ctx.fillStyle = '#ffd166';
-      ctx.font = `700 46px ${SANS}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`🏆 ${merged} PR${merged === 1 ? '' : 's'} merged`, 256, 50);
-    },
-    [merged],
-  );
-  const cups = Math.min(8, merged);
-  return (
-    <group position={[x, 0, z]}>
-      <Box size={[w, 0.12, l]} position={[0, 0.06, 0]} color={shade('#c68b59', -0.1)} outline />
-      <Box size={[w, 0.06, l]} position={[0, h - 0.03, 0]} color={shade('#c68b59', -0.1)} outline />
-      {[0.75, 1.4].map((sy) => (
-        <Box key={sy} size={[w - 0.06, 0.03, l - 0.06]} position={[0, sy, 0]} color="#e3f2fd" shadow={false} />
-      ))}
-      <mesh position={[w / 2 - 0.02, h / 2, 0]} rotation={[0, Math.PI / 2, 0]} material={toon('#cfe8ef', { transparent: true, opacity: 0.25 })}>
-        <planeGeometry args={[l, h - 0.1]} />
-      </mesh>
-      {Array.from({ length: cups }, (_, i) => {
-        const shelf = i < 4 ? 0.78 : 1.43;
-        const cz = -l / 2 + 0.4 + (i % 4) * ((l - 0.8) / 3);
-        return (
-          <group key={i} position={[0, shelf, cz]}>
-            <Cyl r={0.06} h={0.03} position={[0, 0.015, 0]} color="#7f5539" />
-            <Cyl r={0.015} h={0.12} position={[0, 0.09, 0]} color="#e9c46a" />
-            <Cyl r={0.05} rTop={0.09} h={0.13} position={[0, 0.21, 0]} color="#f7c548" outline />
-          </group>
-        );
-      })}
-      <mesh position={[w / 2 + 0.01, h + 0.25, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <planeGeometry args={[1.5, 0.28]} />
-        <meshBasicMaterial map={label} transparent toneMapped={false} />
-      </mesh>
-    </group>
-  );
-}
-
 /** The lobby. `top` is the building's highest walled storey, for the facade above. */
 export const Lobby = memo(function Lobby({ top }: { top: number }) {
   return (
@@ -281,6 +235,7 @@ export const Lobby = memo(function Lobby({ top }: { top: number }) {
       <TodayBoard />
       <Directory />
       <TrophyCabinet />
+      <ShippedWall />
       <Couch position={[LOBBY_COUCH.x, 0, LOBBY_COUCH.z]} rotationY={Math.PI / 2} color="#2a9d8f" />
       <CoffeeTable position={[LOBBY_TABLE.x, 0, LOBBY_TABLE.z]} rotationY={Math.PI / 2} />
       {LOBBY_PLANTS.map(([x, z, s]) => (

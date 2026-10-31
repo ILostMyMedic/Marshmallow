@@ -7,7 +7,7 @@
 import type { Gesture } from '../body';
 import { HALF_W, SIDE_OPENINGS, WINDOW, sideSign, type Side } from '../layout';
 import type { FloorKind, Spot } from '../walkways';
-import type { EventId } from './director';
+import type { EventId } from '../../../../shared/worldEvents';
 
 const EAST = 0;
 const WEST = Math.PI;

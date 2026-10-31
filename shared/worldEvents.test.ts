@@ -1,10 +1,9 @@
 // Adapted from cubefarm client/src/world/events/director.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { EVENT_IDS, EVENTS, FIRST, GAP, newDirector, parseEventId, parseEventParam, pickEvent, RETRY_SECONDS, startRunning, stepDirector, type EventId } from './director';
+import { EVENT_IDS, EVENTS, FIRST, GAP, newDirector, parseEventId, parseEventParam, pickEvent, RETRY_SECONDS, roll, seeded, startRunning, stepDirector, type Director, type EventId } from './worldEvents.ts';
 
-/** Runs a director for `minutes` of watching, starting each event it picks; returns what started when. */
-function simulate(minutes: number, seed = 1, step = 1) {
-  const d = newDirector(seed);
+/** Runs a director for `minutes`, starting each event it picks; returns what started when. */
+function simulate(minutes: number, seed = 1, step = 1, d: Director = newDirector(seed)) {
   const started: { id: EventId; at: number }[] = [];
   let key = 0;
   for (let t = 0; t < minutes * 60; t += step) {
@@ -81,5 +80,24 @@ describe('the schedule', () => {
   it('is the same for the same seed', () => {
     expect(simulate(120, 42)).toEqual(simulate(120, 42));
     expect(simulate(300, 42)).not.toEqual(simulate(300, 43));
+  });
+
+  it("starts on the clock it's given, and carries on the same from a saved state", () => {
+    const d = newDirector(7, 1_000_000);
+    expect(d.nextAt).toBeGreaterThanOrEqual(1_000_000 + FIRST[0]);
+    const whole = simulate(60, 7, 1, newDirector(7));
+    const first = newDirector(7);
+    const before = simulate(30, 7, 1, first);
+    // saved and read back: its clock, schedule and random, as numbers
+    const restored: Director = { clock: first.clock, nextAt: first.nextAt, running: first.running.map((r) => ({ ...r })), state: first.state };
+    const after = simulate(30, 7, 1, restored);
+    expect([...before, ...after].map((s) => s.id)).toEqual(whole.map((s) => s.id));
+  });
+
+  it("draws the same numbers as the scenes' seeded random", () => {
+    const d = newDirector(99);
+    const r = seeded(99);
+    r(); // newDirector's own roll, for its first event
+    for (let i = 0; i < 5; i++) expect(roll(d)).toBe(r());
   });
 });

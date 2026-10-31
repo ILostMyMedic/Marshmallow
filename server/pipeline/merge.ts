@@ -152,7 +152,7 @@ export class Merge {
       store.appendLog(w.id, [{ kind: 'done', text: `🎉 PR #${n} was merged. Ready for the next issue.` }]);
       clearTask(this.ctx, w.id);
     }
-    store.moment({ type: 'merged', at: Date.now(), floorId: floor.id, prNumber: n, devWorkerId: rec.devWorkerId });
+    store.moment({ type: 'merged', at: Date.now(), floorId: floor.id, prNumber: n, devWorkerId: rec.devWorkerId, qaWorkerId: rec.qaWorkerId });
     // GitHub closes what "Closes #N" links; the office closes the rest (and anything GitHub missed).
     for (const issue of resolved) {
       const state = await this.ctx.backend.github.issueState(floor.fullName, issue).catch(() => null);

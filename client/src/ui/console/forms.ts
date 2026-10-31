@@ -1,6 +1,6 @@
 // The manager's console's forms as plain data: the settings form and the patch its Save sends, the repositories you
 // could still connect, and a typed repository checked before it goes to the server.
-import type { BoxSize, EffortLevel, Floor, GhRepoSummary, MachineHost, Settings } from '../../../../shared/types';
+import type { BoxSize, DayMode, EffortLevel, Floor, GhRepoSummary, MachineHost, Settings } from '../../../../shared/types';
 
 export const EFFORTS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -17,6 +17,7 @@ export interface SettingsForm {
   autoscale: boolean;
   defaultModel: string;
   defaultEffort: EffortLevel;
+  dayMode: DayMode;
   machineKind: MachineHost;
   boxSize: BoxSize;
   boxLimit: string;
@@ -36,6 +37,7 @@ export function settingsForm(s: Settings): SettingsForm {
     autoscale: s.autoscale,
     defaultModel: s.defaultModel,
     defaultEffort: s.defaultEffort,
+    dayMode: s.dayMode,
     machineKind: s.cloud.machineKind,
     boxSize: s.cloud.boxSize,
     boxLimit: String(s.cloud.boxLimit),
@@ -82,6 +84,7 @@ export function settingsPatch(form: SettingsForm, now: Settings): { patch: Parti
   if (!model) problems.defaultModel = 'A model name, like claude-opus-5-5 or ollama/gpt-oss:20b';
   else if (model !== now.defaultModel) patch.defaultModel = model;
   if (form.defaultEffort !== now.defaultEffort) patch.defaultEffort = form.defaultEffort;
+  if (form.dayMode !== now.dayMode) patch.dayMode = form.dayMode;
   const boxLimit = whole(form.boxLimit, LIMITS.boxLimit);
   if (typeof boxLimit === 'string') problems.boxLimit = boxLimit;
   else {

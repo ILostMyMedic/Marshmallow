@@ -18,9 +18,9 @@ describe('settingsPatch', () => {
   });
 
   it('sends only what changed, trimmed and as numbers', () => {
-    const { patch, problems } = settingsPatch(form({ managerName: '  Alex ', sessionLimit: '6', maxWorkers: '10', autoscale: false, defaultEffort: 'high' }), now);
+    const { patch, problems } = settingsPatch(form({ managerName: '  Alex ', sessionLimit: '6', maxWorkers: '10', autoscale: false, defaultEffort: 'high', dayMode: 'clock' }), now);
     expect(problems).toEqual({});
-    expect(patch).toEqual({ managerName: 'Alex', sessionLimit: 6, autoscale: false, defaultEffort: 'high' });
+    expect(patch).toEqual({ managerName: 'Alex', sessionLimit: 6, autoscale: false, defaultEffort: 'high', dayMode: 'clock' });
   });
 
   it('turns an emptied session limit into no limit', () => {

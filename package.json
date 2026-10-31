@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.316",
+    "@electric-sql/pglite": "0.5.10",
     "@lydell/node-pty": "1.2.0-beta.15",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@playwright/mcp": "0.0.83",

@@ -245,6 +245,28 @@ Everything the debug page does, over the game, in the game's style. O, P and H o
 
 **Done when:** in the demo a fresh office opens on the setup; from the console, without the debug page, you connect a fake repo, hire workers and change a setting; a message typed in a worker's panel shows in their terminal; the phone carries a chat with the CEO and a question answered; a toast tells you of a merge; H shows the controls. (Done: seen in a browser on the demo: the setup opened on a fresh office, saved the names and hired the CEO; the console connected a fake repo, hired a worker and saved a setting; a message typed in a working worker's panel showed in their terminal and was answered; the phone answered a question (the issue went back to work) and carried a chat with the CEO; toasts for a hire, a PR opened, QA passed and the CEO's reports; H showed the controls. The merge toast is covered by `officeToasts.test.ts` rather than seen. The new rules are tested in `ui/console/forms.test.ts` and `ui/officeToasts.test.ts`, and the message route in `pipeline.test.ts` and `demo.test.ts`.)
 
+## Phase 16: the office database
+
+Postgres built into the server (PGlite: no install, no service) for the data that keeps growing; the live office stays in the state file.
+
+1. The database (`server/db/`): PGlite in `<home>/db` (`<home>/demo-db` in the demo), numbered migrations in order, a small typed query layer, closed cleanly on shutdown; tests on an in-memory database.
+2. Shipped work and trophies: every merge recorded (floor, PR, title, who built it, who tested it, when) and backfilled from each floor's merged PRs on sync, so merges made outside the office count too; milestones (the company's and each floor's) earned from it. In the snapshot (recent work, totals, trophies), with events as they happen.
+3. The lobby and the CEO's floor show them: the trophy cabinet holds the real trophies, a shipped wall lists the latest merges and each floor's total, the CEO's floor has the company's milestones, and the front desk and the tour mention them.
+4. Your look on the server: saved to the database and the same in every browser (the browser's copy moves up the first time).
+5. The environment's state, office-wide: the office clock's mode becomes an office setting, and the server chooses the world events (the director moves to `shared/`) and keeps them in the database, so every tab sees the same blimp at the same moment.
+6. Floor plans: each floor's items and their spots, seeded with what every floor has today (the default kit), which the shop builds on.
+
+**Done when:** in the demo the database comes up in the home folder and survives a restart; a merge shows on the shipped wall and earns a floor its first trophy in the lobby's cabinet; your look follows you to a second browser; two tabs see the same world event; and `npm test` runs it all on an in-memory database. (Done: seen in a browser on the demo: the database came up in the home folder, backfilled the floors' merged PRs and four trophies, and kept them through a restart; a task filed and merged went on the shipped wall built by Ada and tested by Grace; the cabinet, the trophies panel and the CEO's milestones showed them; a look picked in one browser reached a fresh one; two tabs drew the same blimp and a reload rejoined it; the office clock moved every tab's sky. The office clock became an office setting rather than a database row. Tested in `server/db/*.test.ts` on an in-memory database, `shared/worldEvents.test.ts`, `trophyShelf.test.ts`, `shipped.test.ts` and `eventsState.test.ts`.)
+
+## Phase 17: coins and the shop
+
+1. Coins per floor (`server/ledger.ts`, after cubefarm's): earned from merges, first-time QA passes and fixes, idempotent from what the office already sees, kept in the database; shown on each floor and in the console.
+2. The shop: a kiosk in the lobby and a console tab, buying per floor. Floors keep what they have; the shop sells extras (a vending machine, a beer fridge, plants, rugs, a couch, posters) and upgrades (a better coffee machine, a nicer ping-pong table).
+3. Fixed spots per floor where bought items snap in, clear of the walkways; workers use the new things (the vending machine, the beer fridge after hours).
+4. Posters with art generated from each floor's repository, unique to it.
+
+**Done when:** in the demo a floor earns coins as its PRs merge, buys a vending machine and a poster in the shop, they appear in their spots and stay after a restart, and a worker uses the vending machine.
+
 ## Watch out for
 
 - **node-pty on Windows:** use the prebuilt `@lydell/node-pty`, as cubefarm does, so nobody needs build tools.

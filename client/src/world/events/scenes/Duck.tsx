@@ -7,7 +7,7 @@ import { useFrame } from '@react-three/fiber';
 import type * as THREE from 'three';
 import { placeAt, play } from '../../../ui/eventSfx';
 import { theCity } from '../../cityLayout';
-import { seeded } from '../director';
+import { seeded } from '../../../../../shared/worldEvents';
 import { along, clearStretch, flightProfile } from '../flight';
 import { eyeAbove, inOut, lerp, sign, toonOut, type SceneProps } from '../kit';
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_CLOUD } from '../../shared/cloud';
-import { DEFAULT_SETTINGS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
+import { DEFAULT_SETTINGS, EMPTY_RECORDS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
+import { EMPTY_WORLD } from '../../shared/worldEvents';
 import { EMPTY_OFFICE, qaKey, reduce, type Office } from './store';
 
 const worker = (over: Partial<Worker> = {}): Worker => ({
@@ -62,6 +63,10 @@ const snapshot: Snapshot = {
   messages: [],
   questions: [],
   usage: { state: 'normal', until: null, warning: null },
+  records: EMPTY_RECORDS,
+  look: null,
+  floorPlans: {},
+  world: EMPTY_WORLD,
 };
 
 const fold = (events: ServerEvent[], from: Office = EMPTY_OFFICE) => events.reduce(reduce, from);

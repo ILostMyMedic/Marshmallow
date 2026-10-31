@@ -292,7 +292,7 @@ export function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
 }
 
 /** Shorten text with an ellipsis until it fits in max pixels, in the context's current font. */
-function fitText(ctx: CanvasRenderingContext2D, text: string, max: number) {
+export function fitText(ctx: CanvasRenderingContext2D, text: string, max: number) {
   let t = text;
   while (t.length > 2 && ctx.measureText(t).width > max) t = `${t.slice(0, -2)}…`;
   return t;

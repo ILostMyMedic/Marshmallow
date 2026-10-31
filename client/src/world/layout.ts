@@ -244,8 +244,10 @@ export const RECEPTION_CHAIR = { x: 0, z: RECEPTION.z - 1.05 };
 export const TODAY_BOARD = { w: 6.4, h: 2.2, y: 1.15, z: -HALF_D + 0.06 };
 /** The floor directory on the south wall, west of the elevator's doors (you read it facing south). */
 export const DIRECTORY = { x: -(ELEVATOR.doorHalf + 2.1), w: 2.2, h: 2.4, y: 0.5, z: HALF_D - 0.05 };
-/** The trophy cabinet against the west wall, and the lounge corner by the east wall (a couch facing west, a table). */
-export const TROPHIES = { x: -HALF_W + 0.35, z: -7.5, w: 0.6, l: 2.6, h: 2.1 };
+/** The trophy cabinet against the west wall (TrophyCabinet.tsx), and the lounge corner by the east wall (a couch facing west, a table). */
+export const TROPHIES = { x: -HALF_W + 0.35, z: -7.5, w: 0.6, l: 3.6, h: 2.1 };
+/** The shipped wall on the east wall, between the corner and the window, facing the trophies: its face x, middle z, size and bottom y. */
+export const SHIPPED_WALL = { x: HALF_W - 0.06, z: -7.2, w: 6.2, h: 2.5, y: 0.75 };
 export const LOBBY_COUCH = { x: HALF_W - 0.9, z: 7.2 };
 export const LOBBY_TABLE = { x: HALF_W - 2.6, z: 7.2 };
 /** The big rug in front of the front desk. */
@@ -302,6 +304,10 @@ export const EXEC_PLANTS: [number, number, number][] = [
   [3.4, -HALF_D + 0.8, 1.1],
 ];
 
+/** The company's milestones on the north wall over the meeting table, and the low cabinet under it with their trophies. */
+export const EXEC_MILESTONES = { x: 8.5, w: 4.4, h: 1.8, y: 1.45, z: -HALF_D + 0.06 };
+export const EXEC_TROPHIES = { x: 8.5, z: -HALF_D + 0.3, w: 4.4, d: 0.5, h: 0.9 };
+
 /** The meeting table's chairs: x, z and which way they face (a yaw, 0 facing -Z). */
 export function meetingChairs(): [number, number, number][] {
   const { x, z, w, d } = EXEC_MEETING;
@@ -329,6 +335,7 @@ export function ceoColliders(doorway = true): Rect[] {
     rect(x, z, w + 1.3, d + 1.6), // the table and its chairs
     rect(EXEC_BAR.x, EXEC_BAR.z, 0.6, 1.1),
     rect(EXEC_GLOBE.x, EXEC_GLOBE.z, 0.7, 0.7),
+    rect(EXEC_TROPHIES.x, EXEC_TROPHIES.z, EXEC_TROPHIES.w, EXEC_TROPHIES.d),
     ...EXEC_PLANTS.map(plantRect),
   ];
 }

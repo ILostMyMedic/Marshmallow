@@ -9,7 +9,8 @@ import { WebSocketServer } from 'ws';
 import { localModel } from '../shared/models.ts';
 import { createDemoBackend } from './backend/demo.ts';
 import { realBackend } from './backend/real.ts';
-import { DEMO, DESK_SWEEP_INTERVAL_MS, HOME_DIR, homeProblem, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION, WATCHDOG_INTERVAL_MS } from './config.ts';
+import { DB_DIR, DEMO, DESK_SWEEP_INTERVAL_MS, HOME_DIR, homeProblem, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION, WATCHDOG_INTERVAL_MS } from './config.ts';
+import { openOffice } from './db/office.ts';
 import { demoRoutes } from './demoRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
@@ -19,6 +20,7 @@ import { Terminals } from './sessions/terminals.ts';
 import { route } from './route.ts';
 import { EFFORTS, settingsPatch } from './settings.ts';
 import { Store } from './store.ts';
+import { worldRoutes } from './worldRoutes.ts';
 
 const problem = homeProblem(HOME_DIR, process.cwd(), DEMO);
 if (problem) {
@@ -33,6 +35,14 @@ const backend = demo ?? realBackend;
 const floors = new Floors(store, backend);
 const terminals = new Terminals(path.join(HOME_DIR, 'terminals'));
 const pipeline = createPipeline(store, backend, floors, terminals);
+// The office database (shipped work, trophies, floor plans, the manager's look): open before the restart and the first
+// sync, so merges finishing now are recorded and the floors' merged PRs are backfilled.
+const office = await openOffice(DB_DIR, store);
+const pipelineSynced = floors.onSynced;
+floors.onSynced = (floorId) => {
+  pipelineSynced?.(floorId);
+  office.synced(floorId);
+};
 // Where the office left off: the cloud's saved keys, then every worker's task checked against GitHub. Finished work is
 // cleared, Box workers' CLIs that kept working are back on their tasks, and interrupted sessions resume or go back in
 // line. Box events wait until then (hooksReady), so a turn that finished meanwhile finishes its task now.
@@ -45,6 +55,8 @@ pipeline.scheduler.start(SCHEDULER_INTERVAL_MS);
 setTimeout(() => void pipeline.sweep(), 60_000).unref();
 setInterval(() => void pipeline.sweep(), DESK_SWEEP_INTERVAL_MS).unref();
 setInterval(() => pipeline.watchdog.tick(), WATCHDOG_INTERVAL_MS).unref();
+// The world events outside: the office picks them for every tab
+office.world.start();
 
 const app = express();
 // Workers' CLIs calling back: hooks and the status line (a tool result can be a large screenshot, hence the limit). The
@@ -77,6 +89,7 @@ app.post(
 );
 app.post('/api/floors/:floor/plan', route((req) => pipeline.ctx.ceo.plan(String(req.params.floor), req.body?.mission === undefined ? undefined : str(req.body.mission))));
 // The CEO: hired and let go, and the manager's messages to it
+app.put('/api/look', route((req) => office.player.setLook(req.body?.look)));
 app.post('/api/ceo', route((req) => pipeline.ctx.ceo.hire(str(req.body?.model).trim())));
 app.delete('/api/ceo', route(() => pipeline.ctx.ceo.letGo()));
 app.post('/api/ceo/message', route((req) => pipeline.ctx.ceo.message(str(req.body?.text))));
@@ -178,6 +191,8 @@ app.post(
 app.post('/api/workers/:id/sign-in', route((req) => pipeline.ctx.cloud.startSignIn(String(req.params.id))));
 if (demo) app.post('/api/demo/expire-sign-ins', route(() => pipeline.ctx.cloud.expireSignIns()));
 if (demo) app.use('/api/demo', demoRoutes(store, demo, pipeline));
+// The world events on demand (?event=, __mmEvents): in real mode too, since they change nothing but the sky
+app.use('/api/world', worldRoutes(office.world));
 app.use(
   '/api',
   route((req) => {
@@ -222,7 +237,8 @@ server.listen(PORT, HOST, () => {
   const port = (server.address() as AddressInfo).port;
   setOfficeUrl(`http://127.0.0.1:${port}`);
   console.log(`\n  Marshmallow ${VERSION} on http://localhost:${port}${DEMO ? '  (DEMO MODE: fake GitHub + fake workers)' : ''}`);
-  console.log(`     state: ${STATE_FILE}\n`);
+  console.log(`     state: ${STATE_FILE}`);
+  console.log(`     database: ${DB_DIR}\n`);
   if (!DEMO) {
     backend.github.user().then(
       (login) => console.log(`     GitHub: acting as ${login} (your gh login)\n`),
@@ -244,7 +260,7 @@ const shutdown = (signal: string) => {
   backend.cloud.detach();
   for (const ws of [...wss.clients, ...terms.clients]) ws.terminate();
   server.close();
-  void Promise.all([store.flush(), demo?.github.flush(), terminals.saveAll()])
+  void Promise.all([store.flush(), demo?.github.flush(), terminals.saveAll(), office.close()])
     .catch((err) => console.error('  could not save the state:', err))
     .finally(() => process.exit(0));
 };

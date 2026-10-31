@@ -1,10 +1,11 @@
-// Adapted from cubefarm client/src/world/outside/cityLayout.ts (MIT): a few blocks round the building rather than a
-// skyline, so two rings of streets and no landmarks.
+// Adapted from cubefarm client/src/world/outside/cityLayout.ts (MIT): its water towers' lookup (for the kaiju) cut;
+// downtown's cluster of glass towers, the outskirts out to the haze and the bay's shore added.
 
 // The city around the building, as plain numbers: a seeded street grid, the buildings on its blocks (with roofs,
-// water towers and antennas), a park, and the routes the little cars drive. Pure (no three.js),
-// so the same seed always gives the same city and the tests can check it. City.tsx draws it. Units are metres,
-// x/z as in layout.ts (our building is centred on the origin), y up from street level. Colours are 0xrrggbb.
+// water towers, antennas and three landmarks), a downtown of skyscrapers to the north-east, a park, the outskirts
+// beyond the grid, and the routes the little cars drive. Pure (no three.js), so the same seed always gives the same
+// city and the tests can check it. City.tsx draws it. Units are metres, x/z as in layout.ts (our building is centred
+// on the origin), y up from street level. Colours are 0xrrggbb.
 
 import { BALCONY_OUT, HALF_D } from './layout';
 
@@ -18,9 +19,7 @@ export const CITY = {
   homeHalfX: 30,
   homeHalfZ: 26,
   /** Streets on each side of our block. */
-  rings: 2,
-  /** Blocks further than this from the building stay empty (the haze has them by then). */
-  radius: 170,
+  rings: 6,
   /** Nothing is built within this distance of our building and its balconies. */
   gap: 20,
 };
@@ -30,6 +29,19 @@ export const CORRIDOR_HALF = CITY.roadHalf + CITY.pavement;
 
 /** Our building with its balconies on the west and east sides: what the gap is kept from. */
 export const HOME_FOOTPRINT = { halfX: BALCONY_OUT, halfZ: HALF_D };
+
+/** The city's western shore (x): the bay, its headlands and the bridge (bridgeLayout.ts) lie beyond it. */
+export const BAY = { shore: -440 };
+
+/** The city's ground, out to the haze: it stops at the shore, where the bay's water begins. */
+export const GROUND = { minX: BAY.shore, maxX: 900, minZ: -900, maxZ: 900 };
+
+/** Where the tall towers cluster: north-east, so the skyline is behind the east windows' view of the street. */
+export const DOWNTOWN = { x: 150, z: -170 };
+/** Blocks this close to downtown are all glass towers, unless they're this close to us (the low-rise round us). */
+export const CORE = { radius: 115, clear: 160 };
+/** Past the street grid to here, loose blocks of buildings fill the view to the haze; none on the bay. */
+export const OUTSKIRTS = { step: 42, max: 760 };
 
 export interface CityBox {
   /** Centre of the footprint. */
@@ -59,7 +71,7 @@ export interface Span {
 export interface CityLayout {
   /** Boxes with windows: towers and their setback tiers. */
   buildings: CityBuilding[];
-  /** Plain boxes: roof huts, water-tower stands, park lawns. */
+  /** Plain boxes: roof huts, water-tower stands, park lawns, the outskirts' buildings. */
   boxes: CityBox[];
   cylinders: CityBox[];
   cones: CityBox[];
@@ -112,9 +124,8 @@ const TREE = [0x5fa84f, 0x4f9a48, 0x6cb35a];
 const TRUNK = 0x7a5a3c;
 const WATER = 0x8fcbe6;
 const STONE = 0xd9d2c4;
-
-/** Where the taller buildings cluster: north-east, so there's a skyline behind the east windows' view of the street. */
-const DOWNTOWN = { x: 150, z: -170 };
+const GLASS = [0x8fb3d1, 0x7d9fbf, 0xa9c2d8, 0x6f8faf, 0xbccfdc, 0x9aa7b8, 0xc9d3dc, 0x7f95a8];
+const CROWN = 0xd9dee5;
 
 const round = (v: number, step = 0.5) => Math.round(v / step) * step;
 
@@ -142,18 +153,32 @@ export function cityLayout(seed = CITY.seed): CityLayout {
       if (bx.index === 0 && bz.index === 0) continue; // our plaza
       const cx = (bx.span.min + bx.span.max) / 2;
       const cz = (bz.span.min + bz.span.max) / 2;
-      if (Math.hypot(cx, cz) > CITY.radius) continue;
       blocks.push({ ix: bx.index, iz: bz.index, x: bx.span, z: bz.span, cx, cz });
     }
 
-  // The block west of ours is the park.
+  // The three blocks nearest downtown get a landmark each and the rest of its core glass towers; the block west of
+  // ours is the park.
+  const fromDowntown = (b: { cx: number; cz: number }) => Math.hypot(b.cx - DOWNTOWN.x, b.cz - DOWNTOWN.z);
+  const byDowntown = [...blocks].sort((a, b) => fromDowntown(a) - fromDowntown(b));
+  const landmarks = new Map(byDowntown.slice(0, 3).map((b, i) => [b, i]));
+
   for (const b of blocks) {
     const roll = r();
-    if ((b.ix === -1 && b.iz === 0) || roll < 0.05) addPark(out, r, b.x, b.z);
+    const landmark = landmarks.get(b);
+    if (landmark !== undefined) addLandmark(out, landmark, b.cx, b.cz);
+    else if (b.ix === -1 && b.iz === 0) addPark(out, r, b.x, b.z);
+    else if (fromDowntown(b) < CORE.radius && Math.hypot(b.cx, b.cz) >= CORE.clear) addTowerBlock(out, r, pickOf, b.x, b.z);
+    else if (roll < 0.05) addPark(out, r, b.x, b.z);
     else addBlock(out, r, pickOf, b.x, b.z);
   }
+  addOutskirts(out, r, pickOf);
   return out;
 }
+
+let shared: CityLayout | null = null;
+
+/** The city everyone draws and flies round (City.tsx, the billboards, the world events): built once, on first use. */
+export const theCity = (): CityLayout => (shared ??= cityLayout());
 
 function addBlock(out: CityLayout, r: () => number, pickOf: <T>(arr: readonly T[]) => T, bx: Span, bz: Span) {
   const nx = r() < 0.25 ? 1 : r() < 0.75 ? 2 : 3;
@@ -208,6 +233,99 @@ function addBuilding(out: CityLayout, r: () => number, pickOf: <T>(arr: readonly
   }
 }
 
+/** One of the three landmarks, centred in its block. */
+function addLandmark(out: CityLayout, which: number, x: number, z: number) {
+  const tower = (y: number, w: number, h: number, color: number) => out.buildings.push({ x, z, y, w, h, d: w, color, lit: 0.6, pattern: (which * 5) % 16 });
+  if (which === 0) {
+    // the spire
+    tower(0, 26, 120, 0xcfd6e0);
+    tower(120, 18, 30, 0xcfd6e0);
+    tower(150, 10, 14, 0xcfd6e0);
+    out.cones.push({ x, z, y: 164, w: 4, h: 26, d: 4, color: 0xe8ecf2 });
+  } else if (which === 1) {
+    // the round tower on a podium
+    tower(0, 34, 10, 0xb5a48c);
+    out.cylinders.push({ x, z, y: 10, w: 24, h: 85, d: 24, color: 0x9fb4c7 });
+    out.cylinders.push({ x, z, y: 95, w: 16, h: 12, d: 16, color: 0x8ea4b8 });
+    out.cones.push({ x, z, y: 107, w: 4, h: 18, d: 4, color: ANTENNA });
+  } else {
+    // the stepped one
+    tower(0, 30, 70, 0xe3c9a0);
+    tower(70, 22, 30, 0xe3c9a0);
+    tower(100, 14, 20, 0xe3c9a0);
+    out.cylinders.push({ x, z, y: 120, w: 1, h: 20, d: 1, color: ANTENNA });
+  }
+}
+
+/** A block of downtown: one to four glass towers, the tallest nearest the middle. */
+function addTowerBlock(out: CityLayout, r: () => number, pickOf: <T>(arr: readonly T[]) => T, bx: Span, bz: Span) {
+  const nx = r() < 0.5 ? 1 : 2;
+  const nz = r() < 0.5 ? 1 : 2;
+  const lotW = (bx.max - bx.min) / nx;
+  const lotD = (bz.max - bz.min) / nz;
+  for (let i = 0; i < nx; i++)
+    for (let j = 0; j < nz; j++) {
+      const inset = 2 + r() * 2.5;
+      const x = bx.min + lotW * (i + 0.5);
+      const z = bz.min + lotD * (j + 0.5);
+      addTower(out, r, pickOf, x, z, Math.max(10, round(lotW - inset * 2)), Math.max(10, round(lotD - inset * 2)));
+    }
+}
+
+/** A skyscraper: a tall glass shaft stepping back once or twice, with a crown, a mast or a plant room on top. */
+function addTower(out: CityLayout, r: () => number, pickOf: <T>(arr: readonly T[]) => T, x: number, z: number, w: number, d: number) {
+  const fromDowntown = Math.hypot(x - DOWNTOWN.x, z - DOWNTOWN.z);
+  const h = round((55 + 95 * Math.exp(-fromDowntown / 85)) * (0.75 + r() * 0.5));
+  const color = pickOf(GLASS);
+  const tier = (y: number, tw: number, th: number, td: number) =>
+    out.buildings.push({ x, z, y, w: tw, h: th, d: td, color, lit: round(0.3 + r() * 0.6, 0.01), pattern: Math.floor(r() * 16) });
+  tier(0, w, h, d);
+  let top = h;
+  let tw = w;
+  let td = d;
+  if (r() < 0.75) {
+    tw = round(w * 0.74);
+    td = round(d * 0.74);
+    const th = round(h * (0.15 + r() * 0.15));
+    tier(top, tw, th, td);
+    top += th;
+  }
+  if (h > 110 && r() < 0.6) {
+    tw = round(tw * 0.66);
+    td = round(td * 0.66);
+    const th = round(8 + r() * 10);
+    tier(top, tw, th, td);
+    top += th;
+  }
+  const crown = r();
+  if (crown < 0.4) {
+    const s = round(Math.min(tw, td) * 0.9);
+    out.cones.push({ x, z, y: top, w: s, h: round(8 + r() * 14), d: s, color: CROWN });
+  } else if (crown < 0.8) out.cylinders.push({ x, z, y: top, w: 0.6, h: round(10 + r() * 16), d: 0.6, color: ANTENNA });
+  else out.boxes.push({ x, z, y: top, w: round(tw * 0.4), h: 3, d: round(td * 0.4), color: ROOF_HUT });
+}
+
+/** Past the street grid, out to the haze: plain buildings on a loose grid, lower the further from downtown; none on the bay. */
+function addOutskirts(out: CityLayout, r: () => number, pickOf: <T>(arr: readonly T[]) => T) {
+  const ex = out.extentX + 8;
+  const ez = out.extentZ + 8;
+  const { step, max } = OUTSKIRTS;
+  for (let gx = -max; gx <= max; gx += step)
+    for (let gz = -max; gz <= max; gz += step) {
+      if (r() < 0.25) continue;
+      const w = round(12 + r() * 16);
+      const d = round(12 + r() * 16);
+      const x = round(gx + (r() - 0.5) * (step - w));
+      const z = round(gz + (r() - 0.5) * (step - d));
+      if (Math.hypot(x, z) > max) continue;
+      if (Math.abs(x) - w / 2 < ex && Math.abs(z) - d / 2 < ez) continue; // the street grid's
+      if (x - w / 2 < BAY.shore + 20) continue; // the bay's
+      const fromDowntown = Math.hypot(x - DOWNTOWN.x, z - DOWNTOWN.z);
+      const h = round(Math.max(6, (8 + 50 * Math.exp(-fromDowntown / 170)) * (0.6 + r() * 0.8)));
+      out.boxes.push({ x, z, y: 0, w, h, d, color: pickOf(FACADES) });
+    }
+}
+
 function addPark(out: CityLayout, r: () => number, bx: Span, bz: Span) {
   const w = bx.max - bx.min;
   const d = bz.max - bz.min;
@@ -251,7 +369,7 @@ export interface CarRoute {
   bus: boolean;
 }
 
-export const CAR_RANGE = 160;
+export const CAR_RANGE = 300;
 /** Lane centre from the street's centreline (cars keep right). */
 export const LANE = CITY.roadHalf / 2;
 export const MAX_CARS = 12;

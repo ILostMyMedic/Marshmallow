@@ -1,5 +1,5 @@
 // Adapted from cubefarm client/src/world/Character.tsx (MIT): toys hitting people, themes, the screen's glow on the
-// face, the phone call and handshake gestures, and the voices are cut.
+// face, the handshake and the voices are cut.
 import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -87,6 +87,10 @@ const GESTURES: Record<Gesture, { l: Arm | null; r: Arm | null; head: number }> 
   thumbs: { l: null, r: { pitch: 0.45, yaw: 0.25 }, head: 0.12 },
   // ping-pong: the free hand out for balance; the bat arm reaches for wherever the match puts the paddle (below)
   paddle: { l: { pitch: -0.5, yaw: 0.5 }, r: { pitch: -0.35, yaw: -0.25 }, head: 0.05 },
+  // watching something outside (events/watch.ts): pointing up at it, and both hands to the cheeks
+  point: { l: null, r: { pitch: 0.6, yaw: -0.12 }, head: 0.28 },
+  gasp: { l: { pitch: 0.72, yaw: 0.95 }, r: { pitch: 0.72, yaw: 0.95 }, head: 0.18 },
+  call: { l: { pitch: -0.75, yaw: 0.55 }, r: { pitch: 0.62, yaw: 0.8 }, head: 0.06 }, // on the phone, the other arm folded
 };
 // The paddle in the right hand (arm space: the hand is at z -0.5): its handle, and the blade's centre further along.
 const BAT = { hand: -0.5, blade: -0.17 };
@@ -210,6 +214,7 @@ export function Character({
   mug,
   carrying,
   standAt = STAND,
+  seatedTag = TAG_SEATED,
   children,
 }: {
   worker: Worker;
@@ -218,6 +223,8 @@ export function Character({
   carrying?: ReactNode;
   /** Where they step out to when they get up, in chair space (default: beside the chair). */
   standAt?: { x: number; z: number };
+  /** Where the name tag floats while they sit (chair space): over the desk, or over their head where there's no desk. */
+  seatedTag?: [number, number, number];
   children?: ReactNode;
 }) {
   const id = worker.id;
@@ -464,7 +471,7 @@ export function Character({
     });
     stepFace(face.s, expression, dt);
     applyFace(faceMesh, face.s, asleep.current ? 1 : blink(t, face.seed));
-    if (phone.current) phone.current.visible = seated && ls.fidget === 'phone' && fw > 0.35;
+    if (phone.current) phone.current.visible = (seated && ls.fidget === 'phone' && fw > 0.35) || (st.stage === 'up' && goal?.gesture === 'call');
     if (seated && body.current) body.current.rotation.y = o.spin * fw;
     if (chair?.current) chair.current.rotation.y = seated ? o.spin * fw : 0;
 
@@ -517,7 +524,7 @@ export function Character({
       kneeR.current.rotation.x = (-Math.PI / 2) * k + bendR * up;
     }
     if (tag.current) {
-      const [tx, ty, tz] = TAG_SEATED;
+      const [tx, ty, tz] = seatedTag;
       tag.current.position.set(tx * k, ty * k + (HIP.standY + look.height * 0.86 + 0.26) * up, tz * k);
     }
     if (head.current) {
@@ -638,7 +645,7 @@ export function Character({
         {/* just above their name tag */}
         <SpeechBubble id={id} y={HIP.standY + look.height * 0.86 + 0.4} />
         {children && (
-          <group ref={tag} position={TAG_SEATED}>
+          <group ref={tag} position={seatedTag}>
             {children}
           </group>
         )}

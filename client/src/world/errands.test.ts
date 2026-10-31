@@ -153,8 +153,9 @@ describe('where to', () => {
   it("finds everyone's desk or the CEO's, and nobody else's", () => {
     expect(homeSpotId('office', { role: 'worker', desk: 7 })).toBe('desk-7');
     expect(homeSpotId('office', { role: 'worker', desk: 13 })).toBe('desk-13'); // along the east wall
-    expect(homeSpotId('lobby', { role: 'ceo', desk: 0 })).toBe('ceo');
-    expect(homeSpotId('lobby', { role: 'worker', desk: 0 })).toBeNull();
+    expect(homeSpotId('ceo', { role: 'ceo', desk: 0 })).toBe('ceo');
+    expect(homeSpotId('lobby', { role: 'ceo', desk: 0 })).toBeNull(); // the CEO has a floor of their own
+    expect(homeSpotId('ceo', { role: 'worker', desk: 0 })).toBeNull();
     expect(homeSpotId('office', { role: 'ceo', desk: 0 })).toBeNull();
   });
 

@@ -400,6 +400,41 @@ button.link {
   bottom: 84px;
 }
 
+/* the overview's way down onto the floor (ui/HUD.tsx; Tab does the same) */
+.hud-walk {
+  position: absolute;
+  left: 50%;
+  bottom: 124px;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 2px solid #1f1d2b;
+  background: #ffd166;
+  box-shadow: 0 3px 0 #1f1d2b;
+  font: 600 1.05rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  color: #1f1d2b;
+  cursor: pointer;
+  z-index: 4;
+}
+
+.hud-walk:hover {
+  background: #ffdc85;
+}
+
+.hud-walk:active {
+  transform: translate(-50%, 2px);
+  box-shadow: 0 1px 0 #1f1d2b;
+}
+
+.hud-walk kbd {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1.5px solid #1f1d2b;
+  background: #fffdf5;
+  font: 600 0.8rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
 .panel-backdrop {
   position: absolute;
   inset: 0;
@@ -550,6 +585,26 @@ button.link {
   background: radial-gradient(circle at 50% 35%, #fff6dd, #f1e4c8);
   position: sticky;
   top: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.look-preview:active {
+  cursor: grabbing;
+}
+
+.look-preview-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(31, 29, 43, 0.6);
+  color: #ffffff;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .look-controls {
@@ -620,7 +675,7 @@ button.link {
     grid-template-columns: 1fr;
   }
   .look-preview {
-    position: static;
+    position: relative;
     height: 240px;
   }
 }
@@ -741,4 +796,151 @@ button.link {
   background: rgba(31, 29, 43, 0.75);
   color: #ffffff;
   font: 500 0.9rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+/* the front desk (ui/FrontDeskPanel.tsx) */
+.frontdesk-hello {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+
+.frontdesk-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.frontdesk-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 14px;
+  background: #23263a;
+  color: #ffffff;
+}
+
+.frontdesk-tile b {
+  font-size: 1.6rem;
+}
+
+.frontdesk-tile small {
+  color: #9aa0b8;
+}
+
+.frontdesk-tour {
+  display: block;
+  width: 100%;
+  margin: 12px 0 4px;
+  padding: 10px;
+  border: 2px solid #1f1d2b;
+  border-radius: 14px;
+  background: #ffd166;
+  box-shadow: 0 3px 0 #1f1d2b;
+  font: 700 1.05rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.frontdesk h3 {
+  margin: 14px 0 6px;
+}
+
+.frontdesk-floors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.frontdesk-floors li {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 2px solid #1f1d2b;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.frontdesk-floors p {
+  margin: 2px 0;
+  color: #3d405b;
+  font-size: 0.9rem;
+}
+
+.frontdesk-floors small {
+  color: #5c6078;
+}
+
+.frontdesk-floors button {
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #fffdf5;
+  padding: 4px 12px;
+  font: 600 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+/* the tour (ui/TourCard.tsx) */
+.tour-card {
+  position: absolute;
+  top: 74px;
+  right: 16px;
+  width: min(340px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: 2px solid #1f1d2b;
+  border-radius: 16px;
+  background: #fffdf5;
+  box-shadow: 0 4px 0 #1f1d2b;
+  font: 500 0.92rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  z-index: 4;
+}
+
+.tour-card-head {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 4px;
+}
+
+.tour-card-head span {
+  color: #5c6078;
+  font-size: 0.8rem;
+}
+
+.tour-card-head strong {
+  font-size: 1.1rem;
+}
+
+.tour-card p {
+  margin: 4px 0;
+}
+
+.tour-card-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tour-card-keys button {
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 3px 10px;
+  font: 600 0.82rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.tour-card kbd {
+  display: inline-block;
+  min-width: 1.2em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #1f1d2b;
+  color: #ffffff;
+  font: 700 0.75rem ui-monospace, Consolas, monospace;
+  text-align: center;
 }

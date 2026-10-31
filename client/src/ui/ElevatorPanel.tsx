@@ -1,9 +1,14 @@
-// The elevator's buttons (E on its panel or the call button): the lobby and every floor, the one you're on lit. A
-// press closes this and rides you there (world/elevatorRide.ts).
+// The elevator's buttons (E on its panel, the call button or the lobby's directory): the roof terrace, the CEO's office,
+// every repo floor and the lobby, top first, the one you're on lit. A press closes this and rides you there
+// (world/elevatorRide.ts).
 import { useStore } from '../store';
 import { rideTo } from '../world/elevatorRide';
+import { kindOf, stops } from '../world/floors';
 import { useView } from '../world/view';
 import { Panel } from './Panel';
+
+/** A stop's colour chip: a repo floor's own colour, else one for the game's floors. */
+const CHIPS = { lobby: '#ff8a5b', ceo: '#9b5de5', roof: '#2a9d8f' } as const;
 
 export function ElevatorPanel() {
   const floors = useStore((s) => s.floors);
@@ -14,21 +19,27 @@ export function ElevatorPanel() {
     close();
     rideTo(floor);
   };
-  const stops = [{ floor: 0, name: 'Lobby', note: 'the CEO', color: '#ff8a5b' }, ...floors.map((f) => ({ floor: f.floor, name: f.fullName, note: `${Object.values(workers).filter((w) => w.floorId === f.id).length} on the team`, color: f.color }))].sort((a, b) => b.floor - a.floor);
   return (
     <Panel onClose={close} title="🛗 Going up?">
       <div className="elevator-buttons">
-        {stops.map((s) => (
-          <button key={s.floor} className={`elevator-button${s.floor === (here ?? -1) ? ' on' : ''}`} style={{ borderColor: s.color }} disabled={s.floor === here} onClick={() => go(s.floor)}>
-            <span className="elevator-number" style={{ background: s.color }}>
-              {s.floor === 0 ? 'L' : s.floor}
-            </span>
-            <span>
-              <strong>{s.name}</strong>
-              <span className="panel-sub"> · {s.floor === here ? "you're here" : s.note}</span>
-            </span>
-          </button>
-        ))}
+        {stops(floors).map((s) => {
+          const f = floors.find((x) => x.floor === s.floor);
+          const kind = kindOf(s.floor);
+          const color = f?.color ?? CHIPS[kind === 'office' ? 'lobby' : kind];
+          const note = f ? `${Object.values(workers).filter((w) => w.floorId === f.id).length} on the team` : kind === 'ceo' ? 'the CEO' : kind === 'roof' ? 'fireplace, deck chairs, the view' : 'front desk';
+          const isHere = s.floor === here;
+          return (
+            <button key={s.floor} className={`elevator-button${isHere ? ' on' : ''}`} style={{ borderColor: color }} disabled={isHere} onClick={() => go(s.floor)}>
+              <span className="elevator-number" style={{ background: color }}>
+                {s.key}
+              </span>
+              <span>
+                <strong>{s.name}</strong>
+                <span className="panel-sub"> · {isHere ? "you're here" : note}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </Panel>
   );

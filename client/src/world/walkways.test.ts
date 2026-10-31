@@ -47,10 +47,17 @@ describe('named spots', () => {
     expect(xs[2]).toBeCloseTo(0); // the middle column
   });
 
-  it('the lobby has the CEO and the elevator', () => {
+  it('the lobby has the front desk and the elevator, and nobody at home there', () => {
     const w = walkways('lobby');
+    expect(w.homes).toEqual([]);
+    for (const id of ['reception', 'elevator']) expect(spot(w, id), id).toBeDefined();
+  });
+
+  it("the CEO's floor has their desk, the elevator and somewhere to stroll to, every one reachable", () => {
+    const w = walkways('ceo');
     expect(w.homes.map((s) => s.id)).toEqual(['ceo']);
-    for (const id of ['ceo', 'elevator']) expect(spot(w, id), id).toBeDefined();
+    const home = spot(w, 'ceo')!;
+    for (const id of ['elevator', 'lounge', 'bar', 'globe', 'window-w0']) expect(findPath(w, home, spot(w, id)!), id).not.toBeNull();
   });
 });
 

@@ -1,16 +1,22 @@
 // The city round the building (cityLayout.ts): streets and pavements, the buildings on their blocks with windows on
-// every face, roofs, parks and trees, and a dozen cars driving the nearer streets. Every kind of thing is one
-// instanced mesh, so the whole city costs a handful of draw calls. It sits `elevation` below the floor you're on.
+// every face, roofs, parks and trees, downtown's skyline, the outskirts, the billboards on the nearer roofs
+// (Billboards.tsx), the bay and its red bridge far to the west (Bridge.tsx), and a dozen cars driving the nearer
+// streets. Every kind of thing is one instanced or merged mesh, so the whole city costs a handful of draw calls. It
+// fades into the haze on its own long curve (haze.ts), and sits `elevation` below the floor you're on.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { carPose, carRoutes, CITY, cityLayout, CORRIDOR_HALF, type CityBox } from './cityLayout';
-import { toon } from './materials';
+import { Billboards } from './Billboards';
+import { Bridge } from './Bridge';
+import { carPose, carRoutes, CITY, CORRIDOR_HALF, GROUND, theCity, type CityBox } from './cityLayout';
+import { CITY_HAZE, hazed, hazedToon } from './haze';
 
-const GROUND = '#d9d2c4'; // pavements and plazas
+const GROUND_COLOR = '#d9d2c4'; // pavements and plazas
 const ROAD = '#5b5f6b';
 const PLAZA = '#efe6d6';
 const KERB = '#c9c0ae';
+/** Lane markings are painted this far out; past it they'd only shimmer. */
+const DASHES = 220;
 
 const unit = {
   box: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
@@ -18,33 +24,37 @@ const unit = {
   cone: new THREE.ConeGeometry(0.5, 1, 12).translate(0, 0.5, 0),
 };
 
-/** A white toon material that takes each instance's colour, and paints a grid of windows on the sides when asked. */
+/**
+ * A white toon material that takes each instance's colour, and paints a grid of windows on the sides when asked
+ * (fading them out far off, where they'd shimmer). Hazed like the rest of the city.
+ */
 function cityMaterial(windows: boolean) {
   const m = new THREE.MeshToonMaterial({ color: '#ffffff' });
-  if (!windows) return m;
-  m.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aSize;\nvarying vec3 vCity;\nvarying vec3 vCityN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCity = position * aSize;\nvCityN = normal;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vCity;\nvarying vec3 vCityN;').replace(
-      '#include <color_fragment>',
-      `#include <color_fragment>
-      {
-        // in metres along the face: a window every 2.8 m across and 3.3 m up, none on the roof or the ground floor's base
-        float side = step(abs(vCityN.y), 0.5);
-        float u = abs(vCityN.x) > 0.5 ? vCity.z : vCity.x;
-        float v = vCity.y;
-        float wx = step(0.22, fract(u / 2.8)) * step(fract(u / 2.8), 0.78);
-        float wy = step(0.3, fract(v / 3.3)) * step(fract(v / 3.3), 0.78) * step(1.4, v);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.76, 0.88), side * wx * wy * 0.85);
-      }`,
-    );
-  };
-  return m;
+  if (windows)
+    m.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec3 aSize;\nvarying vec3 vCity;\nvarying vec3 vCityN;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCity = position * aSize;\nvCityN = normal;');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vCity;\nvarying vec3 vCityN;').replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          // in metres along the face: a window every 2.8 m across and 3.3 m up, none on the roof or the ground floor's base
+          float side = step(abs(vCityN.y), 0.5);
+          float u = abs(vCityN.x) > 0.5 ? vCity.z : vCity.x;
+          float v = vCity.y;
+          float wx = step(0.22, fract(u / 2.8)) * step(fract(u / 2.8), 0.78);
+          float wy = step(0.3, fract(v / 3.3)) * step(fract(v / 3.3), 0.78) * step(1.4, v);
+          float near = 1.0 - smoothstep(320.0, 560.0, length(vViewPosition));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.76, 0.88), side * wx * wy * 0.85 * near);
+        }`,
+      );
+    };
+  return hazed(m, CITY_HAZE);
 }
 
 /** One instanced mesh of `geometry` for every box in `items`, each scaled, placed and coloured; `windows` paints them. */
-function Instances({ items, geometry, windows = false }: { items: CityBox[]; geometry: THREE.BufferGeometry; windows?: boolean }) {
+function Instances({ items, geometry, windows = false, shadows = false }: { items: CityBox[]; geometry: THREE.BufferGeometry; windows?: boolean; shadows?: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const material = useMemo(() => cityMaterial(windows), [windows]);
   const geo = useMemo(() => {
@@ -74,21 +84,23 @@ function Instances({ items, geometry, windows = false }: { items: CityBox[]; geo
     },
     [material, geo, geometry],
   );
-  return <instancedMesh ref={ref} args={[geo, material, items.length]} castShadow={windows} receiveShadow />;
+  return <instancedMesh ref={ref} args={[geo, material, items.length]} castShadow={shadows} receiveShadow />;
 }
 
-/** The streets, their pavements' kerbs and our own plaza, as flat strips on the ground. */
+/** The streets and their lane markings as flat strips, on the ground, which stops at the bay's shore. */
 function Streets({ streetsX, streetsZ, extentX, extentZ }: { streetsX: number[]; streetsZ: number[]; extentX: number; extentZ: number }) {
   const geo = useMemo(() => {
     const roads: THREE.BufferGeometry[] = [];
     const lines: THREE.BufferGeometry[] = [];
+    const dz = Math.min(extentZ, DASHES);
+    const dx = Math.min(extentX, DASHES);
     for (const x of streetsX) {
       roads.push(new THREE.PlaneGeometry(CITY.roadHalf * 2, extentZ * 2).rotateX(-Math.PI / 2).translate(x, 0.02, 0));
-      for (let z = -extentZ; z < extentZ; z += 6) lines.push(new THREE.PlaneGeometry(0.18, 2.6).rotateX(-Math.PI / 2).translate(x, 0.03, z));
+      if (Math.abs(x) < DASHES) for (let z = -dz; z < dz; z += 6) lines.push(new THREE.PlaneGeometry(0.18, 2.6).rotateX(-Math.PI / 2).translate(x, 0.03, z));
     }
     for (const z of streetsZ) {
       roads.push(new THREE.PlaneGeometry(extentX * 2, CITY.roadHalf * 2).rotateX(-Math.PI / 2).translate(0, 0.025, z));
-      for (let x = -extentX; x < extentX; x += 6) lines.push(new THREE.PlaneGeometry(2.6, 0.18).rotateX(-Math.PI / 2).translate(x, 0.035, z));
+      if (Math.abs(z) < DASHES) for (let x = -dx; x < dx; x += 6) lines.push(new THREE.PlaneGeometry(2.6, 0.18).rotateX(-Math.PI / 2).translate(x, 0.035, z));
     }
     const merge = (parts: THREE.BufferGeometry[]) => {
       const g = new THREE.BufferGeometry();
@@ -109,11 +121,11 @@ function Streets({ streetsX, streetsZ, extentX, extentZ }: { streetsX: number[];
   useEffect(() => () => Object.values(geo).forEach((g) => g.dispose()), [geo]);
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={toon(GROUND)}>
-        <planeGeometry args={[extentX * 2 + 400, extentZ * 2 + 400]} />
+      <mesh position={[(GROUND.minX + GROUND.maxX) / 2, 0, (GROUND.minZ + GROUND.maxZ) / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={hazedToon(GROUND_COLOR, CITY_HAZE)}>
+        <planeGeometry args={[GROUND.maxX - GROUND.minX, GROUND.maxZ - GROUND.minZ]} />
       </mesh>
-      <mesh geometry={geo.roads} material={toon(ROAD)} receiveShadow />
-      <mesh geometry={geo.lines} material={toon('#f4f1e8')} />
+      <mesh geometry={geo.roads} material={hazedToon(ROAD, CITY_HAZE)} receiveShadow />
+      <mesh geometry={geo.lines} material={hazedToon('#f4f1e8', CITY_HAZE)} />
     </group>
   );
 }
@@ -181,23 +193,25 @@ function Cars() {
 const STREET_Y = -0.16;
 
 export function City({ elevation }: { elevation: number }) {
-  const city = useMemo(() => cityLayout(), []);
+  const city = useMemo(() => theCity(), []);
   const trees = useMemo(() => plazaTrees(), []);
   return (
     <group position={[0, -elevation, 0]}>
       <group position={[0, STREET_Y, 0]}>
         <Streets streetsX={city.streetsX} streetsZ={city.streetsZ} extentX={city.extentX + CORRIDOR_HALF} extentZ={city.extentZ + CORRIDOR_HALF} />
-        <Instances items={city.buildings} geometry={unit.box} windows />
+        <Instances items={city.buildings} geometry={unit.box} windows shadows />
         <Instances items={city.boxes} geometry={unit.box} />
         <Instances items={city.cylinders} geometry={unit.cylinder} />
         <Instances items={city.cones} geometry={unit.cone} />
         <Cars />
+        <Billboards />
+        <Bridge />
       </group>
       {/* our plaza, a step up from the pavement, with its kerb and trees */}
-      <mesh position={[0, (STREET_Y - 0.03) / 2, 0]} material={toon(KERB)}>
+      <mesh position={[0, (STREET_Y - 0.03) / 2, 0]} material={hazedToon(KERB, CITY_HAZE)}>
         <boxGeometry args={[CITY.homeHalfX * 2 + 0.6, -STREET_Y - 0.03, CITY.homeHalfZ * 2 + 0.6]} />
       </mesh>
-      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} material={toon(PLAZA)} receiveShadow>
+      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} material={hazedToon(PLAZA, CITY_HAZE)} receiveShadow>
         <planeGeometry args={[CITY.homeHalfX * 2 - 0.6, CITY.homeHalfZ * 2 - 0.6]} />
       </mesh>
       <Instances items={trees.trunks} geometry={unit.cylinder} />

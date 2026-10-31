@@ -12,6 +12,7 @@ import { WALK_SPEED, type Gesture } from './body';
 import { chatSay } from './Chatter';
 import type { ChatTopic } from './chatterLines';
 import './coffeeErrand';
+import './events/watch';
 import {
   admit,
   choose,
@@ -47,6 +48,7 @@ import type { Pt } from './nav';
 import { bodyState, bodyTarget, isSeated, onClaim, placeBody, say, seatBody, setBody, setErrand, trackDirector } from './people';
 import './pongErrands';
 import { playerAt } from './rig';
+import './roof/roofErrand';
 import { ARRIVE, arrivalPath, CABIN, CHAT, CHAT_VENUES, DOORS_SECONDS, exitPath, floorNews, headingTo, huddle, LEAVE, nearest, pickTopic, planChat, topicPr } from './socials';
 import { findPath, spot as spotById, standable, steer, walkways, type Body, type FloorKind, type Spot } from './walkways';
 

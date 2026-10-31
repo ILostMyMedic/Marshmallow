@@ -245,9 +245,9 @@ export function pickSpot<T extends Pt & { id: string }>(spots: readonly T[], fro
   return close[Math.min(close.length - 1, Math.floor(rand * close.length))];
 }
 
-/** Where someone's errands start and end: their desk's stand-up spot, or the CEO's in the lobby; null for nobody. */
+/** Where someone's errands start and end: their desk's stand-up spot, or the CEO's on their own floor; null for nobody. */
 export function homeSpotId(floor: FloorKind, worker: { role: string; desk: number }): string | null {
-  if (worker.role === 'ceo') return floor === 'lobby' ? 'ceo' : null;
+  if (worker.role === 'ceo') return floor === 'ceo' ? 'ceo' : null;
   return floor === 'office' ? `desk-${worker.desk}` : null;
 }
 

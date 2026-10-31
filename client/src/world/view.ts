@@ -1,19 +1,20 @@
 // What this tab is looking at and doing, kept in the tab, not on the server: which floor (0 is the lobby), whether you
-// walk it in first person or look down on it, what's under the crosshair, whether the mouse is locked for looking
-// round, the panel that's open over the view, what you hold, and a passing note. Adapted from cubefarm
-// client/src/store.ts (MIT): overlay, focus, locked, held and toasts.
+// walk it (the camera behind you or in your eyes) or look down on it, what's under the crosshair, whether the mouse is
+// locked for looking round, the panel that's open over the view, what you hold, and a passing note. Adapted from
+// cubefarm client/src/store.ts (MIT): overlay, focus, locked, held and toasts.
 import { create } from 'zustand';
 import type { SnackId } from './fridge';
 import type { End } from './pongPhysics';
 
-/** A panel over the view: a worker's terminal, a floor's board, the elevator's buttons, or your look. */
-export type Overlay = { kind: 'terminal'; workerId: string } | { kind: 'kanban'; floorId: string } | { kind: 'elevator' } | { kind: 'look' };
+/** A panel over the view: a worker's terminal, a floor's board, the elevator's buttons, your look, or the front desk. */
+export type Overlay = { kind: 'terminal'; workerId: string } | { kind: 'kanban'; floorId: string } | { kind: 'elevator' } | { kind: 'look' } | { kind: 'frontdesk' };
 
-const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look'] satisfies Overlay['kind'][];
+const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk'] satisfies Overlay['kind'][];
 
 /**
  * What E does with what's under the crosshair: open a panel, or do something in the room (actions.ts hands those to
- * whoever registered for them): say hi, take a mug, work the coffee machine or the fridge, pick up a paddle.
+ * whoever registered for them): say hi, take a mug, work the coffee machine or the fridge, pick up a paddle, look
+ * through a lookout's binoculars.
  */
 export type Action =
   | Overlay
@@ -21,7 +22,8 @@ export type Action =
   | { kind: 'mugs' }
   | { kind: 'coffee'; op: 'place' | 'brew' | 'take' }
   | { kind: 'fridge'; op: 'door' | 'take'; snack?: SnackId }
-  | { kind: 'paddle'; end: End };
+  | { kind: 'paddle'; end: End }
+  | { kind: 'lookout'; id: string };
 
 export const isPanel = (a: Action): a is Overlay => PANELS.includes(a.kind);
 
@@ -36,10 +38,22 @@ export interface Focus {
 export type Held = { kind: 'mug'; id: string; sips: number } | { kind: 'snack'; id: string; snack: SnackId; left: number } | { kind: 'paddle'; end: End };
 
 export type ViewMode = 'first' | 'overview';
+/** On foot (ViewMode 'first'), whether the camera looks out of your eyes (the default) or follows behind you. */
+export type Person = 'third' | 'first';
+
+const PERSON_KEY = 'marshmallow:camera'; // not 'marshmallow:person': that held the old default, third person
+function loadPerson(): Person {
+  try {
+    return localStorage.getItem(PERSON_KEY) === 'third' ? 'third' : 'first';
+  } catch {
+    return 'first';
+  }
+}
 
 interface View {
   floor: number | null; // until the manager picks one: the first floor with workers on it
   mode: ViewMode;
+  person: Person;
   overlay: Overlay | null;
   focus: Focus | null;
   locked: boolean;
@@ -48,6 +62,7 @@ interface View {
   toast: { text: string; at: number } | null;
   setFloor(floor: number): void;
   setMode(mode: ViewMode): void;
+  setPerson(p: Person): void;
   openOverlay(o: Overlay): void;
   closeOverlay(): void;
   setFocus(f: Focus | null): void;
@@ -59,6 +74,7 @@ interface View {
 export const useView = create<View>()((set, get) => ({
   floor: null,
   mode: 'overview',
+  person: typeof window === 'undefined' ? 'first' : loadPerson(),
   overlay: null,
   focus: null,
   locked: false,
@@ -66,6 +82,14 @@ export const useView = create<View>()((set, get) => ({
   toast: null,
   setFloor: (floor) => set({ floor }),
   setMode: (mode) => set({ mode }),
+  setPerson: (person) => {
+    set({ person });
+    try {
+      localStorage.setItem(PERSON_KEY, person);
+    } catch {
+      // not saved: it holds for this visit
+    }
+  },
   openOverlay: (overlay) => set({ overlay, focus: null }),
   closeOverlay: () => set({ overlay: null }),
   // The player sets it every few frames: only a change of target re-renders the hint.

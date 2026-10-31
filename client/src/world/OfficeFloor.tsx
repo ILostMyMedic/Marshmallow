@@ -1,8 +1,8 @@
 // One floor of the building: its room and the building around it, a desk for every seat (each worker at the desk their
 // `desk` number names, the rest vacant), the whiteboard, the lounge with its couch, the kitchenette, the water cooler,
 // the clock, the ping-pong table, the gong and the plants, all where cubefarm has them, and the errand director
-// sending people out to them. The lobby is floor 0, with the CEO's desk.
-// Adapted from cubefarm client/src/world/OfficeFloor.tsx and Lobby.tsx (MIT): signs are cut.
+// sending people out to them. The lobby (Lobby.tsx) and the CEO's floor (CeoFloor.tsx) are floors of their own.
+// Adapted from cubefarm client/src/world/OfficeFloor.tsx (MIT): signs are cut.
 import { memo, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Floor, Worker } from '../../../shared/types';
@@ -12,33 +12,22 @@ import { ErrandDirector } from './ErrandDirector';
 import { Gong } from './Gong';
 import { KanbanBoard } from './KanbanBoard';
 import { Leaver, useLeavers } from './Leavers';
-import { CEO_DESK, CLOCK, COFFEE_TABLE, COOLER, COUCH, DESK_RUGS, deskPosition, deskRotation, KITCHEN, LOBBY_PLANTS, LOBBY_RUG, OFFICE_PLANTS, SEATS, type Rect } from './layout';
-import { shade, toon } from './materials';
+import { CLOCK, COFFEE_TABLE, COOLER, COUCH, DESK_RUGS, deskPosition, deskRotation, KITCHEN, OFFICE_PLANTS, SEATS } from './layout';
+import { shade } from './materials';
 import { MergeConfetti } from './MergeConfetti';
 import { Outside } from './Outside';
 import { PongTable } from './PongTable';
 import { OfficeRituals } from './Rituals';
-import { CoffeeTable, Couch, Kitchenette, Plant, WallClock, WaterCooler } from './Props';
+import { CoffeeTable, Couch, Kitchenette, Plant, Rug, WallClock, WaterCooler } from './Props';
 import { Shell } from './Shell';
 
 const FLOOR_WOOD = '#e8c79a';
-const LOBBY_TILE = '#e9dfcf';
-
-/** A flat rug over a rect of the floor. */
-function Rug({ r, color }: { r: Rect; color: string }) {
-  return (
-    <mesh position={[(r.minX + r.maxX) / 2, 0.008, (r.minZ + r.maxZ) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={toon(color)} receiveShadow>
-      <planeGeometry args={[r.maxX - r.minX, r.maxZ - r.minZ]} />
-    </mesh>
-  );
-}
 
 // Stable positions for every desk, so a re-render never hands a Desk a new array (it's memoised on its props).
 const DESK_AT = Array.from({ length: SEATS }, (_, s) => {
   const p = deskPosition(s);
   return { position: [p.x, 0, p.z] as [number, number, number], rotation: deskRotation(s) };
 });
-const CEO_AT: [number, number, number] = [CEO_DESK.x, 0, CEO_DESK.z];
 const at = (p: { x: number; z: number }, y = 0): [number, number, number] => [p.x, y, p.z];
 
 /** The workers on a floor: one store read, re-rendering only when one of them changes. */
@@ -83,24 +72,6 @@ export const OfficeFloor = memo(function OfficeFloor({ floor, top }: { floor: Fl
       ))}
       <OfficeRituals floorId={floor.id} workers={workers} />
       <ErrandDirector floor="office" workers={workers} leavers={leavers} onGone={gone} floorId={floor.id} />
-    </group>
-  );
-});
-
-/** The lobby: the ground floor, with the CEO at their desk if the office has one. */
-export const Lobby = memo(function Lobby({ top }: { top: number }) {
-  const ceo = useStore((s) => Object.values(s.workers).find((w) => w.role === 'ceo') ?? null);
-  const workers = useMemo(() => (ceo ? [ceo] : []), [ceo]);
-  return (
-    <group>
-      <Shell kind="lobby" accent="#ff8a5b" floorColor={LOBBY_TILE} />
-      <Outside kind="lobby" floor={0} top={top} />
-      <Rug r={LOBBY_RUG} color="#f4a261" />
-      {LOBBY_PLANTS.map(([x, z, s]) => (
-        <Plant key={`${x},${z}`} position={[x, 0, z]} scale={s} />
-      ))}
-      {ceo && <Desk worker={ceo} accent="#2b2d42" position={CEO_AT} />}
-      <ErrandDirector floor="lobby" workers={workers} />
     </group>
   );
 });

@@ -9,6 +9,7 @@ import { onAction } from './actions';
 import { CoffeeMachine } from './CoffeeMachine';
 import { useInteractable } from './interact';
 import { Fridge } from './KitchenFridge';
+import type { Rect } from './layout';
 import { shade, toon } from './materials';
 import { MUG_SIZE, MugLook, tintMug } from './mugLook';
 import './sipping'; // E sips what you hold (it registers with actions.ts): loaded with the floor, wherever you carry it
@@ -61,6 +62,15 @@ export function CoffeeTable({ position, rotationY = 0 }: { position: P; rotation
       <Cyl r={0.05} h={0.1} position={[0.3, 0.51, 0.1]} color="#ffffff" outline />
       <Box size={[0.3, 0.04, 0.22]} position={[-0.25, 0.48, -0.05]} color="#4cc9f0" outline />
     </group>
+  );
+}
+
+/** A flat rug over a rect of the floor. */
+export function Rug({ r, color }: { r: Rect; color: string }) {
+  return (
+    <mesh position={[(r.minX + r.maxX) / 2, 0.008, (r.minZ + r.maxZ) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={toon(color)} receiveShadow>
+      <planeGeometry args={[r.maxX - r.minX, r.maxZ - r.minZ]} />
+    </mesh>
   );
 }
 

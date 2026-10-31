@@ -1,12 +1,12 @@
-// Adapted from cubefarm client/src/world/walkways.ts (MIT): the spots Marshmallow's floors have (no toys, jukebox or
-// gong; the lobby has only the CEO's desk), and the grid built from the floor's colliders.
+// Adapted from cubefarm client/src/world/walkways.ts (MIT): the spots Marshmallow's floors have (no toys or jukebox;
+// the CEO has a floor of their own), and the grid built from the floor's colliders.
 
 // Walkways: where people can walk on each floor kind, how to get from A to B, and the named places they walk to.
 // Pure (no three.js): the grid and A* are nav.ts's, sized for a person. Headings follow nav's: facing h looks along
 // (cos h, sin h), so 0 is east, π/2 south (+z), π west, -π/2 north. (body.ts's headings differ: errands.ts converts.)
 
 import { kanbanColumnSpan, KANBAN_KEYS } from './draw';
-import { BOARD, CEO_DESK, deskPosition, HALF_D, HALF_W, isEastDesk, lobbyColliders, officeColliders, PLAYER_RADIUS, PONG_TABLE, SEATS, sideDoorway, SIDE_OPENINGS, SIDES, WALL_T, type FloorKind, type Rect } from './layout';
+import { BOARD, ceoColliders, deskPosition, EXEC_BAR, EXEC_COFFEE, EXEC_DESK, EXEC_GLOBE, HALF_D, HALF_W, isEastDesk, lobbyColliders, officeColliders, PLAYER_RADIUS, RECEPTION, PONG_TABLE, SEATS, sideDoorway, SIDE_OPENINGS, SIDES, WALL_T, type FloorKind, type Rect } from './layout';
 import { clear, makeNav, planPath, type Nav, type Pt } from './nav';
 
 export type { FloorKind };
@@ -104,15 +104,31 @@ function officeSpots(): Spot[] {
   ];
 }
 
+/** The lobby: in front of the front desk (where the tour starts), the elevator and the windows. */
 function lobbySpots(): Spot[] {
-  return [{ id: 'ceo', x: CEO_DESK.x, z: CEO_DESK.z + STAND_BACK, facing: NORTH }, elevatorSpot(), ...windowSpots(SIDE_OPENINGS.lobby.west.windows, SIDE_OPENINGS.lobby.east.windows)];
+  return [{ id: 'reception', x: RECEPTION.x, z: RECEPTION.z + RECEPTION.d / 2 + 1, facing: NORTH }, elevatorSpot(), ...windowSpots(SIDE_OPENINGS.lobby.west.windows, SIDE_OPENINGS.lobby.east.windows)];
+}
+
+/**
+ * The CEO's floor: behind their desk, which faces the room (south), where they get up; the lounge, the bar cart, the
+ * globe, the elevator and the windows, for their strolls.
+ */
+function ceoSpots(): Spot[] {
+  return [
+    { id: 'ceo', x: EXEC_DESK.x, z: EXEC_DESK.z - STAND_BACK, facing: SOUTH },
+    { id: 'lounge', x: EXEC_COFFEE.x + 1.3, z: EXEC_COFFEE.z, facing: WEST },
+    { id: 'bar', x: EXEC_BAR.x - 1.1, z: EXEC_BAR.z, facing: EAST },
+    { id: 'globe', x: EXEC_GLOBE.x + 0.9, z: EXEC_GLOBE.z + 0.7, facing: WEST },
+    elevatorSpot(),
+    ...windowSpots(SIDE_OPENINGS.ceo.west.windows.slice(0, 2), SIDE_OPENINGS.ceo.east.windows),
+  ];
 }
 
 // ---------- the walk grid ----------
 
 /** Everything people steer round: the floor's colliders inside the walls (the balconies are off-limits) and the side doorways. */
 export function walkRects(floor: FloorKind): Rect[] {
-  const out = (floor === 'office' ? officeColliders() : lobbyColliders()).filter((r) => Math.abs(r.minX + r.maxX) / 2 < HALF_W + WALL_T);
+  const out = (floor === 'office' ? officeColliders() : floor === 'ceo' ? ceoColliders() : lobbyColliders()).filter((r) => Math.abs(r.minX + r.maxX) / 2 < HALF_W + WALL_T);
   for (const side of SIDES) out.push(sideDoorway(floor, side));
   return out;
 }
@@ -125,7 +141,7 @@ export function walkways(floor: FloorKind): Walkways {
   if (w) return w;
   // A slightly greedy search: paths get smoothed into straight legs anyway, and it searches far fewer cells.
   const nav = makeNav(walkRects(floor), { planR: WALK_R + 0.1, lineR: WALK_R + 0.03, greed: 1.3 });
-  const spots = floor === 'office' ? officeSpots() : lobbySpots();
+  const spots = floor === 'office' ? officeSpots() : floor === 'ceo' ? ceoSpots() : lobbySpots();
   const homes = floor === 'office' ? Array.from({ length: SEATS }, (_, s) => deskSpot(s)) : spots.filter((s) => s.id === 'ceo');
   w = { floor, nav, spots, homes };
   cache.set(floor, w);

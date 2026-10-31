@@ -2,8 +2,10 @@
 // what you hold, and how to look round; in the overview, how to get about; a passing note (view.ts toast) either way.
 // Adapted from cubefarm client/src/ui/HUD.tsx (MIT).
 import { useEffect, useState } from 'react';
+import { toggleWalk } from '../world/Player';
 import { sipLabel } from '../world/sip';
 import { PongHud } from './PongHud';
+import { TourCard } from './TourCard';
 import { useView, type Held } from '../world/view';
 
 const TOAST_MS = 2600;
@@ -37,18 +39,23 @@ export function HUD() {
     return (
       <>
         <Toast />
-        <div className="hud-hint">Tab: walk the floor · drag to turn · wheel to zoom · right-drag or WASD to move</div>
+        <TourCard />
+        <button className="hud-walk" onClick={toggleWalk}>
+          🚶 Walk the floor <kbd>Tab</kbd>
+        </button>
+        <div className="hud-hint">Drag to turn · wheel to zoom · right-drag or WASD to move</div>
       </>
     );
   const playing = held?.kind === 'paddle';
   return (
     <>
       <Toast />
+      <TourCard />
       {locked && !playing && <div className={`crosshair${focus ? ' on' : ''}`} />}
       {focus && locked && !playing && <div className="hud-use">E / Click: {focus.label}</div>}
       {playing && <PongHud />}
       {locked && held && held.kind !== 'paddle' && <div className="hud-hint">{heldHint(held)}</div>}
-      {!locked && <div className="hud-hint">Click to look around · WASD to walk, Shift to run · C: your look · Tab: overview</div>}
+      {!locked && <div className="hud-hint">Click to look around · WASD to walk, Shift to run · V: 1st / 3rd person · C: your look · Tab: overview</div>}
     </>
   );
 }

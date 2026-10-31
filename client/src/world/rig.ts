@@ -1,6 +1,6 @@
-// The camera rig: first person (the player drives the camera, Player.tsx) or the overview, and the flights between
-// them. In the overview the rig drives the camera, cuts the floor open (cutaway.ts) and takes the manager's drags,
-// wheel and keys; Tab flies down to where you were standing, and back up.
+// The camera rig: on foot (the player drives the camera, Player.tsx: behind you or in your eyes) or the overview, and
+// the flights between them. In the overview the rig drives the camera, cuts the floor open (cutaway.ts) and takes the
+// manager's drags, wheel and keys; Tab flies down to where you were standing, and back up.
 // Adapted from cubefarm client/src/world/camera/rig.ts (MIT): first person and the overview; the building view and the
 // follow cam are cut, and floor changes are instant (no elevator ride yet).
 import type * as THREE from 'three';
@@ -9,7 +9,7 @@ import { cutOff, setCut } from './cutaway';
 import { EYE_HEIGHT, SPAWN } from './layout';
 import { useView, type ViewMode } from './view';
 
-/** Where the player is standing and facing: the camera in first person, and where they left themselves in the overview. */
+/** Where the player is standing and which way they face (Player.tsx keeps it), and where they left themselves in the overview. */
 export const playerAt = { x: SPAWN.x, z: SPAWN.z, yaw: SPAWN.yaw };
 
 interface Home {
@@ -47,6 +47,14 @@ const rig = {
 
 let camera: THREE.PerspectiveCamera | null = null;
 let homeLook: () => { yaw: number; pitch: number } = () => rig.home;
+/** Where the camera goes when you're on foot at (x, z) looking yaw/pitch: Player.tsx says (in your eyes, or behind you). */
+let homeView = (x: number, z: number, yaw: number, pitch: number, out: Pose) => {
+  out.x = x;
+  out.y = EYE_HEIGHT;
+  out.z = z;
+  out.yaw = yaw;
+  out.pitch = pitch;
+};
 
 function setMode(mode: ViewMode) {
   rig.mode = mode;
@@ -82,6 +90,11 @@ export function setHomeLook(fn: () => { yaw: number; pitch: number }) {
   homeLook = fn;
 }
 
+/** Player.tsx: where the camera sits on foot, for the flight back down to you. */
+export function setHomeView(fn: typeof homeView) {
+  homeView = fn;
+}
+
 /** Whether first person may grab the mouse. */
 export const lookAllowed = () => rig.mode === 'first';
 export const rigOwnsCamera = () => rig.owns;
@@ -113,7 +126,7 @@ function capture(out: Pose) {
 function leaveFirst() {
   if (rig.owns || !camera) return;
   const look = homeLook();
-  rig.home = { x: camera.position.x, z: camera.position.z, yaw: look.yaw, pitch: look.pitch };
+  rig.home = { x: playerAt.x, z: playerAt.z, yaw: look.yaw, pitch: look.pitch };
   playerAt.x = rig.home.x;
   playerAt.z = rig.home.z;
   playerAt.yaw = rig.home.yaw;
@@ -227,11 +240,7 @@ export function stepRig(dt: number) {
   } else {
     const look = homeLook();
     const p = rig.goalPose;
-    p.x = rig.home.x;
-    p.y = EYE_HEIGHT;
-    p.z = rig.home.z;
-    p.yaw = look.yaw;
-    p.pitch = look.pitch;
+    homeView(rig.home.x, rig.home.z, look.yaw, look.pitch, p);
     p.fov = FIRST_FOV;
     p.near = FIRST_NEAR;
   }

@@ -1,8 +1,8 @@
-// Adapted from cubefarm client/src/world/socials.ts (MIT): the CEO strolls to the lobby's windows (it has no reception).
+// Adapted from cubefarm client/src/world/socials.ts (MIT): the CEO strolls round their own floor, not the lobby.
 
 // Comings and goings (errands.ts, run by ErrandDirector.tsx): new hires stepping out of the elevator, people who
 // were let go leaving with a box, idle people chatting at the water cooler or the couch, visiting a busy
-// teammate's desk, and the CEO strolling about the lobby. Pure: the decisions and the errands, no three.js.
+// teammate's desk, and the CEO strolling about their floor. Pure: the decisions and the errands, no three.js.
 
 import type { Floor, QaRecord } from '../../../shared/types';
 import { isFree, registerErrand, type Errand, type ErrandPeer, type ErrandState } from './errands';
@@ -111,12 +111,12 @@ const visit: Errand = {
   weight: 0.7,
 };
 
-// ---------- the CEO in the lobby ----------
+// ---------- the CEO on their floor ----------
 
 const stroll: Errand = {
   name: 'stroll',
-  when: (w, s) => w.role === 'ceo' && s.floor === 'lobby' && isFree(w.status) && restless(s),
-  spot: ['window-*'],
+  when: (w, s) => w.role === 'ceo' && s.floor === 'ceo' && isFree(w.status) && restless(s),
+  spot: ['window-*', 'lounge', 'bar', 'globe'],
   steps: [
     { gesture: 'none', seconds: 3 },
     { gesture: 'none', seconds: 2, turn: 0.6 },

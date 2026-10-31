@@ -28,7 +28,7 @@ export const rect = (cx: number, cz: number, w: number, d: number): Rect => ({ m
 
 // ---------- outside: windows, side doors and balconies ----------
 
-export type FloorKind = 'office' | 'lobby';
+export type FloorKind = 'office' | 'lobby' | 'ceo';
 export type Side = 'west' | 'east';
 export const SIDES: readonly Side[] = ['west', 'east'];
 /** -1 for the west wall, 1 for the east one. */
@@ -52,6 +52,7 @@ export const SIDE_DOOR = { half: 0.9, h: 2.5 };
 export const SIDE_OPENINGS: Record<FloorKind, Record<Side, { door: number; windows: number[] }>> = {
   office: { west: { door: -4.2, windows: [-8.5, 0, 8] }, east: { door: 3.55, windows: [-8, -2] } },
   lobby: { west: { door: 4.5, windows: [0, 8.5] }, east: { door: 2.6, windows: [-1] } },
+  ceo: { west: { door: -4.2, windows: [-8.5, 0, 8] }, east: { door: 3.55, windows: [-8, -2] } },
 };
 
 /** A side door opens while the player is within `across` of its wall's middle and `along` of the doorway's middle. */
@@ -232,29 +233,103 @@ export function officeColliders(doorway = true): Rect[] {
   return out;
 }
 
-// ---------- the lobby (floor 0) ----------
+// ---------- the lobby (floor 0): the entrance ----------
 
-/** The CEO's desk in the lobby. */
-export const CEO_DESK = { x: 12, z: -7.4 };
-/** The big rug in front of reception. */
-export const LOBBY_RUG = rect(3, 3, 14, 9);
-/** The lobby's plants, in its corners. */
+/**
+ * The front desk, facing you as you step out of the elevator: its middle, width and depth; the guide's chair behind it
+ * (north), and the screen with today's news on the wall behind that.
+ */
+export const RECEPTION = { x: 0, z: -4.2, w: 4.6, d: 1.0 };
+export const RECEPTION_CHAIR = { x: 0, z: RECEPTION.z - 1.05 };
+export const TODAY_BOARD = { w: 6.4, h: 2.2, y: 1.15, z: -HALF_D + 0.06 };
+/** The floor directory on the south wall, west of the elevator's doors (you read it facing south). */
+export const DIRECTORY = { x: -(ELEVATOR.doorHalf + 2.1), w: 2.2, h: 2.4, y: 0.5, z: HALF_D - 0.05 };
+/** The trophy cabinet against the west wall, and the lounge corner by the east wall (a couch facing west, a table). */
+export const TROPHIES = { x: -HALF_W + 0.35, z: -7.5, w: 0.6, l: 2.6, h: 2.1 };
+export const LOBBY_COUCH = { x: HALF_W - 0.9, z: 7.2 };
+export const LOBBY_TABLE = { x: HALF_W - 2.6, z: 7.2 };
+/** The big rug in front of the front desk. */
+export const LOBBY_RUG = rect(0, 2.5, 12, 8);
+/** The lobby's plants, in its corners and either side of the front desk. */
 export const LOBBY_PLANTS: [number, number, number][] = [
   [-HALF_W + 0.9, -HALF_D + 0.9, 1.2],
   [HALF_W - 0.9, -HALF_D + 0.9, 1.2],
   [-HALF_W + 0.9, HALF_D - 0.9, 1.2],
   [HALF_W - 0.9, HALF_D - 0.9, 1.2],
+  [-3.6, -HALF_D + 0.8, 1],
+  [3.6, -HALF_D + 0.8, 1],
 ];
 
-/** What can't be walked through in the lobby: only what it draws so far. `doorway` as for officeColliders. */
+/** What can't be walked through in the lobby. `doorway` as for officeColliders. */
 export function lobbyColliders(doorway = true): Rect[] {
   return [
     ...shellColliders('lobby'),
     ...(doorway ? [elevatorDoorway()] : []),
     ...outsideColliders('lobby'),
-    rect(CEO_DESK.x, CEO_DESK.z, DESK.w + 0.1, DESK.d + 0.1),
-    rect(CEO_DESK.x, CEO_DESK.z + 0.8, 0.7, 0.6),
+    rect(RECEPTION.x, RECEPTION.z, RECEPTION.w + 0.1, RECEPTION.d + 0.1),
+    rect(RECEPTION_CHAIR.x, RECEPTION_CHAIR.z, 0.7, 0.7),
+    rect(TROPHIES.x, TROPHIES.z, TROPHIES.w, TROPHIES.l),
+    rect(LOBBY_COUCH.x, LOBBY_COUCH.z, 1.1, 3.2),
+    rect(LOBBY_TABLE.x, LOBBY_TABLE.z, 0.9, 1.4),
     ...LOBBY_PLANTS.map(plantRect),
+  ];
+}
+
+// ---------- the CEO's floor (above the repo floors) ----------
+
+/**
+ * The CEO's desk on the north side, turned to face the room (and the elevator): its middle and size. Their chair is
+ * 0.8 m behind it, to the north; a credenza and the company's sign are on the wall behind them.
+ */
+export const EXEC_DESK = { x: 0, z: -6.8, w: 2.8, d: 1.2 };
+export const EXEC_CREDENZA = { x: 0, z: -HALF_D + 0.35, w: 5.2, d: 0.6 };
+/** The lounge in the west half: a long sofa against the west wall facing east, armchairs and a low table on a rug. */
+export const EXEC_SOFA = { x: -HALF_W + 0.9, z: 3.5 };
+export const EXEC_ARMCHAIRS: [number, number][] = [
+  [-HALF_W + 4.6, 1.8],
+  [-HALF_W + 4.6, 5.2],
+];
+export const EXEC_COFFEE = { x: -HALF_W + 2.75, z: 3.5 };
+/** The meeting table in the east half, its chairs round it. */
+export const EXEC_MEETING = { x: 8.5, z: -3, w: 3.4, d: 1.5 };
+/** The bar cart by the east wall, the globe beside the desk, and the plants. */
+export const EXEC_BAR = { x: HALF_W - 0.5, z: 8.2 };
+export const EXEC_GLOBE = { x: -3.4, z: -8.2 };
+export const EXEC_PLANTS: [number, number, number][] = [
+  [-HALF_W + 0.9, -HALF_D + 0.9, 1.3],
+  [HALF_W - 0.9, -HALF_D + 0.9, 1.3],
+  [-HALF_W + 0.9, HALF_D - 0.9, 1.1],
+  [3.4, -HALF_D + 0.8, 1.1],
+];
+
+/** The meeting table's chairs: x, z and which way they face (a yaw, 0 facing -Z). */
+export function meetingChairs(): [number, number, number][] {
+  const { x, z, w, d } = EXEC_MEETING;
+  const out: [number, number, number][] = [];
+  for (const dx of [-w / 3, 0, w / 3]) {
+    out.push([x + dx, z - d / 2 - 0.45, Math.PI]);
+    out.push([x + dx, z + d / 2 + 0.45, 0]);
+  }
+  return out;
+}
+
+/** What can't be walked through on the CEO's floor. `doorway` as for officeColliders. */
+export function ceoColliders(doorway = true): Rect[] {
+  const { x, z, w, d } = EXEC_MEETING;
+  return [
+    ...shellColliders('ceo'),
+    ...(doorway ? [elevatorDoorway()] : []),
+    ...outsideColliders('ceo'),
+    rect(EXEC_DESK.x, EXEC_DESK.z, EXEC_DESK.w + 0.1, EXEC_DESK.d + 0.1),
+    rect(EXEC_DESK.x, EXEC_DESK.z - 0.8, 0.8, 0.7), // the chair and whoever's in it
+    rect(EXEC_CREDENZA.x, EXEC_CREDENZA.z, EXEC_CREDENZA.w, EXEC_CREDENZA.d),
+    rect(EXEC_SOFA.x, EXEC_SOFA.z, 1.1, 3.6),
+    ...EXEC_ARMCHAIRS.map(([ax, az]) => rect(ax, az, 0.9, 0.9)),
+    rect(EXEC_COFFEE.x, EXEC_COFFEE.z, 1.0, 1.6),
+    rect(x, z, w + 1.3, d + 1.6), // the table and its chairs
+    rect(EXEC_BAR.x, EXEC_BAR.z, 0.6, 1.1),
+    rect(EXEC_GLOBE.x, EXEC_GLOBE.z, 0.7, 0.7),
+    ...EXEC_PLANTS.map(plantRect),
   ];
 }
 

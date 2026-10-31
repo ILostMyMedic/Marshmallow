@@ -106,6 +106,8 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 
 - [x] **3D office** in React Three Fiber: toon shading and ink outlines, built from primitives · L → `client/src/world/Toon.tsx`, `materials.ts`
 - [x] **Building**: lobby, one floor per repo, an elevator between them · L → `layout.ts`, `Lobby.tsx`, `OfficeFloor.tsx`, `Elevator.tsx`
+- [x] **Lobby entrance**: a front desk with a guide who tours you round the floors and their projects, today's status, a floor directory · M → `Lobby.tsx`, `tour.ts`
+- [x] **The CEO's floor**, below the roof: an executive office with its own desk and chair · M → `CeoFloor.tsx`
 - [x] **Desks with live monitors** showing each worker's terminal · M → `Desk.tsx`, `draw.ts`
 - [x] **Characters with seeded looks** (id hash → hair, colours, outfit, build) · L → `appearance.ts`, `characterParts.ts`
 - [x] **Faces that follow state**: focused, puzzled, joyful, sleepy · M → `face.ts`
@@ -121,10 +123,10 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [ ] **Look editor** for workers · M → `LookPreview.tsx`, `client/src/ui/AgentSettings.tsx`
 - [ ] **Carry a whiteboard sticky to a desk** to assign it · M → `StickyNotes.tsx`
 - [ ] **Mission control screens** in the lobby · M → `MissionControl.tsx`
-- [ ] **City outside the windows** · M → `outside/`
-- [ ] **Roof**: garden, deck chairs, telescope, grill · L → `roof/`
+- [x] **City outside the windows**: skyscrapers downtown, billboards on the rooftops, a red suspension bridge in the distance · M → `outside/`, `cityLayout.ts`
+- [x] **Roof terrace** on the top floor: lookouts over the city, billboards, a fireplace, deck chairs, a garden · L → `roof/`
 - [ ] **Weather**: rain, snow, or your real weather · M → `weather/`
-- [ ] **World events** (UFO, kaiju, blimp, fireworks…): you said skip · M → `events/`
+- [x] **World events**: planes, blimps and the odd surprise in the sky, and workers going to the windows to watch · M → `events/`
 - [ ] **Holiday themes** · M → `themes/`
 - [ ] **Graphics tiers and post-processing** (bloom, ambient occlusion) · M → `gfx/`
 - [ ] **Instanced batching** for 10 floors of 15 workers · L → `batch.ts`
@@ -142,11 +144,11 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [x] **Lunch** from noon to one · S → `meals.ts`
 - [ ] **Evening wind-down**: lamps on, idle workers go home, back in the morning with a coffee · M
 - [ ] **Pizza Friday** · S
-- [ ] **CEO walks the floors** · S
+- [x] **CEO walks the floors** · S
 - [ ] **Welcome tour** for new hires · S
 - [ ] **Hoops, toss and catch** with toys (needs physics toys) · M → `toyErrands.ts`
 - [x] **Ping-pong** between workers · L → `toys/pong*`
-- [ ] **Roof breaks** (needs the roof) · S
+- [x] **Roof breaks**: idle workers go up to the roof terrace · S
 - [ ] **Office dog**: naps, fetches, rides the elevator · L → `toys/dog*`
 - [ ] **Roomba** · M
 

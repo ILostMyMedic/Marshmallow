@@ -1,21 +1,24 @@
 // The rituals on the floor you're on, a frame at a time (Rituals.tsx mounts one per office floor). ritualSchedule.ts
 // decides; this carries it out: when new issues land (the server's `issuesFiled` moments), the CEO rides up, the free
-// workers gather round the whiteboard, and the CEO puts each issue up on the board and has them clap; and lunch goes on
-// and off. Everything it moved is put back when the floor goes. window.__mmRituals reports it, and can force one.
-// Adapted from cubefarm client/src/world/ritualRunner.ts (MIT): the CEO's floor walks, Friday pizza, the evening and
-// going home, the voice, the sticky notes and the sounds are cut. Until the sky comes (the day/night clock), the
+// workers gather round the whiteboard, and the CEO puts each issue up on the board and has them clap; now and then the
+// CEO comes down to walk the floor (ceoWalk.ts); and lunch goes on and off. Everything it moved is put back when the
+// floor goes. window.__mmRituals reports it, and can force one.
+// Adapted from cubefarm client/src/world/ritualRunner.ts (MIT): Friday pizza, the evening and going home, the voice,
+// the sticky notes and the sounds are cut. Until the sky comes (the day/night clock), the
 // office runs on the real clock, so lunch agrees with the wall clock.
 import type { Moment, Worker } from '../../../shared/types';
 import { useStore } from '../store';
 import type { Gesture } from './body';
+import { tickWalkClock, walkDue, walkStarted } from './ceoWalk';
 import { dayPhase } from './dayTime';
-import { headingFor } from './errands';
+import { headingFor, isFree } from './errands';
 import { closeGathering, openGathering, type Gathering } from './gathering';
+import { GONG_SPOT, SEATS } from './layout';
 import { meals, mealsChanged, resetMeals } from './meals';
 import { bodyState, say, seatBody, setBody } from './people';
 import { momentsSince } from './reactions';
 import { newRitualState, officeClock, PRESENTER, schedule, semicircle, STANDUP_SPOTS, type Decision, type Ritual } from './ritualSchedule';
-import { CABIN, DOORS_SECONDS } from './socials';
+import { CABIN, DOORS_SECONDS, shoulderSpot } from './socials';
 import { Performer, type Cue } from './stage';
 import { spot, walkways } from './walkways';
 
@@ -42,6 +45,10 @@ interface Standup {
 }
 
 const ceoOf = () => Object.values(useStore.getState().workers).find((w) => w.role === 'ceo') ?? null;
+/** Where the CEO looks in on a walk: the board, the cooler, the windows, the coffee corner, the ping-pong table. */
+const WALK_SPOTS = ['board-backlog', 'board-progress', 'board-qa', 'cooler', 'window-w0', 'window-w1', 'window-e0', 'coffee-line', 'pong-west'];
+/** A merge on the floor this recently (ms) takes the CEO past the gong. */
+const GONG_WITHIN = 15 * 60_000;
 
 export class OfficeRitualRunner {
   readonly w = walkways('office');
@@ -50,6 +57,9 @@ export class OfficeRitualRunner {
   readonly cast = { ceo: false };
   onCast: () => void = () => {};
   standup: Standup | null = null;
+  /** The CEO walking the floor, and who that is. */
+  walk: Performer | null = null;
+  private walker = '';
   /** Seconds of watching this floor (the ritual clock: it stops with the render). */
   private watched = 0;
   private wait = 0.5;
@@ -71,7 +81,9 @@ export class OfficeRitualRunner {
   /** One frame (`dt` seconds). */
   tick(dt: number) {
     this.watched += dt;
+    tickWalkClock(dt);
     if (this.standup) this.stepStandup(dt);
+    if (this.walk && !this.walk.tick(dt)) this.endWalk();
     if ((this.wait -= dt) > 0) return;
     this.wait = 0.5;
     this.look();
@@ -93,8 +105,54 @@ export class OfficeRitualRunner {
     const wall = Date.now();
     const clock = officeClock(wall, dayPhase(wall, 'clock'), 'clock');
     if (now < this.lunchUntil) clock.hour = 12.5;
-    const decisions = schedule(this.s, { now, clock, standupOn: !!this.standup });
+    // the CEO is busy enough as it is: no stand-up while they walk the floor, no walk during a stand-up
+    const decisions = schedule(this.s, { now, clock, standupOn: !!this.standup || !!this.walk });
     for (const d of decisions) this.apply(d);
+    if (!this.standup && !this.walk && walkDue(new Date(wall).getHours())) this.startWalk();
+  }
+
+  // ---------- the CEO's walk ----------
+
+  /**
+   * The CEO steps out of the elevator, looks in on a couple of places, stops behind someone at work for a thumbs-up,
+   * takes in the gong if something merged here lately, and leaves.
+   */
+  private startWalk(): boolean {
+    const ceo = ceoOf();
+    if (!ceo || !isFree(ceo.status)) return false;
+    walkStarted();
+    const lift = spot(this.w, 'elevator')!;
+    const picks = WALK_SPOTS.flatMap((id) => spot(this.w, id) ?? [])
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 2);
+    const cues: Cue[] = [{ place: CABIN, face: NORTH }, { hold: DOORS_SECONDS }, { walk: lift, straight: true, speed: BRISK }];
+    for (const p of picks) cues.push({ walk: p, face: p.facing }, { hold: 2.2, face: p.facing });
+    const working = this.workers.filter((w) => w.status === 'working');
+    const host = working[Math.floor(Math.random() * working.length)];
+    const desk = host && spot(this.w, `desk-${host.desk % SEATS}`);
+    if (host && desk) {
+      const at = shoulderSpot({ id: host.id, role: host.role, status: host.status, home: desk });
+      cues.push({ walk: at, face: at.facing }, { run: () => say(ceo.id, '👍', 2.2) }, { hold: 2.4, face: at.facing, gesture: 'thumbs' });
+    }
+    const since = Date.now() - GONG_WITHIN;
+    if (useStore.getState().moments.some((m) => m.type === 'merged' && m.floorId === this.floorId && m.at > since)) {
+      cues.push({ walk: GONG_SPOT, face: NORTH }, { run: () => say(ceo.id, '🎉', 2) }, { hold: 2, face: NORTH, gesture: 'cheer' });
+    }
+    cues.push({ walk: lift, speed: BRISK }, { walk: CABIN, straight: true });
+    this.walker = ceo.id;
+    this.walk = new Performer(ceo.id, this.w, cues);
+    this.cast.ceo = true;
+    this.onCast();
+    this.note('the CEO walks the floor');
+    return true;
+  }
+
+  private endWalk() {
+    this.walk = null;
+    seatBody(this.walker);
+    say(this.walker, null);
+    this.cast.ceo = false;
+    this.onCast();
   }
 
   private apply(d: Decision) {
@@ -225,10 +283,16 @@ export class OfficeRitualRunner {
     return true;
   }
 
+  /** QA: the CEO's walk now, if they're free and nothing else is on. */
+  forceWalk(): boolean {
+    return !this.standup && !this.walk && this.startWalk();
+  }
+
   state() {
     const st = this.standup;
     return {
       watched: Math.round(this.watched),
+      walk: !!this.walk,
       lunch: { on: meals.lunch, ate: [...meals.ate], eating: Object.fromEntries(meals.spots) },
       standup: st && { stage: st.stage, issues: st.issues, shown: st.shown, ceo: st.ceo, at: bodyState(st.ceo) ?? null, coming: [...st.g.seats.keys()], there: [...st.g.there] },
       fresh: this.s.fresh.map((f) => f.n),
@@ -243,6 +307,11 @@ export class OfficeRitualRunner {
       say(this.standup.ceo, null);
     }
     this.standup = null;
+    if (this.walk) {
+      seatBody(this.walker);
+      say(this.walker, null);
+    }
+    this.walk = null;
     resetMeals();
   }
 }

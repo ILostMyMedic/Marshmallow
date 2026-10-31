@@ -26,6 +26,7 @@ if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__mmRituals = {
     state: () => active?.state() ?? null,
     force: (kind: 'standup' | 'lunch') => active?.force(kind) ?? false,
+    walk: () => active?.forceWalk() ?? false,
   };
 }
 

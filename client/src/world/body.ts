@@ -5,7 +5,7 @@
 
 export type BodyMode = 'seated' | 'standing' | 'walking';
 /** What the hands are busy with while up. */
-export type Gesture = 'none' | 'reach' | 'post' | 'hold' | 'sip' | 'stretch' | 'mug' | 'tap' | 'chat' | 'cheer' | 'wave' | 'talk' | 'stoop' | 'shrug' | 'take' | 'windup' | 'strike' | 'clap' | 'nod' | 'thumbs' | 'paddle';
+export type Gesture = 'none' | 'reach' | 'post' | 'hold' | 'sip' | 'stretch' | 'mug' | 'tap' | 'chat' | 'cheer' | 'wave' | 'talk' | 'stoop' | 'shrug' | 'take' | 'windup' | 'strike' | 'clap' | 'nod' | 'thumbs' | 'paddle' | 'point' | 'gasp' | 'call';
 
 /** Where someone should be: the people controller (people.ts) holds one per worker who isn't simply seated. */
 export interface BodyTarget {

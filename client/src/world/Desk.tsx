@@ -258,11 +258,59 @@ function DeskMug({ workerId, color }: { workerId: string; color: string }) {
   );
 }
 
+// ---------- the CEO's desk and chair ----------
+
+const WALNUT = '#6b4226';
+const BRASS = '#d4a017';
+const LEATHER = '#3b2a24';
+
+/** The CEO's desk: a wide walnut top on solid pedestals, brass trim along its front, a banker's lamp and a nameplate. */
+function ExecDesk() {
+  return (
+    <group>
+      <Box size={[2.8, 0.06, 1.2]} position={[0, 0.74, 0]} color={WALNUT} outline />
+      <Box size={[2.82, 0.025, 0.02]} position={[0, 0.735, -0.61]} color={BRASS} shadow={false} />
+      {[-1.18, 1.18].map((x) => (
+        <Box key={x} size={[0.42, 0.71, 1.1]} position={[x, 0.355, 0]} color={shade(WALNUT, -0.12)} outline />
+      ))}
+      {/* the front panel, facing whoever comes in, with a brass inlay */}
+      <Box size={[1.94, 0.55, 0.04]} position={[0, 0.42, -0.53]} color={shade(WALNUT, -0.06)} outline />
+      <Box size={[1.2, 0.03, 0.01]} position={[0, 0.5, -0.555]} color={BRASS} shadow={false} />
+      {/* the banker's lamp: brass stem, green glass shade */}
+      <group position={[-1.05, 0.77, -0.25]}>
+        <Cyl r={0.08} h={0.03} position={[0, 0.015, 0]} color={BRASS} outline />
+        <Cyl r={0.012} h={0.3} position={[0, 0.17, 0]} color={BRASS} />
+        <Box size={[0.36, 0.08, 0.14]} position={[0, 0.33, 0.04]} rotation={[0.25, 0, 0]} color="#1b7f4b" outline />
+      </group>
+      {/* the nameplate at the desk's front edge, and a pen pot */}
+      <Box size={[0.42, 0.07, 0.08]} position={[0.55, 0.805, -0.48]} rotation={[-0.35, 0, 0]} color={BRASS} outline />
+      <Cyl r={0.04} h={0.11} position={[1.1, 0.825, -0.3]} color="#2b2d42" outline />
+    </group>
+  );
+}
+
+/** The CEO's chair: a high back in dark leather with a headrest and arms, on a chrome star. */
+function ExecChair() {
+  return (
+    <group>
+      <Box size={[0.62, 0.12, 0.58]} position={[0, 0.46, 0]} color={LEATHER} outline />
+      <Box size={[0.6, 0.86, 0.12]} position={[0, 0.94, 0.3]} rotation={[-0.08, 0, 0]} color={LEATHER} outline />
+      <Box size={[0.42, 0.18, 0.14]} position={[0, 1.43, 0.34]} rotation={[-0.08, 0, 0]} color={shade(LEATHER, 0.08)} outline />
+      {[-0.34, 0.34].map((x) => (
+        <Box key={x} size={[0.08, 0.06, 0.48]} position={[x, 0.66, 0.02]} color={shade(LEATHER, -0.1)} outline />
+      ))}
+      <Cyl r={0.04} h={0.36} position={[0, 0.22, 0]} color="#c9ced6" />
+      <Cyl r={0.3} h={0.04} position={[0, 0.03, 0]} color="#c9ced6" />
+    </group>
+  );
+}
+
 /**
  * One desk, with its worker or empty. Memoised: the floor re-renders on every worker event, and without this every
  * desk, person and monitor on it would re-render with it. Give it stable props (a position that isn't a new array).
+ * `exec`: the CEO's desk and chair.
  */
-export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0 }: { worker: Worker | null; accent: string; position: [number, number, number]; rotationY?: number }) {
+export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0, exec = false }: { worker: Worker | null; accent: string; position: [number, number, number]; rotationY?: number; exec?: boolean }) {
   const shirt = useMemo(() => (worker ? seededAppearance({ seed: worker.seed, role: worker.role }).shirt : '#ffffff'), [worker?.seed, worker?.role]);
   // E on the desk: their terminal (where a Box worker's sign-in runs too); E on them, when they've nothing to do: say hi
   const hello = useMemo(() => (worker ? greetPick(worker.id, 'for their terminal') : undefined), [worker?.id]);
@@ -275,17 +323,22 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
   const mugRef = useRef<THREE.Group>(null);
   return (
     <group ref={ref} position={position} rotation={[0, rotationY, 0]}>
-      {/* desk */}
-      <Box size={[1.9, 0.06, 0.95]} position={[0, 0.74, 0]} color={WOOD} outline />
-      {[
-        [-0.88, -0.42],
-        [0.88, -0.42],
-        [-0.88, 0.42],
-        [0.88, 0.42],
-      ].map(([x, z]) => (
-        <Box key={`${x}${z}`} size={[0.06, 0.71, 0.06]} position={[x, 0.355, z]} color="#5c677d" />
-      ))}
-      <Box size={[1.76, 0.4, 0.03]} position={[0, 0.5, -0.44]} color={shade(WOOD, -0.08)} />
+      {exec ? (
+        <ExecDesk />
+      ) : (
+        <>
+          <Box size={[1.9, 0.06, 0.95]} position={[0, 0.74, 0]} color={WOOD} outline />
+          {[
+            [-0.88, -0.42],
+            [0.88, -0.42],
+            [-0.88, 0.42],
+            [0.88, 0.42],
+          ].map(([x, z]) => (
+            <Box key={`${x}${z}`} size={[0.06, 0.71, 0.06]} position={[x, 0.355, z]} color="#5c677d" />
+          ))}
+          <Box size={[1.76, 0.4, 0.03]} position={[0, 0.5, -0.44]} color={shade(WOOD, -0.08)} />
+        </>
+      )}
 
       {worker ? (
         <>
@@ -301,7 +354,7 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
       ) : (
         <VacantMonitor accent={accent} />
       )}
-      {(!worker || worker.role === 'ceo') && (
+      {!exec && (!worker || worker.role === 'ceo') && (
         <>
           <Cyl r={0.06} rTop={0.07} h={0.09} position={[-0.76, 0.815, -0.22]} color="#e07a5f" outline />
           <Ball r={0.09} position={[-0.76, 0.92, -0.22]} color="#52b788" outline />
@@ -310,10 +363,16 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
 
       {/* chair: it rolls back while they're up */}
       <group ref={chairRef} position={[0, 0, worker ? 0.8 : 0.6]}>
-        <Box size={[0.52, 0.08, 0.5]} position={[0, 0.44, 0]} color={accent} outline />
-        <Box size={[0.48, 0.42, 0.07]} position={[0, 0.72, 0.28]} color={accent} outline />
-        <Cyl r={0.035} h={0.36} position={[0, 0.22, 0]} color="#444a5c" />
-        <Cyl r={0.26} h={0.04} position={[0, 0.03, 0]} color="#444a5c" />
+        {exec ? (
+          <ExecChair />
+        ) : (
+          <>
+            <Box size={[0.52, 0.08, 0.5]} position={[0, 0.44, 0]} color={accent} outline />
+            <Box size={[0.48, 0.42, 0.07]} position={[0, 0.72, 0.28]} color={accent} outline />
+            <Cyl r={0.035} h={0.36} position={[0, 0.22, 0]} color="#444a5c" />
+            <Cyl r={0.26} h={0.04} position={[0, 0.03, 0]} color="#444a5c" />
+          </>
+        )}
       </group>
       {worker && (
         <>

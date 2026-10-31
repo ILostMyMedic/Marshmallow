@@ -1,6 +1,7 @@
-// Your look: the same parts the workers are made of, picked one row at a time, with you turning in a little preview
-// beside them. Every change is saved straight away (world/myLook.ts), in this browser. Hats are off for hair that would poke
+// Your look: the same parts the workers are made of, picked one row at a time, with you in a little preview beside
+// them that you turn by dragging. Every change is saved straight away (world/myLook.ts), in this browser. Hats are off for hair that would poke
 // through them, as they are for the workers.
+import { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Appearance } from '../world/appearance';
 import { hashId, seededAppearance, TALL_HAIR } from '../world/appearance';
@@ -52,15 +53,35 @@ function Swatches({ label, colours, value, onPick }: { label: string; colours: r
   );
 }
 
-/** You, turning on the spot. */
+/** Radians the preview turns per pixel dragged, and where it starts: three-quarters on (π faces the camera). */
+const SPIN_PER_PX = 0.012;
+const SPIN_START = Math.PI - 0.5;
+
+/** You, standing still until you drag across the preview to turn yourself round. */
 function Preview({ look }: { look: Appearance }) {
+  const spin = useRef(SPIN_START);
+  const drag = useRef<number | null>(null); // the pointer's last x while dragging
   return (
-    <div className="look-preview">
+    <div
+      className="look-preview"
+      onPointerDown={(e) => {
+        drag.current = e.clientX;
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        if (drag.current === null) return;
+        spin.current += (e.clientX - drag.current) * SPIN_PER_PX;
+        drag.current = e.clientX;
+      }}
+      onPointerUp={() => (drag.current = null)}
+      onPointerCancel={() => (drag.current = null)}
+    >
       <Canvas dpr={[1, 2]} camera={{ position: [0, 1.15, 3.7], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 0.95, 0)}>
         <hemisphereLight args={['#ffffff', '#c9b8a0', 1.6]} />
         <directionalLight position={[2, 4, 3]} intensity={1.6} />
-        <MeFigure look={look} preview />
+        <MeFigure look={look} preview spin={spin} />
       </Canvas>
+      <span className="look-preview-hint">↔ Drag to turn</span>
     </div>
   );
 }

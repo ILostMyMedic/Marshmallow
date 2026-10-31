@@ -88,3 +88,7 @@ export function eWithHeld(focusKind: Action['kind'] | null): boolean {
 }
 
 onUseHeld(eWithHeld);
+
+// window.__mmSip, for QA: `pose` is sipPose itself (set it between sips to hold the arm still at any point of a sip),
+// `start()` sips or bites what you hold, `sipping()` says whether one is under way.
+if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__mmSip = { pose: sipPose, start: () => sipCoffee(), sipping };

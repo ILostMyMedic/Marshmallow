@@ -207,11 +207,23 @@ Workers get up: walking (walk grid, paths, named spots), the errand system, coff
 
 **Done when:** in the demo you pick your look, see your body in first person and yourself in the overview, say hi to a worker, make a coffee and drink it, eat a snack, ride the elevator to another floor, and play a game of ping-pong against a worker. (Done: seen in a browser on the demo, every step of it; the new rules are tested in `myLook.test.ts`, `elevatorRide.test.ts`, `sip.test.ts`, `chatterEvents.test.ts` and the pong tests.)
 
-## Phase 13: the day and the senses
+## Phase 13: the building and the city
+
+1. The building's floors: the lobby at the bottom, a floor per repo, the CEO's floor above them and the roof terrace on top, in the elevator and the floor picker (`floors.ts`).
+2. The lobby as an entrance: a front desk with a guide who gives you a tour of the floors and their projects, today's status, a floor directory and a trophy cabinet (`Lobby.tsx`, `tour.ts`).
+3. The CEO's floor: an executive office with its own desk and chair, where the CEO works; now and then the CEO rides down and walks a floor (`CeoFloor.tsx`, the rituals).
+4. The roof terrace: lookouts over the city, billboards, a fireplace, deck chairs and a garden; idle workers come up for a break (`roof/`).
+5. The city: skyscrapers downtown, billboards on rooftops, a red suspension bridge in the distance (`cityLayout.ts`, `Billboards.tsx`, `Bridge.tsx`).
+6. World events: planes, blimps and the odd surprise in the sky; free workers go to the windows to watch (`events/`).
+7. Third person: on foot V switches from your eyes to a camera that follows behind you, and back (`Player.tsx`).
+
+**Done when:** in the demo you step out into a lobby with a front desk, take the guide's tour of the floors, ride up to the CEO's office and the roof terrace, see workers come up to the roof on a break, see the CEO walk a floor, and watch a plane or a blimp go by over a skyline with skyscrapers and a bridge. (Done: seen in a browser on the demo: the tour end to end, the CEO's walk on floor 1 and their office, the roof's fire pit, deck and lookouts, a blimp, a UFO, a plane and skywriting, with the workers going to the windows; the new rules are tested in `floors.test.ts`, `tour.test.ts`, `ceoWalk.test.ts`, the `roof/` tests, `cityLayout.test.ts`, `bridgeLayout.test.ts`, `billboardLayout.test.ts`, `haze.test.ts` and the `events/` tests.)
+
+## Phase 14: the day and the senses
 
 The day/night clock (lunch and going home need it), synthesized sound effects, and the overview camera's click-a-worker.
 
-## Phase 14: the manager UI
+## Phase 15: the manager UI
 
 The setup wizard, the manager console, the worker panel (live terminal, message box, setup), the 2D Kanban, the phone overlay, toasts and the help screen.
 

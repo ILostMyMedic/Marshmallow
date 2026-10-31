@@ -28,7 +28,7 @@ import {
 import { findPath, spot, standable, walkways } from './walkways';
 
 const office = walkways('office');
-const lobby = walkways('lobby');
+const ceoFloor = walkways('ceo');
 const peer = (id: string, status: WorkerStatus, desk: string, role = 'worker'): ErrandPeer => ({ id, status, role, home: spot(office, desk)! });
 const state = (over: Partial<ErrandState> = {}): ErrandState => ({ floor: 'office', statusFor: 100, seatedFor: 60, restless: 30, ...over });
 /** A fixed sequence of "random" numbers. */
@@ -106,16 +106,17 @@ describe('visiting a busy teammate', () => {
   });
 });
 
-describe('the CEO in the lobby', () => {
-  it('strolls to a window, and only the CEO, only in the lobby', () => {
+describe('the CEO on their floor', () => {
+  it('strolls round it, and only the CEO, only there', () => {
     const ceo = { id: 'ceo', status: 'idle' as const, role: 'ceo' };
-    expect(wanted(errands(), ceo, state({ floor: 'lobby' })).map((e) => e.name)).toContain('stroll');
-    expect(wanted(errands(), ceo, state({ floor: 'lobby', seatedFor: 1 }))).toEqual([]);
+    expect(wanted(errands(), ceo, state({ floor: 'ceo' })).map((e) => e.name)).toContain('stroll');
+    expect(wanted(errands(), ceo, state({ floor: 'ceo', seatedFor: 1 }))).toEqual([]);
+    expect(wanted(errands(), ceo, state({ floor: 'lobby' })).map((e) => e.name)).not.toContain('stroll');
     expect(wanted(errands(), { ...ceo, role: 'worker' }, state()).map((e) => e.name)).not.toContain('stroll');
-    const ids = spotChoices(errandNamed('stroll')!.spot, lobby.spots.map((s) => s.id), new Set());
+    const ids = spotChoices(errandNamed('stroll')!.spot, ceoFloor.spots.map((s) => s.id), new Set());
     expect(ids.length).toBeGreaterThanOrEqual(2);
-    const home = spot(lobby, 'ceo')!;
-    for (const id of ids) expect(findPath(lobby, home, spot(lobby, id)!), id).not.toBeNull();
+    const home = spot(ceoFloor, 'ceo')!;
+    for (const id of ids) expect(findPath(ceoFloor, home, spot(ceoFloor, id)!), id).not.toBeNull();
   });
 
   it('picks among wanted errands by weight, work ones first', () => {

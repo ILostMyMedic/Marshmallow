@@ -11,6 +11,7 @@ import { useStore } from '../store';
 import { useCanvasTexture } from './canvasTexture';
 import { drawSign } from './draw';
 import { doors, doorsHeldShut, tickRide } from './elevatorRide';
+import { floorLabel } from './floors';
 import { useInteractable } from './interact';
 import { ELEVATOR, HALF_D, WALL_H } from './layout';
 import { glow, toon, toonMap } from './materials';
@@ -24,9 +25,8 @@ const CHOOSE = { id: 'elevator', label: 'Choose a floor', action: { kind: 'eleva
 
 /** The floor's name, lit over the doors. */
 function Indicator({ y }: { y: number }) {
-  const label = useView((s) => s.floor);
-  const name = useStore((s) => (label ? (s.floors.find((f) => f.floor === label)?.fullName.split('/').pop() ?? '') : 'Lobby'));
-  const text = label ? `${label} · ${name}` : 'L · Lobby';
+  const floor = useView((s) => s.floor);
+  const text = useStore((s) => (floor === null ? '' : floorLabel(floor, s.floors)));
   const tex = useCanvasTexture(512, 128, (ctx) => drawSign(ctx, 512, 128, [{ text, size: 52, color: '#7CFFB2' }], '#15151f'), [text]);
   return (
     <mesh position={[0, y, HALF_D - 0.03]} rotation={[0, Math.PI, 0]} material={toonMap(`elevator-sign:${text}`, tex, 'room')}>

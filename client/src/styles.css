@@ -1,13 +1,141 @@
 :root {
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
+  --line: color-mix(in srgb, CanvasText 15%, transparent);
+  --ok: #2e9d4f;
+  --bad: #d9534f;
+  --busy: #2f7fd1;
 }
 
 body {
   margin: 0;
-  padding: 24px;
+  padding: 16px 24px;
+  background: Canvas;
+  color: CanvasText;
 }
 
-pre {
+button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.muted {
+  color: GrayText;
+}
+
+.error {
+  color: var(--bad);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.debug-header,
+.floor-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.debug-header h1 {
+  margin: 0 8px 0 0;
+  font-size: 1.5rem;
+}
+
+.pill {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.8rem;
+}
+
+.pill-ok {
+  color: var(--ok);
+}
+
+.pill-bad {
+  color: var(--bad);
+}
+
+.floor {
+  border-left: 6px solid;
+  padding: 2px 0 8px 14px;
+  margin: 24px 0;
+}
+
+.floor h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+h3 {
+  margin: 16px 0 4px;
+  font-size: 1rem;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.status-preparing,
+.status-working {
+  color: var(--busy);
+  font-weight: 600;
+}
+
+.status-done {
+  color: var(--ok);
+}
+
+.status-error {
+  color: var(--bad);
+}
+
+.last-line {
   font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.8rem;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.actions button + button {
+  margin-left: 4px;
+}
+
+.queue {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.moments {
+  list-style: none;
+  padding: 0;
+}
+
+.moments li {
+  padding: 2px 0;
 }

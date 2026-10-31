@@ -8,7 +8,7 @@ A cartoon 3D office game on top of a Node service that runs Claude Code workers 
 
 Teams grow and shrink on their own (autospawning). Workers run on this computer or in an Upstash Box, and idle workers wander off for coffee, chats and lunch. A worker's model is Claude's, or a local one through Ollama (`ollama/<name>`). Ollama is the testing ground, and more model servers may come later.
 
-**Status: Phase 0 (the skeleton) is done; Phase 1 is next.** The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
+**Status: Phases 0 and 1 are done (skeleton, contract, state file, live debug page); Phase 2 is next.** The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
 
 ## The reference implementation: cubefarm
 
@@ -71,6 +71,6 @@ Rules for using it:
 
 ## Scripts
 
-- `npm run dev -- --demo`: the server from source (tsx watch) on 4600, plus Vite on 5600 (`MARSHMALLOW_CLIENT_PORT`) proxying `/api` and `/ws` to it. Open http://localhost:5600. Ctrl+C stops both. Set the isolated home first: `$env:MARSHMALLOW_HOME='./.mm-home'` in PowerShell, or a `MARSHMALLOW_HOME=./.mm-home` prefix in bash.
+- `npm run dev -- --demo`: the server from source (tsx watch) on 4600, plus Vite on 5600 (`MARSHMALLOW_CLIENT_PORT`) proxying `/api` and `/ws` to it. Open http://localhost:5600 for the debug page; in demo mode its buttons drive pretend changes through `/api/demo/*` (`server/demoRoutes.ts`). Ctrl+C stops both. Set the isolated home first: `$env:MARSHMALLOW_HOME='./.mm-home'` in PowerShell, or a `MARSHMALLOW_HOME=./.mm-home` prefix in bash.
 - `npm test` (Vitest), `npm run typecheck`, `npm run build` (typecheck, then the client into `dist/`).
 - `npm start`: the server alone, serving `dist/` on 4600.

@@ -5,32 +5,25 @@ import http from 'node:http';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { WebSocketServer, type WebSocket } from 'ws';
-import type { ServerEvent, Snapshot } from '../shared/types.ts';
+import { WebSocketServer } from 'ws';
 import { DEMO, HOST, PORT, STATE_FILE, VERSION } from './config.ts';
+import { demoRoutes } from './demoRoutes.ts';
 import { HttpError } from './httpError.ts';
+import { route } from './route.ts';
+import { Store } from './store.ts';
 
-// Phase 1 replaces this with the store's.
-const snapshot = (): Snapshot => ({ version: VERSION, demo: DEMO });
+const store = new Store(STATE_FILE, { version: VERSION, demo: DEMO });
+await store.load();
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
-type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
-const route = (fn: Handler) => async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const out = await fn(req, res);
-    if (!res.headersSent) res.json(out ?? { ok: true });
-  } catch (err) {
-    next(err);
-  }
-};
-
-app.get('/api/state', route(() => snapshot()));
+app.get('/api/state', route(() => store.snapshot()));
+if (DEMO) app.use('/api/demo', demoRoutes(store));
 app.use(
   '/api',
   route((req) => {
-    throw new HttpError(404, `No such route: ${req.method} /api${req.path}`);
+    throw new HttpError(404, `No such route: ${req.method} ${req.originalUrl}`);
   }),
 );
 
@@ -52,8 +45,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
-const send = (ws: WebSocket, ev: ServerEvent) => ws.send(JSON.stringify(ev));
-wss.on('connection', (ws) => send(ws, { type: 'snapshot', data: snapshot() }));
+wss.on('connection', (ws) => store.addClient(ws));
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
   if (pathname !== '/ws') return void socket.destroy();
@@ -70,10 +62,14 @@ let closing = false;
 const shutdown = (signal: string) => {
   if (closing) return;
   closing = true;
-  console.log(`\n  ${signal}: closing…`);
-  for (const ws of wss.clients) ws.terminate();
-  server.close(() => process.exit(0));
+  console.log(`\n  ${signal}: saving and closing…`);
   setTimeout(() => process.exit(0), 5_000).unref();
+  for (const ws of wss.clients) ws.terminate();
+  server.close();
+  void store
+    .flush()
+    .catch((err) => console.error('  could not save the state:', err))
+    .finally(() => process.exit(0));
 };
 process.once('SIGINT', () => shutdown('SIGINT'));
 process.once('SIGTERM', () => shutdown('SIGTERM'));

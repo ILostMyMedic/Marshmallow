@@ -14,6 +14,8 @@ import type { Fix } from './fix.ts';
 import type { Merge } from './merge.ts';
 import type { Qa } from './qa.ts';
 import type { Questions } from './questions.ts';
+import type { Ceo } from '../team/ceo/jobs.ts';
+import type { Team } from '../team/workers.ts';
 import { prepFailure, type PrepStrikes } from './rules/handOut.ts';
 import type { Sessions } from './sessions.ts';
 import type { Usage } from './usage.ts';
@@ -29,6 +31,8 @@ export interface Ctx {
   fix: Fix;
   merge: Merge;
   questions: Questions;
+  team: Team;
+  ceo: Ceo;
   /** Failed desk preparations per PR and task (`${floorId}#${pr}:${task}`), in memory. */
   prepStrikes: Map<string, PrepStrikes>;
   /** Asks the scheduler for a pass shortly. */

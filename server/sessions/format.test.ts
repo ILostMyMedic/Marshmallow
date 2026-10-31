@@ -13,6 +13,7 @@ describe('describeTool', () => {
     expect(describeTool(cwd, 'Bash', { command: `cd "${cwd}" && npm test\nmore` })).toBe('$ npm test');
     expect(describeTool(cwd, 'Grep', { pattern: 'useTodos' })).toBe('Grep "useTodos"');
     expect(describeTool(cwd, 'mcp__playwright__browser_navigate', { url: 'http://localhost:5200/' })).toBe('🌐 navigate http://localhost:5200/');
+    expect(describeTool(cwd, 'mcp__office__scale_team', { floor: 2, size: 3, reason: 'Five issues wait.' })).toBe('📈 scale_team floor 2 → 3: Five issues wait.');
     expect(describeTool(cwd, 'Mystery', { a: 1 })).toBe('Mystery({"a":1})');
   });
 });

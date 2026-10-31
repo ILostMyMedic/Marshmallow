@@ -6,6 +6,8 @@ import type { Backend } from '../backend/backend.ts';
 import type { Floors } from '../floors.ts';
 import type { Terminals } from '../sessions/terminals.ts';
 import type { Store } from '../store.ts';
+import { Ceo } from '../team/ceo/jobs.ts';
+import { Team, type TeamTiming } from '../team/workers.ts';
 import { Build } from './build.ts';
 import { clearTask, type Ctx } from './context.ts';
 import { Fix } from './fix.ts';
@@ -32,7 +34,7 @@ export interface Pipeline {
 }
 
 /** `terminals`: each worker's terminal, which their sessions run in (null in tests that don't watch them). */
-export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null): Pipeline {
+export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null, o: { teamTiming?: TeamTiming } = {}): Pipeline {
   const usage = new Usage(store);
   const sessions = new Sessions(store, backend, { limited: (at) => usage.limited(at), usageWarning: (info) => usage.warned(info) }, terminals);
   const ctx = { store, backend, sessions, floors, usage, prepStrikes: new Map(), soon: (ms?: number) => scheduler.soon(ms) } as Ctx;
@@ -41,7 +43,10 @@ export function createPipeline(store: Store, backend: Backend, floors: Floors, t
   ctx.fix = new Fix(ctx);
   ctx.merge = new Merge(ctx);
   ctx.questions = new Questions(ctx);
+  ctx.team = new Team(ctx, (id) => stopWorker(id), o.teamTiming);
+  ctx.ceo = new Ceo(ctx);
   const scheduler = new Scheduler(ctx);
+  ctx.ceo.onboardUnknown();
 
   floors.onSynced = (floorId) => {
     reconcile(ctx, floorId);

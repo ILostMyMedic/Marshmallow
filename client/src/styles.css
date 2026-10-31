@@ -204,3 +204,33 @@ td {
 .live-dot-on {
   background: #50fa7b;
 }
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  font-size: inherit;
+}
+
+.ceo {
+  border-left: 6px solid #b48ead;
+  padding: 2px 0 8px 14px;
+  margin: 24px 0;
+}
+
+.chat-line {
+  white-space: pre-wrap;
+}
+
+.brief {
+  margin: 4px 0 8px;
+  font-size: 0.9rem;
+}
+
+.qa-brief {
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+  margin: 6px 0;
+}

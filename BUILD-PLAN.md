@@ -133,8 +133,8 @@ marshmallow/
 1. Hire and fire workers, with a names pool and a seed per worker (the game draws their look from it).
 2. Autoscale:
    - The rules version first: free and testable.
-   - Then the CEO: a Claude session with office tools over MCP (`company_status`, `scale_team`, `file_issue`, `set_floor_profile`, and `ask_manager` for when the brief or the backlog leaves it unsure what to build) and its job queue (onboard, plan, chat). See cubefarm's `server/ceo.ts`.
-3. Scaling mode: automatic, or approved by you.
+   - Then the CEO: a Claude session with office tools over MCP (`company_status`, `worker_detail`, `set_floor_profile`, `scale_team`, `configure_worker`, `file_issue`, `set_dependencies`, `close_issue`, and `ask_manager` for when the brief or the backlog leaves it unsure what to build) and its job queue (onboard, plan, chat). See cubefarm's `server/ceo.ts`.
+3. Team changes apply at once, within the floor's max (approval is unchecked in FEATURES.md). The rules size every floor nobody holds at a size; a size the CEO or the manager sets holds until the floor is handed back to the rules.
 
 **Done when:** a backlog of 8 issues grows a floor from 1 worker to 3, and it shrinks back once they sit idle.
 

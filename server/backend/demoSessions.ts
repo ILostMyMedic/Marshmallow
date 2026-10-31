@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import type { LogEntry } from '../../shared/types.ts';
 import { ANSWER_LEAD } from '../pipeline/questions.ts';
+import { describeOfficeTool } from '../sessions/format.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
 import type { FakeGitHub } from './demoGithub.ts';
 
@@ -84,6 +85,7 @@ function fixScript(pr: number, pushes: boolean): Step[] {
 }
 
 export function fakeSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSessionContext): SessionHandle {
+  if (opts.role === 'ceo' && opts.office) return ceoSession(opts, cb, ctx);
   const kind = opts.task ?? 'issue';
   const subject = opts.subject ?? { issueNumber: null, prNumber: null, title: 'follow-up' };
   const round = subject.round ?? 1;
@@ -192,6 +194,98 @@ export function fakeSession(opts: SessionOptions, cb: SessionCallbacks, ctx: Fak
       timers.forEach(clearTimeout);
       cb.tool(null);
       cb.finished({ ok: false, text: '', costUsd: 0.05, turns: i, errors: ['Stopped by the manager'] });
+    },
+  };
+}
+
+interface DemoStatus {
+  floors: { floor: number; repo: string; brief: string | null; issues: unknown[]; team: unknown[] }[];
+}
+
+/**
+ * A scripted CEO that calls the real office tools, so profiles, team changes and filed issues behave as in the real
+ * thing. Onboarding writes a profile and sizes the team; a plan files three issues; a chat closes an issue ("close #4
+ * on floor 1"), sizes a floor ("floor 1 to 3") or sums the company up.
+ * Adapted from cubefarm server/demo.ts (MIT): ceoSession.
+ */
+function ceoSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSessionContext): SessionHandle {
+  const office = opts.office!;
+  const job = opts.ceoJob ?? { kind: 'chat' as const, floorId: null, text: '' };
+  let stopped = false;
+  let turns = 0;
+  let timer: NodeJS.Timeout | undefined;
+  const wait = () => new Promise<void>((resolve) => (timer = setTimeout(resolve, ctx.stepMs())));
+  const use = async (name: string, args: Record<string, unknown>) => {
+    await wait();
+    if (stopped) throw new Error('stopped');
+    turns++;
+    cb.tool(`mcp__office__${name}`);
+    cb.log(tool(`mcp__office__${name}`, describeOfficeTool(name, args)));
+    const out = await office.call(name, args);
+    cb.log([{ kind: out.startsWith('Refused:') ? 'error' : 'result', text: `  ⎿ ${out.split('\n')[0].slice(0, 160)}` }]);
+    return out;
+  };
+  const filed = (out: string) => Number(out.match(/Filed #(\d+)/)?.[1] ?? 0);
+
+  const script = async (): Promise<string> => {
+    cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · CEO` }]);
+    const status = JSON.parse(await use('company_status', {})) as DemoStatus;
+    const floor = status.floors.find((f) => f.repo === job.floorId) ?? status.floors[0];
+    if (job.kind === 'onboard' && floor) {
+      await wait();
+      cb.log(tool('Read', `Read ${floor.repo}/README.md`, 'Read 42 lines'));
+      const name = floor.repo.split('/')[1] ?? floor.repo;
+      await use('set_floor_profile', { floor: floor.floor, summary: `${name} · demo project`, qa_brief: '- The app loads without console errors\n- The change works on desktop and at 375px\n- Tests and the build pass' });
+      const size = Math.min(3, Math.max(1, Math.ceil(floor.issues.length / 3)));
+      await use('scale_team', { floor: floor.floor, size, reason: `${floor.issues.length} open issues: ${size} workers can take them side by side.` });
+      return `Floor ${floor.floor} (${floor.repo}) is a small demo project with ${floor.issues.length} open issues. I wrote its QA brief and set its team to ${size}.`;
+    }
+    if (job.kind === 'plan' && floor) {
+      const brief = floor.brief ?? 'the brief';
+      const base = filed(await use('file_issue', { floor: floor.floor, title: `Groundwork for: ${brief}`.slice(0, 120), body: `The shared pieces the rest of "${brief}" builds on.\n\nAcceptance: tests cover them.` }));
+      const a = filed(await use('file_issue', { floor: floor.floor, title: `${brief}: the main flow`.slice(0, 120), body: `Depends on #${base}\n\nThe main flow of "${brief}", end to end.` }));
+      const b = filed(await use('file_issue', { floor: floor.floor, title: `${brief}: settings and polish`.slice(0, 120), body: `Depends on #${base}\n\nSettings, empty states and phone layout for "${brief}".` }));
+      await use('scale_team', { floor: floor.floor, size: Math.max(2, floor.team.length), reason: 'Two of the new issues can be built side by side once the groundwork lands.' });
+      return `Planned "${brief}" as #${base}, #${a} and #${b}: #${base} first, then the other two side by side.`;
+    }
+    const text = job.text.toLowerCase();
+    const onFloor = Number(text.match(/floor (\d+)/)?.[1] ?? floor?.floor ?? 1);
+    const close = text.match(/close #(\d+)/);
+    if (close) {
+      const out = await use('close_issue', { floor: onFloor, number: Number(close[1]), reason: 'The manager asked to close it.' });
+      return out.startsWith('Refused:') ? `I couldn't close #${close[1]}: ${out.slice(9)}` : `Done: #${close[1]} on floor ${onFloor} is closed.`;
+    }
+    const size = text.match(/floor (\d+) to (\d+)/);
+    if (size) {
+      await use('scale_team', { floor: Number(size[1]), size: Number(size[2]), reason: 'The manager asked for it.' });
+      return `Floor ${size[1]} now has ${size[2]} workers, and holds that size.`;
+    }
+    await wait();
+    return `Here's where things stand: ${status.floors.map((f) => `floor ${f.floor} (${f.repo}) has ${f.team.length} workers and ${f.issues.length} open issues`).join('; ') || 'no floors yet'}.`;
+  };
+
+  cb.sessionId(opts.resumeSessionId ?? `demo-${crypto.randomUUID()}`);
+  void script().then(
+    (text) => {
+      if (stopped) return;
+      cb.tool(null);
+      cb.log(say(text));
+      cb.finished({ ok: true, text, costUsd: 0, turns, errors: [] });
+    },
+    (err: Error) => {
+      if (stopped) return;
+      cb.tool(null);
+      cb.finished({ ok: false, text: '', costUsd: 0, turns, errors: [err.message] });
+    },
+  );
+  return {
+    send: () => undefined,
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      clearTimeout(timer);
+      cb.tool(null);
+      cb.finished({ ok: false, text: '', costUsd: 0, turns, errors: ['Stopped by the manager'] });
     },
   };
 }

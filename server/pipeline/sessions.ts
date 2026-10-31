@@ -49,6 +49,11 @@ export class Sessions {
     return this.running.has(workerId);
   }
 
+  /** The worker left: their terminal goes, with its saved screen. */
+  forget(workerId: string) {
+    this.terminals?.remove(workerId);
+  }
+
   /** The worker's terminal, if they have one (a CLI may be waiting at its prompt in it). */
   terminalOf(workerId: string) {
     return this.terminals?.existing(workerId) ?? null;

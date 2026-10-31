@@ -78,6 +78,7 @@ export interface Worker {
   turns: number;
   lastError: string | null;
   sessionId: string | null; // their latest session, resumed for a follow-up (a nudge, a fix of their own PR)
+  leaving: boolean; // asked to leave while busy: gets no new work, and goes when their task ends
 }
 
 export interface IssueInfo {
@@ -132,6 +133,7 @@ export interface Floor {
   mission: string; // the manager's brief: what this floor is building
   summary: string; // the CEO's one-line read of the project, e.g. "3D browser game · Three.js + Vite"
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
+  teamSize: number | null; // the size the CEO or the manager set, which the rules leave alone; null = the rules size it
   // GitHub's side: refreshed by every sync, never saved
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';
   cloneError: string | null;
@@ -177,6 +179,7 @@ export interface Settings {
   sessionLimit: number; // most sessions running at once; 0 = no limit
   pacingSessions: number; // after Claude's usage warning, new issues start only while fewer sessions than this run
   maxWorkers: number; // most workers on a floor
+  autoscale: boolean; // the rules grow and shrink floors to fit the work (floors held at a size excepted)
   defaultModel: string; // a Claude model, or `ollama/<name>`
   defaultEffort: EffortLevel;
 }
@@ -188,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sessionLimit: 0,
   pacingSessions: 3,
   maxWorkers: 10,
+  autoscale: true,
   defaultModel: 'claude-opus-5-5',
   defaultEffort: 'medium',
 };
@@ -224,11 +228,15 @@ export interface Question {
 }
 
 /** A note from the office to the manager, for the phone: a PR that needs them, merges GitHub refuses, pacing. */
+/** The CEO's jobs: study a new floor, plan the manager's brief into issues, answer the manager. */
+export type CeoJobKind = 'onboard' | 'plan' | 'chat';
+
 export interface OfficeMessage {
   id: number;
   at: number;
   text: string;
   floorId: string | null;
+  from: 'office' | 'ceo' | 'manager'; // the office's own notices, the CEO's replies, or what the manager told the CEO
 }
 
 /** What a tab needs to draw everything, sent when it connects. */

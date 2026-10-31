@@ -49,6 +49,7 @@ function worker(): Worker {
     turns: 0,
     lastError: null,
     sessionId: null,
+    leaving: false,
   };
 }
 

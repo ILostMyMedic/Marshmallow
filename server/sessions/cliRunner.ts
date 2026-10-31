@@ -11,13 +11,15 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { IPty } from '@lydell/node-pty';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { Request, Response } from 'express';
 import { localModel } from '../../shared/models.ts';
 import type { LogEntry } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
 import { browserProblem, playwrightMcp } from './browser.ts';
 import { claudeCommand, interruptions, launchArgs, modelEnv, STATUSLINE_SOURCE, trustKey } from './clis.ts';
 import { clip, describeTool, resultText, screenshotFile, summariseResult, tidyPaths, todoLines } from './format.ts';
-import type { SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from './session.ts';
+import type { OfficeTools, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from './session.ts';
 import type { WorkerTerminal } from './terminal.ts';
 
 const nodePty = await import('@lydell/node-pty').catch((err: unknown) => {
@@ -114,6 +116,26 @@ export function handleHook(token: string, body: unknown): Record<string, unknown
   }
 }
 
+/** The CEO sessions' office tools, by session token. */
+const offices = new Map<string, OfficeTools>();
+
+/** The CEO's office tools over MCP (POST /api/mcp/:token): Streamable HTTP, stateless, a fresh server per request. */
+export async function handleMcp(token: string, req: Request, res: Response) {
+  const office = offices.get(token);
+  if (!office) {
+    res.status(404).json({ jsonrpc: '2.0', error: { code: -32001, message: 'This session has ended.' }, id: null });
+    return;
+  }
+  const server = office.serve();
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  res.on('close', () => {
+    void transport.close();
+    void server.close();
+  });
+  await server.connect(transport);
+  await transport.handleRequest(req, res, req.body);
+}
+
 let helpersWritten = false;
 
 /** The status-line script the CLIs run. Rewritten once per start, so updates reach them. */
@@ -178,6 +200,7 @@ function endLive(live: LiveCli) {
   lives.delete(live.term);
   clearTimeout(live.idleTimer);
   routes.delete(live.token);
+  offices.delete(live.token);
   live.term.releaseIdle = null;
   live.term.bind(null);
   live.proc?.kill();
@@ -501,9 +524,11 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       hooks: Object.fromEntries(HOOK_EVENTS.map((e) => [e, [{ hooks: [{ type: 'http', url: hookUrl, timeout: 30 }] }]])),
       statusLine: { type: 'command', command: `${shellArg(process.execPath)} ${shellArg(path.join(BIN_DIR, 'statusline.cjs'))} ${shellArg(hookUrl)}`, padding: 0 },
     };
-    files = { settings: path.join(dir, 'settings.json'), mcp: browser ? path.join(dir, 'mcp.json') : null, system: path.join(dir, 'instructions.md') };
+    const servers = { ...(browser && { playwright: browser }), ...(opts.office && { office: { type: 'http', url: `${officeUrl}/api/mcp/${token}` } }) };
+    files = { settings: path.join(dir, 'settings.json'), mcp: Object.keys(servers).length ? path.join(dir, 'mcp.json') : null, system: path.join(dir, 'instructions.md') };
     fs.writeFileSync(files.settings, JSON.stringify(settings, null, 2));
-    if (files.mcp) fs.writeFileSync(files.mcp, JSON.stringify({ mcpServers: { playwright: browser } }, null, 2));
+    if (files.mcp) fs.writeFileSync(files.mcp, JSON.stringify({ mcpServers: servers }, null, 2));
+    if (opts.office) offices.set(token, opts.office);
     fs.writeFileSync(files.system, opts.systemAppend);
     if (prompt.length > INLINE_PROMPT_MAX) {
       const file = path.join(dir, 'task.md');
@@ -516,7 +541,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   }
   officePrompts.push(prompt.trim());
 
-  const launch = launchArgs({ prompt, model: opts.model, effort: opts.effort, resumeId: opts.resumeSessionId, sessionId, name: opts.label ?? 'Marshmallow', role: opts.role, files });
+  const launch = launchArgs({ prompt, model: opts.model, effort: opts.effort, resumeId: opts.resumeSessionId, sessionId, name: opts.label ?? 'Marshmallow', role: opts.role, files, addDirs: opts.addDirs });
 
   // Each worker is a clean instance on the account Claude Code is logged into: no API keys (they would switch its
   // billing to the API) and nothing inherited from a Claude Code session the server itself was started from. A local

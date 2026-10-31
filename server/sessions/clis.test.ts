@@ -58,10 +58,12 @@ describe('launchArgs', () => {
   });
 
   it("resumes a session, and keeps the CEO's hands off the shell", () => {
-    const { args } = launchArgs(ctx({ resumeId: 'abc', role: 'ceo', files: { settings: 's', mcp: 'mcp.json', system: 'i' } }));
+    const { args, env } = launchArgs(ctx({ resumeId: 'abc', role: 'ceo', files: { settings: 's', mcp: 'mcp.json', system: 'i' }, addDirs: ['/clones/a', '/clones/b'] }));
     expect(args.slice(0, 2)).toEqual(['--resume', 'abc']);
     expect(args).toContain('--mcp-config');
-    expect(args.slice(args.indexOf('--disallowedTools'), args.indexOf('--'))).toEqual(['--disallowedTools', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS, 'Bash', 'PowerShell', 'NotebookEdit']);
+    expect(args.join(' ')).toContain('--add-dir /clones/a --add-dir /clones/b');
+    expect(env.ENABLE_TOOL_SEARCH).toBe('false');
+    expect(args.slice(args.indexOf('--disallowedTools'), args.indexOf('--'))).toEqual(['--disallowedTools', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS, 'Bash', 'PowerShell', 'NotebookEdit', 'Edit', 'Write']);
   });
 
   it("asks for a Claude model and effort by name, and a local model by the server's own name, without effort", () => {

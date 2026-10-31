@@ -60,7 +60,37 @@ export function describeTool(cwd: string, name: string, input: Record<string, un
     const detail = input.url ?? input.element ?? input.text ?? '';
     return `🌐 ${action}${detail ? ` ${clip(String(detail), 120)}` : ''}`;
   }
+  if (name.startsWith('mcp__office__')) return describeOfficeTool(name.slice('mcp__office__'.length), input);
   return `${name}(${clip(JSON.stringify(input), 140)})`;
+}
+
+/** One of the CEO's office tool calls, for its log. Adapted from cubefarm server/agentRunner.ts (MIT). */
+export function describeOfficeTool(action: string, input: Record<string, unknown>): string {
+  const floor = input.floor != null ? ` → floor ${input.floor}` : '';
+  const why = (key: string) => (input[key] ? `: ${clip(String(input[key]), 90)}` : '');
+  switch (action) {
+    case 'company_status':
+      return '🏢 company_status';
+    case 'worker_detail':
+      return `🔎 worker_detail ${String(input.worker_id ?? '')}`;
+    case 'set_floor_profile':
+      return `🗂️ set_floor_profile${floor}${why('summary')}`;
+    case 'scale_team':
+      return `📈 scale_team floor ${String(input.floor ?? '?')} → ${String(input.size ?? '?')}${why('reason')}`;
+    case 'configure_worker': {
+      const set = [input.model, input.effort].filter((x) => typeof x === 'string' && x !== '');
+      return `⚙️ configure_worker ${String(input.worker_id ?? '')}${set.length ? `: ${set.join(' · ')}` : ''}`;
+    }
+    case 'file_issue':
+      return `📝 file_issue "${clip(String(input.title ?? ''), 70)}"${floor}`;
+    case 'set_dependencies':
+      return `🔗 set_dependencies #${String(input.number ?? '?')}${floor}${Array.isArray(input.depends_on) ? ` · depends on ${input.depends_on.map((n) => `#${n}`).join(', ') || 'nothing'}` : ''}`;
+    case 'close_issue':
+      return `🗂️ close_issue #${String(input.number ?? '?')}${floor}`;
+    case 'ask_manager':
+      return `❓ ask_manager #${String(input.number ?? '?')}${floor}${why('question')}`;
+  }
+  return `🏢 ${action}(${clip(JSON.stringify(input), 120)})`;
 }
 
 /** A TodoWrite's list, one line per item. */

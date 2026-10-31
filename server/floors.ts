@@ -47,6 +47,7 @@ export class Floors {
       mission: '',
       summary: '',
       qaBrief: '',
+      teamSize: null,
       cloneStatus: 'cloning',
       cloneError: null,
       issues: [],
@@ -69,6 +70,11 @@ export class Floors {
     if (running) {
       this.again.add(id);
       return running;
+    }
+    // After a restart a floor's clone is unchecked: fetched if it's there, cloned if not.
+    if (this.store.hasFloor(id) && this.store.floor(id).cloneStatus === 'pending') {
+      this.store.patchFloor(id, { cloneStatus: 'cloning' });
+      void this.clone(id);
     }
     const next = this.fetch(id).finally(() => {
       this.syncing.delete(id);

@@ -112,6 +112,15 @@ Every ported file gets the header `Adapted from cubefarm <path> (MIT).`; the fir
 
 ## Phase 6: workers and autospawning
 
+**Done.** Things that differ from cubefarm:
+- **Rules first:** `server/team/autoscale.ts` keeps `scalePlan` and `floorCapacity`, and adds `rulesSize`: one worker per 3 things to do (tasks under way, ready issues, waiting PRs), growing at once and shrinking only by workers idle 10 minutes (1 in the demo) while nothing waits. cubefarm has no rules sizer, only its CEO.
+- **No approval:** without request records, a busy worker asked to leave carries `leaving`, gets no new work, and goes when their task ends (`Team.applyLeaving`, at each scheduler tick). A floor keeps its last worker.
+- **Held sizes:** `Floor.teamSize` is the size the CEO's `scale_team` or the manager set; the rules leave such a floor alone until `PATCH /api/floors/:floor {teamSize: null}`. Hiring or letting go by hand holds the floor too.
+- **The CEO** (`server/team/ceo/`): `prompts.ts` is about half of cubefarm's (no triage, notes, previews, approval or heartbeat); `issueRules.ts` keeps `IssueCap`, `planDependencies` and `checkCloseIssue`; `tools.ts` serves nine tools, `ask_manager` new; `office.ts` implements them; `jobs.ts` queues onboard, plan and chat, one at a time, chat first. The queue isn't saved: at start the CEO onboards the floors it has no profile of. A message during a job waits for the next chat instead of being injected.
+- **Transport:** `POST /api/mcp/:token`, stateless Streamable HTTP with a fresh server per request (`handleMcp` in `cliRunner.ts`). With `--strict-mcp-config`, the CEO's CLI sees only the office's server.
+- **The CEO can't edit:** Edit and Write join Bash, PowerShell and NotebookEdit in its disallowed tools; it reads the floors' clones through `--add-dir`.
+- **Demo:** the scripted CEO in `demoSessions.ts` calls the real handlers, picking its script from `SessionOptions.ceoJob`, not from the prompt's wording.
+
 | Marshmallow | cubefarm | Verdict | Notes |
 | --- | --- | --- | --- |
 | `server/team/workers.ts` | `swarm.ts`: agents section (~l.2122): `hireAgent`, `fireAgent`, `updateAgent`, `stopAgent`, `resetAgent`, `freeName`, `ensureAgent`; `NAMES` (~l.289); team changes section (~l.5098) | Rewrite | |

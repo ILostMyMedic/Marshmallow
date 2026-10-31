@@ -29,6 +29,7 @@ const floor = (over: Partial<Floor> = {}): Floor => ({
   mission: '',
   summary: '',
   qaBrief: '',
+  teamSize: null,
   cloneStatus: 'ready',
   cloneError: null,
   issues: [{ number: 1, title: 'An issue', body: '', url: '', labels: [], createdAt: '' }],
@@ -58,6 +59,7 @@ const worker = (over: Partial<Worker> = {}): Worker => ({
   turns: 0,
   lastError: null,
   sessionId: null,
+  leaving: false,
   ...over,
 });
 

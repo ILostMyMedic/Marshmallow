@@ -43,6 +43,18 @@ describe('Floors', () => {
     expect(now.lastSync).not.toBeNull();
   });
 
+  it('checks the clone of a floor loaded after a restart on its first sync', async () => {
+    await floors.connect(REPO);
+    await wait(10);
+    await store.flush();
+    const restarted = new Store(path.join(dir, 'state.json'), { version: '0', demo: true });
+    await restarted.load();
+    expect(restarted.floor(REPO).cloneStatus).toBe('pending');
+    await new Floors(restarted, backend).sync(REPO);
+    await wait(10);
+    expect(restarted.floor(REPO).cloneStatus).toBe('ready');
+  });
+
   it('refuses a bad name, an unknown repository and one that is already a floor', async () => {
     await expect(floors.connect('not a repo')).rejects.toMatchObject({ status: 400 });
     await expect(floors.connect('nobody/nothing')).rejects.toMatchObject({ status: 400, message: expect.stringContaining('Could not resolve') });

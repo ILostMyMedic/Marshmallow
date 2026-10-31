@@ -31,5 +31,6 @@ export function settingsPatch(body: unknown): Partial<Settings> {
     patch[key] = (b[key] as string).trim().slice(0, 80);
   }
   if (b.setupDone !== undefined) patch.setupDone = b.setupDone === true;
+  if (b.autoscale !== undefined) patch.autoscale = b.autoscale === true;
   return patch;
 }

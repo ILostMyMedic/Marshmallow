@@ -105,7 +105,7 @@ describe('asking and answering, with the demo', () => {
     store.patchFloor(REPO, { autoAssign: true });
     for (const n of [1, 2, 3, 4, 5, 6]) await backend.github.closeIssue(REPO, n, 'not now'); // leave only "Make it pop"
     await floors.sync(REPO);
-    store.putWorker({ id: 'ada-0000', name: 'Ada', floorId: REPO, role: 'worker', seed: 1, desk: 0, model: '', effort: '', host: 'local', status: 'idle', task: null, activity: null, idleSince: 0, startedAt: null, endedAt: null, costUsd: 0, turns: 0, lastError: null, sessionId: null });
+    store.putWorker({ id: 'ada-0000', name: 'Ada', floorId: REPO, role: 'worker', seed: 1, desk: 0, model: '', effort: '', host: 'local', status: 'idle', task: null, activity: null, idleSince: 0, startedAt: null, endedAt: null, costUsd: 0, turns: 0, lastError: null, sessionId: null, leaving: false });
     const syncing = setInterval(() => void floors.syncAll(), 25);
     pipeline.scheduler.start(20);
     try {

@@ -77,8 +77,8 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 ## 5. Autospawning (team size)
 
 - [x] **Workers are added and removed automatically** to fit the work · M
-- [x] **Decided by a CEO agent**: a Claude session with office tools over MCP, no shell · L → `server/ceo.ts`
-- [ ] **Decided by plain rules** instead (queue length, idle time): free and predictable · S
+- [x] **Decided by plain rules** by default (queue length, idle time): free and predictable · S
+- [x] **Decided by a CEO agent** when it's on: a Claude session with office tools over MCP, no shell. It runs on the office default model unless given its own · L → `server/ceo.ts`
 - [x] **Changes apply at once**, within the floor's max · S
 - [ ] **Changes wait for your approval**: candidates wait on chairs in the lobby · M
 - [x] **Max workers per floor** · S
@@ -213,10 +213,7 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 
 Pick one in each; my recommendation comes first.
 
-1. **Who decides the team size?**
-   - (a) Rules by default, CEO on top when it's on. Free and predictable; Claude only when you want judgement.
-   - (b) CEO only, as cubefarm does: every decision costs a session.
-   - (c) Rules only.
+1. **Who decides the team size?** decided: plain rules by default, the CEO on top when it's on. The CEO runs on the office default model unless given its own.
 2. **Hires: automatic or approved?** I pre-checked automatic, since you said autospawning. Approval adds the lobby-chairs game moment.
 3. **Runtime: real terminal or Agent SDK?** I pre-checked the real terminal, because the desk monitors and the worker panel show it.
 4. **Coding agents for v1:** decided: Claude Code only, on Claude or on a local Ollama model, with room for more model servers later.

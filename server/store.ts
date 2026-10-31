@@ -121,15 +121,15 @@ export class Store {
       return;
     }
     this.settings = { ...DEFAULT_SETTINGS, ...saved.settings };
-    for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
-    for (const w of saved.workers ?? []) this.workers.set(w.id, { ...w, activity: null, sessionId: w.sessionId ?? null });
+    for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, teamSize: f.teamSize ?? null, cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
+    for (const w of saved.workers ?? []) this.workers.set(w.id, { ...w, activity: null, sessionId: w.sessionId ?? null, leaving: w.leaving ?? false });
     for (const q of saved.qa ?? []) this.qa.set(qaKey(q.floorId, q.prNumber), q);
     for (const [id, lines] of Object.entries(saved.logs ?? {})) {
       if (!this.workers.has(id)) continue;
       this.logs.set(id, lines);
       for (const l of lines) this.logSeq = Math.max(this.logSeq, l.id + 1);
     }
-    this.messages = saved.messages ?? [];
+    this.messages = (saved.messages ?? []).map((m) => ({ ...m, from: m.from ?? 'office' }));
     for (const q of saved.questions ?? []) this.questions.set(q.id, q);
   }
 
@@ -295,8 +295,8 @@ export class Store {
   }
 
   /** A message from the office to the manager's phone. */
-  say(text: string, floorId: string | null = null): OfficeMessage {
-    const message: OfficeMessage = { id: (this.messages.at(-1)?.id ?? 0) + 1, at: Date.now(), text, floorId };
+  say(text: string, floorId: string | null = null, from: OfficeMessage['from'] = 'office'): OfficeMessage {
+    const message: OfficeMessage = { id: (this.messages.at(-1)?.id ?? 0) + 1, at: Date.now(), text, floorId, from };
     this.messages = [...this.messages, message].slice(-MESSAGES_KEPT);
     this.emit({ type: 'message', message });
     return message;

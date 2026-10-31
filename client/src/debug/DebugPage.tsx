@@ -1,5 +1,5 @@
-// The debug page: every floor with its workers, queue and pull requests, the office's messages and the latest
-// moments. It stays on as the admin view once the game exists. In the demo it can also hire and let go of pretend
+// The debug page: the CEO, every floor with its workers, queue and pull requests, the office's messages and the
+// latest moments. It stays on as the admin view once the game exists. In the demo it can also hire and let go of pretend
 // workers, and fake Claude's usage warning or limit (server/demoRoutes.ts).
 import { Fragment, useEffect, useState } from 'react';
 import { isBusy, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
@@ -44,6 +44,9 @@ export function DebugPage() {
         )}
         {version && <span className="muted">v{version}</span>}
         <span className="spacer" />
+        <label className="connect" title="The rules grow and shrink floors to fit the work, except floors held at a size">
+          <input type="checkbox" checked={settings.autoscale} onChange={(e) => run('PATCH', '/api/settings', { autoscale: e.target.checked })} /> autoscale
+        </label>
         <ModelField label="default model" value={settings.defaultModel} placeholder="claude-opus-5-5" onCommit={(v) => v && run('PATCH', '/api/settings', { defaultModel: v })} />
         <ConnectRepo run={run} />
         {demo && (
@@ -61,7 +64,10 @@ export function DebugPage() {
       )}
       {!loaded ? (
         <p className="muted">Waiting for the snapshot…</p>
-      ) : floors.length === 0 ? (
+      ) : (
+        <CeoSection run={run} />
+      )}
+      {!loaded ? null : floors.length === 0 ? (
         <p className="muted">No floors yet. Connect a repository to start.</p>
       ) : (
         floors.map((f) => <FloorSection key={f.id} floor={f} run={run} />)
@@ -138,7 +144,8 @@ function Messages() {
       <ul className="moments">
         {[...messages].reverse().map((m) => (
           <li key={m.id}>
-            <span className="muted">{time(m.at)}</span> {m.text}
+            <span className="muted">{time(m.at)}</span> {m.from === 'ceo' ? <strong>CEO: </strong> : m.from === 'manager' ? <strong>You: </strong> : null}
+            <span className={m.from === 'office' ? undefined : 'chat-line'}>{m.text}</span>
           </li>
         ))}
       </ul>
@@ -214,6 +221,16 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
         <label className="connect">
           <input type="checkbox" checked={floor.autoAssign} onChange={(e) => run('PATCH', `/api/floors/${fp}`, { autoAssign: e.target.checked })} /> auto-assign
         </label>
+        {floor.teamSize === null ? (
+          <span className="pill">sized by the rules</span>
+        ) : (
+          <span className="pill pill-warn">
+            held at {floor.teamSize}{' '}
+            <button className="link" onClick={() => run('PATCH', `/api/floors/${fp}`, { teamSize: null })}>
+              back to the rules
+            </button>
+          </span>
+        )}
       </div>
       <p className="muted">
         {plural(team.length, 'worker')} · {plural(floor.issues.length, 'open issue')} · clone {floor.cloneStatus}
@@ -221,6 +238,7 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
         {floor.lastSync && ` · synced ${time(floor.lastSync)}`}
       </p>
       {floor.syncError && <p className="error">Sync failed: {floor.syncError}</p>}
+      <FloorBrief floor={floor} run={run} />
 
       <h3>Workers</h3>
       {team.length === 0 ? (
@@ -246,6 +264,7 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                   <th scope="row">{w.name}</th>
                   <td>
                     <span className={`status status-${w.status}`}>{w.status}</span>
+                    {w.leaving && <span className="muted"> · 🧳 leaving</span>}
                     {!isBusy(w.status) && w.idleSince && <span className="muted"> since {time(w.idleSince)}</span>}
                     {w.status === 'error' && w.lastError && <div className="error">{w.lastError}</div>}
                   </td>
@@ -414,3 +433,78 @@ function ModelField({ value, placeholder, onCommit, label }: { value: string; pl
 }
 
 const MODEL_SUGGESTIONS = [...CLAUDE_MODELS, 'ollama/gpt-oss:20b', 'ollama/qwen3:8b'];
+
+/** The CEO: hire one, then their status, model and terminal, and a box to write to them (the phone, later). */
+function CeoSection({ run }: { run: Run }) {
+  const ceo = useStore((s) => Object.values(s.workers).find((w) => w.role === 'ceo') ?? null);
+  const lastLine = useStore((s) => (ceo ? s.logs[ceo.id]?.at(-1)?.text : undefined));
+  const defaultModel = useStore((s) => s.settings.defaultModel);
+  const [draft, setDraft] = useState('');
+  const [term, setTerm] = useState(false);
+  if (!ceo) {
+    return (
+      <section className="ceo">
+        <h2>CEO</h2>
+        <p className="muted">
+          No CEO yet. A CEO onboards new floors, plans your briefs into issues and answers your messages; it costs a session each time.{' '}
+          <button onClick={() => run('POST', '/api/ceo')}>Hire a CEO</button>
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className="ceo">
+      <div className="floor-title">
+        <h2>CEO · {ceo.name}</h2>
+        <span className={`status status-${ceo.status}`}>{ceo.status}</span>
+        <ModelField value={ceo.model} placeholder={defaultModel} onCommit={(v) => run('PATCH', `/api/workers/${ceo.id}`, { model: v })} />
+        <button onClick={() => setTerm(!term)}>{term ? 'Hide terminal' : 'Terminal'}</button>
+        <button onClick={() => run('POST', `/api/workers/${ceo.id}/stop`)}>Stop</button>
+        <button onClick={() => run('DELETE', '/api/ceo')}>Let go</button>
+      </div>
+      {ceo.status === 'error' && ceo.lastError && <p className="error">{ceo.lastError}</p>}
+      {lastLine && <p className="last-line">{lastLine}</p>}
+      {term && <LiveTerminal workerId={ceo.id} />}
+      <form
+        className="connect"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run('POST', '/api/ceo/message', { text: draft });
+          setDraft('');
+        }}
+      >
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Message ${ceo.name}`} size={60} />
+        <button type="submit" disabled={!draft.trim()}>
+          Send
+        </button>
+      </form>
+    </section>
+  );
+}
+
+/** A floor's brief (what it's building), which the CEO plans into issues, and the CEO's profile of the project. */
+function FloorBrief({ floor, run }: { floor: Floor; run: Run }) {
+  const [mission, setMission] = useState(floor.mission);
+  useEffect(() => setMission(floor.mission), [floor.mission]);
+  return (
+    <details className="brief">
+      <summary>
+        {floor.summary || 'No profile yet'}
+        {floor.mission && <span className="muted"> · brief: {floor.mission.slice(0, 80)}</span>}
+      </summary>
+      {floor.qaBrief && <pre className="qa-brief">{floor.qaBrief}</pre>}
+      <form
+        className="connect"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run('POST', `/api/floors/${floorPath(floor.id)}/plan`, { mission });
+        }}
+      >
+        <textarea value={mission} onChange={(e) => setMission(e.target.value)} placeholder="What this floor should build next" rows={2} cols={60} />
+        <button type="submit" disabled={!mission.trim()}>
+          Plan it with the CEO
+        </button>
+      </form>
+    </details>
+  );
+}

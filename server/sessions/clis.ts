@@ -105,6 +105,8 @@ export interface LaunchContext {
   role: 'worker' | 'ceo';
   /** Files the office wrote for this session (settings, MCP config, instructions). */
   files: { settings: string; mcp: string | null; system: string };
+  /** Folders it may read besides its working directory. */
+  addDirs?: string[];
 }
 
 export interface Launch {
@@ -143,7 +145,8 @@ export function modelEnv(model: string, env: NodeJS.ProcessEnv = process.env): R
 /** Claude Code's command line for a session. */
 export function launchArgs(ctx: LaunchContext): Launch {
   const local = localModel(ctx.model);
-  const disallowed = ['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS, ...(ctx.role === 'ceo' ? ['Bash', 'PowerShell', 'NotebookEdit'] : [])];
+  // The CEO changes things only through the office tools: no shell, and the clones it reads stay as they are.
+  const disallowed = ['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', ...CROSS_TURN_TOOLS, ...(ctx.role === 'ceo' ? ['Bash', 'PowerShell', 'NotebookEdit', 'Edit', 'Write'] : [])];
   const args = [
     ...(ctx.resumeId ? ['--resume', ctx.resumeId] : ['--session-id', ctx.sessionId]),
     ...(ctx.model ? ['--model', local ? local.model : ctx.model] : []),
@@ -159,6 +162,7 @@ export function launchArgs(ctx: LaunchContext): Launch {
     // Only the office's MCP servers: a worker approves its own tool calls, so it mustn't reach the manager's servers or
     // claude.ai connectors (mail, drives, calendars).
     '--strict-mcp-config',
+    ...(ctx.addDirs ?? []).flatMap((d) => ['--add-dir', d]),
     '--append-system-prompt-file',
     ctx.files.system,
     '--name',
@@ -168,7 +172,9 @@ export function launchArgs(ctx: LaunchContext): Launch {
     '--',
     ctx.prompt,
   ];
-  return { args, env: { DISABLE_AUTOUPDATER: '1' } }; // the office's own copy: workers mustn't each try to update it
+  // The office's own copy: workers mustn't each try to update it. The CEO's nine office tools load up front: behind a
+  // tool search, smaller models fumble finding them.
+  return { args, env: { DISABLE_AUTOUPDATER: '1', ...(ctx.role === 'ceo' && { ENABLE_TOOL_SEARCH: 'false' }) } };
 }
 
 const TRUST_PROMPT = /Quick safety check|Do you trust the (files|contents) (in|of) this|trust this folder/i;

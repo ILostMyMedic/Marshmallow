@@ -226,6 +226,7 @@ const OFFICE_KINDS: Record<string, ActivityKind> = {
   file_issue: 'git',
   set_dependencies: 'edit',
   close_issue: 'git',
+  ask_manager: 'talk',
 };
 
 /**

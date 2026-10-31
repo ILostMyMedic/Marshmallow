@@ -1,7 +1,8 @@
 // The session contract: one Claude Code session on one task, in a worker's worktree. The pipeline starts sessions
 // through Backend.startSession and only ever sees these types, so it can't tell the real CLI from the demo's fakes.
 // Adapted from cubefarm server/agentRunner.ts (MIT).
-import type { EffortLevel, LogEntry, TaskKind } from '../../shared/types.ts';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CeoJobKind, EffortLevel, LogEntry, TaskKind } from '../../shared/types.ts';
 import type { UsageWarning } from '../pipeline/pacing.ts';
 import type { WorkerTerminal } from './terminal.ts';
 
@@ -31,6 +32,20 @@ export interface SessionOptions {
   workerId?: string;
   /** The worker's terminal: the real CLI runs in it, the demo prints into it. */
   terminal?: WorkerTerminal;
+  /** The CEO's office tools, served to its CLI over MCP. */
+  office?: OfficeTools;
+  /** Folders the session may read besides its own (the CEO reads the floors' clones). */
+  addDirs?: string[];
+  /** What the CEO's job is: the demo's scripted CEO acts on it. */
+  ceoJob?: { kind: CeoJobKind; floorId: string | null; text: string };
+}
+
+/** The office's tools for the CEO. */
+export interface OfficeTools {
+  /** A fresh MCP server with the tools, for one request (a shared one left later sessions without tools). */
+  serve(): McpServer;
+  /** Runs a tool without a model in the loop (the demo's CEO); a refusal comes back as text starting "Refused:". */
+  call(name: string, args: Record<string, unknown>): Promise<string>;
 }
 
 export interface SessionResult {

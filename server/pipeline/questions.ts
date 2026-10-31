@@ -24,12 +24,13 @@ export function managerQuestion(text: string): string | null {
 }
 
 /** The comment the office posts to ask the question. */
-export function questionComment(from: string, text: string): string {
+export function questionComment(from: string, text: string, role: 'worker' | 'ceo' = 'worker'): string {
   const quoted = text
     .split(/\r?\n/)
     .map((l) => `> ${l}`)
     .join('\n');
-  return `🤖 **${from}** (a Marshmallow worker) has a question before building this:\n\n${quoted}\n\nReply in a comment and the issue goes back to the team with your answer.\n${OFFICE_MARK}`;
+  const who = role === 'ceo' ? "Marshmallow's CEO" : 'a Marshmallow worker';
+  return `🤖 **${from}** (${who}) has a question about this:\n\n${quoted}\n\nReply in a comment and the issue goes back to the team with your answer.\n${OFFICE_MARK}`;
 }
 
 /** The manager's answer: the first comment after the question that the office didn't post. */
@@ -48,13 +49,13 @@ export class Questions {
   constructor(private readonly ctx: Ctx) {}
 
   /** Asks the manager about an issue: the comment, the label, and the office's record. The issue waits for the answer. */
-  async ask(floorId: string, issueNumber: number, text: string, from: string): Promise<Question> {
+  async ask(floorId: string, issueNumber: number, text: string, from: string, role: 'worker' | 'ceo' = 'worker'): Promise<Question> {
     const { store } = this.ctx;
     const gh = this.ctx.backend.github;
     const floor = store.floor(floorId);
     if (store.questionList(floorId).some((q) => q.issueNumber === issueNumber && !q.answer)) throw new HttpError(409, `#${issueNumber} already waits for an answer`);
     const askedAt = Date.now();
-    const url = await gh.commentIssue(floor.fullName, issueNumber, questionComment(from, text));
+    const url = await gh.commentIssue(floor.fullName, issueNumber, questionComment(from, text, role));
     await gh.editIssue(floor.fullName, issueNumber, { addLabels: [QUESTION_LABEL] });
     // The scheduler skips it from now on, without waiting for the next sync to list the label.
     this.labelLocally(floor, issueNumber, (labels) => [...labels.filter((l) => l !== QUESTION_LABEL), QUESTION_LABEL]);

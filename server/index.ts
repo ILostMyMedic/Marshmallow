@@ -13,12 +13,11 @@ import { demoRoutes } from './demoRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
 import { createPipeline } from './pipeline/pipeline.ts';
-import { handleHook, releaseClis, setOfficeUrl } from './sessions/cliRunner.ts';
+import { handleHook, handleMcp, releaseClis, setOfficeUrl } from './sessions/cliRunner.ts';
 import { Terminals } from './sessions/terminals.ts';
 import { route } from './route.ts';
 import { EFFORTS, settingsPatch } from './settings.ts';
 import { Store } from './store.ts';
-import { hireWorker, letGo } from './team/workers.ts';
 
 const problem = homeProblem(HOME_DIR, process.cwd(), DEMO);
 if (problem) {
@@ -43,6 +42,9 @@ const app = express();
 // Workers' CLIs calling back: hooks and the status line (a tool result can be a large screenshot, hence the limit). The
 // token in the path is the session's; unknown tokens get an empty answer.
 app.post('/api/hooks/:token', express.json({ limit: '64mb' }), (req, res) => void res.json(handleHook(String(req.params.token), req.body)));
+// The CEO's office tools over MCP, stateless: POST only, the session's token in the path.
+app.post('/api/mcp/:token', express.json({ limit: '4mb' }), (req, res) => void handleMcp(String(req.params.token), req, res).catch(() => res.headersSent || res.status(500).end()));
+app.all('/api/mcp/:token', (_req, res) => void res.status(405).set('Allow', 'POST').end());
 app.use(express.json({ limit: '1mb' }));
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const num = (v: unknown) => {
@@ -54,7 +56,22 @@ const num = (v: unknown) => {
 app.get('/api/state', route(() => store.snapshot()));
 // The repositories you could connect: yours, or an organisation's (?owner=)
 app.get('/api/github/repos', route((req) => backend.github.listMyRepos(str(req.query.owner) || undefined)));
-app.post('/api/floors', route((req) => floors.connect(str(req.body?.fullName), { autoAssign: req.body?.autoAssign === true })));
+// A new floor: the CEO, if there is one, studies it, and plans the brief when one came with it
+app.post(
+  '/api/floors',
+  route(async (req) => {
+    const floor = await floors.connect(str(req.body?.fullName), { autoAssign: req.body?.autoAssign === true });
+    const mission = str(req.body?.mission).trim();
+    if (mission) store.patchFloor(floor.id, { mission });
+    pipeline.ctx.ceo.joined(floor.id);
+    return store.floor(floor.id);
+  }),
+);
+app.post('/api/floors/:floor/plan', route((req) => pipeline.ctx.ceo.plan(String(req.params.floor), req.body?.mission === undefined ? undefined : str(req.body.mission))));
+// The CEO: hired and let go, and the manager's messages to it
+app.post('/api/ceo', route(() => pipeline.ctx.ceo.hire()));
+app.delete('/api/ceo', route(() => pipeline.ctx.ceo.letGo()));
+app.post('/api/ceo/message', route((req) => pipeline.ctx.ceo.message(str(req.body?.text))));
 app.post('/api/floors/:floor/sync', route((req) => floors.sync(String(req.params.floor))));
 // Questions to the manager: asked on an issue (the CEO's ask_manager later; a test meanwhile), and answered here or on GitHub
 app.post(
@@ -69,23 +86,41 @@ app.post('/api/questions/:id/answer', route((req) => pipeline.ctx.questions.answ
 app.patch(
   '/api/floors/:floor',
   route((req) => {
-    const patch: { autoAssign?: boolean; browserTesting?: boolean } = {};
+    const floorId = String(req.params.floor);
+    const patch: { autoAssign?: boolean; browserTesting?: boolean; teamSize?: null } = {};
     for (const key of ['autoAssign', 'browserTesting'] as const) {
       if (req.body?.[key] === undefined) continue;
       if (typeof req.body[key] !== 'boolean') throw new HttpError(400, `${key} must be true or false`);
       patch[key] = req.body[key];
     }
-    const floor = store.patchFloor(String(req.params.floor), patch);
+    // teamSize: a number holds the floor at that size; null hands it back to the rules
+    const size = req.body?.teamSize;
+    if (size === null) patch.teamSize = null;
+    else if (size !== undefined) {
+      if (!Number.isInteger(size)) throw new HttpError(400, 'teamSize must be a whole number, or null for the rules');
+      pipeline.ctx.team.resize(floorId, size, 'Set by hand.', 'manager');
+    }
+    const floor = store.patchFloor(floorId, patch);
     pipeline.ctx.soon(200);
     return floor;
   }),
 );
-app.post('/api/floors/:floor/workers', route((req) => hireWorker(store, pipeline, String(req.params.floor))));
+// Hiring and letting go by hand hold the floor at its new size (PATCH teamSize: null hands it back to the rules)
+app.post(
+  '/api/floors/:floor/workers',
+  route((req) => {
+    const w = pipeline.ctx.team.hire(String(req.params.floor));
+    pipeline.ctx.team.hold(w.floorId);
+    return w;
+  }),
+);
 app.delete(
   '/api/workers/:id',
   route((req) => {
-    letGo(store, pipeline, String(req.params.id));
-    terminals.remove(String(req.params.id));
+    const w = store.worker(String(req.params.id));
+    if (w.role === 'ceo') return pipeline.ctx.ceo.letGo();
+    pipeline.ctx.team.letGo(w.id);
+    pipeline.ctx.team.hold(w.floorId);
   }),
 );
 // A worker's model (a Claude model, or ollama/<name>) and effort; '' falls back to the office default

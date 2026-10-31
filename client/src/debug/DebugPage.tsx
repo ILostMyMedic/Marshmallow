@@ -37,6 +37,7 @@ export function DebugPage() {
         <h1>Marshmallow</h1>
         <span className={`pill ${connected ? 'pill-ok' : 'pill-bad'}`}>{connected ? 'Connected' : 'Reconnecting…'}</span>
         {demo && <span className="pill">DEMO MODE</span>}
+        <a href="/">🏢 The office</a>
         {usage.state !== 'normal' && (
           <span className="pill pill-warn" title={usage.warning?.limit ?? undefined}>
             {usage.state === 'paused' ? '⛔ Paused' : '🐢 Pacing'}

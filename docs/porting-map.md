@@ -189,4 +189,15 @@ When a box in FEATURES.md gets checked, move its row into the phase that needs i
 
 ## The game (after phase 8)
 
-Each game item in FEATURES.md sections 7 to 11 names its cubefarm source. The world's code is mostly pure modules (rules, layouts, state machines, each with a test) drawn by thin React components: port the pure module first, then its component. The game reads the client-side world model from BUILD-PLAN's "Then: game states", never the server directly.
+Each game item in FEATURES.md sections 7 to 11 names its cubefarm source. The world's code is mostly pure modules (rules, layouts, state machines, each with a test) drawn by thin React components: port the pure module first, then its component. The game reads the client-side world model (`client/src/world/model.ts`), never the server directly.
+
+### Phase 9: the floor and its people
+
+**Done.** Everything is in `client/src/world/`, lazy-loaded so the debug page (now at `/debug`) never pulls three.js in. Things that differ from cubefarm:
+- **Copied or adapted with their tests:** `layout.ts` (footprint, outside and desks only), `appearance.ts` and `characterParts.ts`, `face.ts`, `typing.ts` (the hands' rhythm; the typing sounds' helpers come with the sounds), `outlineMesh.ts`, `shapes.ts`, `cameraMath.ts` (the overview orbit only), `dprControl.ts` and `outside/cityLayout.ts` (`cityLayout.ts`: two rings of streets and no landmarks, for "a few blocks").
+- **Looks from the seed:** `seededAppearance` takes the worker's `seed` instead of hashing the id, and draws the colours cubefarm picks at hire (shirt, hair, skin) and the feminine or masculine body from it too (`looks.ts` holds the palettes; the look editor is cut).
+- **Plain meshes:** `Batched.tsx` keeps cubefarm's `Part` / `Piece` / `look` API but draws each part as its own mesh, so instanced batching can drop in later. `Toon.tsx` is plain meshes. No bloom, no graphics tiers, no paint worker: monitors are a main-thread canvas (640×384) with cubefarm's repaint throttle (`Desk.tsx`).
+- **The cutaway:** cubefarm installs its cut planes on the whole renderer, which would hide the city in the overview. Here they live on the building's materials only (`cutaway.ts`, `toon(color, { cut })`): the room loses its ceiling and the walls facing the camera (15 cm in, so the window sills go too), the building loses everything above your floor, and the city and the floors below stay in view.
+- **Rewritten:** `model.ts` (from cubefarm's spread-out trackers: working, idle or celebrating from status and moments), a seated-only `Character.tsx`, `City.tsx` (instanced toon boxes with windows painted per face in metres; cubefarm's is tied to its sky), `Game.tsx` with the overview's controls (cubefarm's live in `camera/rig.ts` with the player), a thin `OfficeFloor.tsx` and `Lobby`, and the floor picker.
+- **Waiting for their phases:** walking, errands, the elevator (a shut door for now), the whiteboard, sounds, the day/night clock (fixed daylight), first person.
+

@@ -248,3 +248,110 @@ button.link {
 .cloud p {
   margin: 6px 0;
 }
+
+/* ---------- the game ---------- */
+
+.game {
+  position: fixed;
+  inset: 0;
+  background: #bfe3ff;
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+  color: #23263a;
+}
+
+.game canvas {
+  touch-action: none;
+}
+
+.game-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #bfe3ff;
+  color: #23263a;
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+  font-size: 1.2rem;
+}
+
+.game-title {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: rgba(255, 253, 245, 0.92);
+  box-shadow: 0 2px 0 #1f1d2b;
+  border: 2px solid #1f1d2b;
+  max-width: calc(100vw - 32px);
+}
+
+.game-title span {
+  font-size: 0.85rem;
+  color: #5c6078;
+}
+
+.game-debug {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(255, 253, 245, 0.92);
+  border: 2px solid #1f1d2b;
+  color: #23263a;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.floor-picker {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(255, 253, 245, 0.9);
+  border: 2px solid #1f1d2b;
+  max-width: calc(100vw - 32px);
+  overflow-x: auto;
+}
+
+.floor-picker button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 2px solid #c9c0ae;
+  background: #fffdf5;
+  color: #23263a;
+  font: 600 0.9rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.floor-picker button.on {
+  background: #ffe8c2;
+  box-shadow: 0 2px 0 #1f1d2b;
+}
+
+.floor-no {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #ff8a5b;
+  color: #ffffff;
+  font-size: 0.8rem;
+}
+
+.floor-count {
+  font-weight: 500;
+  color: #5c6078;
+}

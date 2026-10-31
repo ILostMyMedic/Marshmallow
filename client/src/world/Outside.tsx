@@ -1,0 +1,226 @@
+// Adapted from cubefarm client/src/world/Outside.tsx (MIT): the balconies and the facade, and the side doors shut (they
+// slide open for the player in a later phase); the balcony lamps come with the day/night clock.
+import { useEffect, useMemo } from 'react';
+import * as THREE from 'three';
+import { drawFacade } from './draw';
+import { BALCONY, BALCONY_OUT, BENCH, FLOOR_HEIGHT, HALF_D, HALF_W, PLANTER, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, balconyFurniture, floorElevation, sideSign, type FloorKind, type Side } from './layout';
+import { toon, toonMap } from './materials';
+import { INK, Outlines } from './Outlines';
+import { boxesGeometry, merged, type BoxSpec } from './shapes';
+import { paneMaterial } from './Shell';
+
+// Outside the side walls: the glass doors, the balconies (the lobby's is a patio on the ground), and the rest of the
+// building round you: its walls above and below your floor and every floor's balcony (the city, City.tsx, is the
+// ground). Everything static is merged into a few meshes, so all of it costs a handful of draw calls.
+
+const wallX = (side: Side) => sideSign(side) * (HALF_W + WALL_T / 2);
+/** The rest of the building: cut away above your floor, so the overview looks in (cutaway.ts). */
+const ABOVE = { cut: 'above' } as const;
+
+// ---------- side doors ----------
+
+const LEAF_W = SIDE_DOOR.half + 0.04; // each of a door's two leaves, a little wider than half, so they meet
+const LEAF_H = SIDE_DOOR.h - 0.02;
+const LEAVES = [0, 1, 2, 3]; // west north, west south, east north, east south
+
+/** A leaf's frame (lying along z, centred on z = 0), with its pull handle by the edge where the leaves meet (+z or -z). */
+function leafFrame(meet: number) {
+  const t = 0.06;
+  return boxesGeometry([
+    { size: [t, LEAF_H, 0.07], at: [0, LEAF_H / 2, -LEAF_W / 2 + 0.035] },
+    { size: [t, LEAF_H, 0.07], at: [0, LEAF_H / 2, LEAF_W / 2 - 0.035] },
+    { size: [t, 0.09, LEAF_W], at: [0, LEAF_H - 0.045, 0] },
+    { size: [t, 0.14, LEAF_W], at: [0, 0.07, 0] },
+    { size: [0.12, 0.6, 0.035], at: [0, 1.05, meet * (LEAF_W / 2 - 0.14)] },
+  ]);
+}
+
+/** The glass doors out to the balconies, shut. */
+function SideDoors({ kind }: { kind: FloorKind }) {
+  const geo = useMemo(
+    () => ({
+      glass: new THREE.PlaneGeometry(LEAF_W - 0.1, LEAF_H - 0.2).rotateY(Math.PI / 2).translate(0, 0.14 + (LEAF_H - 0.2) / 2, 0),
+      frames: [leafFrame(1), leafFrame(-1)],
+    }),
+    [],
+  );
+  useEffect(() => () => [geo.glass, ...geo.frames].forEach((g) => g.dispose()), [geo]);
+  return (
+    <group>
+      {LEAVES.map((i) => {
+        const side = SIDES[i >> 1];
+        const dir = i & 1 ? 1 : -1;
+        return (
+          <group key={i} position={[wallX(side), 0, SIDE_OPENINGS[kind][side].door + dir * (LEAF_W / 2 - 0.02)]}>
+            <mesh geometry={geo.glass} material={paneMaterial('room')} renderOrder={1} />
+            <mesh geometry={geo.frames[i & 1]} material={toon('#e9ecef', { cut: 'room' })} />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+// ---------- balconies ----------
+
+const DEEP = BALCONY_OUT - HALF_W; // a slab, from under the doorway to the railing's outside
+const LEN = BALCONY.maxZ - BALCONY.minZ;
+const MID_Z = (BALCONY.minZ + BALCONY.maxZ) / 2;
+const IN = HALF_W + WALL_T;
+
+/** Every floor's balconies, the ground's patio and the roof's canopy over the top floor's: slabs, glass and rails. */
+function balconyGeometry(floor: number, top: number) {
+  const { rail, railT, slab, minZ, maxZ, depth } = BALCONY;
+  const slabs: BoxSpec[] = [];
+  const patio: BoxSpec[] = [];
+  const glass: BoxSpec[] = [];
+  const rails: BoxSpec[] = [];
+  for (let f = 0; f <= top + 1; f++) {
+    const y = (f - floor) * FLOOR_HEIGHT;
+    for (const side of SIDES) {
+      const s = sideSign(side);
+      (f === 0 ? patio : slabs).push({ size: [DEEP, slab, LEN], at: [s * (HALF_W + DEEP / 2), y - slab / 2, MID_Z] });
+      if (f > top) continue;
+      const out = s * (BALCONY_OUT - railT / 2);
+      const across = s * (IN + (depth - railT) / 2);
+      const paneH = rail - 0.14;
+      glass.push({ size: [0.03, paneH, LEN - railT * 2], at: [out, y + 0.06 + paneH / 2, MID_Z] });
+      rails.push({ size: [railT + 0.03, 0.07, LEN], at: [out, y + rail - 0.035, MID_Z] });
+      for (const z of [minZ + railT / 2, maxZ - railT / 2]) {
+        glass.push({ size: [depth - railT, paneH, 0.03], at: [across, y + 0.06 + paneH / 2, z] });
+        rails.push({ size: [depth, 0.07, railT + 0.03], at: [s * (IN + depth / 2), y + rail - 0.035, z] });
+        for (const x of [IN + 0.05, IN + depth / 2]) rails.push({ size: [0.07, rail, 0.07], at: [s * x, y + rail / 2, z] });
+      }
+      for (let k = 0; k <= 10; k++) rails.push({ size: [0.07, rail, 0.07], at: [out, y + rail / 2, minZ + railT / 2 + (k * (LEN - railT)) / 10] });
+    }
+  }
+  return { slabs: boxesGeometry(slabs), patio: boxesGeometry(patio), glass: boxesGeometry(glass), rails: boxesGeometry(rails) };
+}
+
+/** On your floor's balconies: planters with shrubs and flowers, and a bench. */
+function furnitureGeometry(kind: FloorKind) {
+  const planters: BoxSpec[] = [];
+  const bench: BoxSpec[] = [];
+  const legs: BoxSpec[] = [];
+  const shrubs: THREE.BufferGeometry[] = [];
+  const flowers: THREE.BufferGeometry[] = [];
+  for (const side of SIDES) {
+    const s = sideSign(side);
+    const f = balconyFurniture(kind, side);
+    for (const p of f.planters) {
+      const x = (p.minX + p.maxX) / 2;
+      const z = (p.minZ + p.maxZ) / 2;
+      planters.push({ size: [PLANTER.w, PLANTER.h - 0.06, PLANTER.l], at: [x, (PLANTER.h - 0.06) / 2, z] });
+      planters.push({ size: [PLANTER.w + 0.06, 0.06, PLANTER.l + 0.06], at: [x, PLANTER.h - 0.03, z] });
+      for (const [dz, r] of [
+        [-0.55, 0.3],
+        [0, 0.36],
+        [0.55, 0.28],
+      ])
+        shrubs.push(new THREE.SphereGeometry(r, 14, 10).translate(x, PLANTER.h + r * 0.55, z + dz));
+      for (const [dx, dz] of [
+        [-0.1, -0.35],
+        [0.12, 0.2],
+        [-0.05, 0.75],
+        [0.08, -0.8],
+      ])
+        flowers.push(new THREE.SphereGeometry(0.07, 8, 6).translate(x + dx, PLANTER.h + 0.5, z + dz));
+    }
+    const b = f.bench;
+    const bz = (b.minZ + b.maxZ) / 2;
+    const seatX = s * (IN + BENCH.w / 2 + 0.04);
+    bench.push({ size: [BENCH.w - 0.08, 0.08, BENCH.l], at: [seatX, 0.46, bz] });
+    bench.push({ size: [0.08, 0.36, BENCH.l], at: [s * (IN + 0.08), 0.68, bz] });
+    for (const dz of [-BENCH.l / 2 + 0.15, BENCH.l / 2 - 0.15]) {
+      legs.push({ size: [BENCH.w - 0.12, 0.06, 0.06], at: [seatX, 0.39, bz + dz] });
+      for (const dx of [-0.2, 0.2]) legs.push({ size: [0.06, 0.42, 0.06], at: [seatX + dx, 0.21, bz + dz] });
+    }
+  }
+  return { planters: boxesGeometry(planters), bench: boxesGeometry(bench), legs: boxesGeometry(legs), shrubs: merged(shrubs), flowers: merged(flowers) };
+}
+
+function Balconies({ kind, floor, top }: { kind: FloorKind; floor: number; top: number }) {
+  const shell = useMemo(() => balconyGeometry(floor, top), [floor, top]);
+  const stuff = useMemo(() => furnitureGeometry(kind), [kind]);
+  useEffect(() => () => [...Object.values(shell), ...Object.values(stuff)].forEach((g) => g.dispose()), [shell, stuff]);
+  return (
+    <group>
+      <mesh geometry={shell.slabs} material={toon('#d6d0c4', ABOVE)} />
+      <mesh geometry={shell.patio} material={toon('#e3b98f', ABOVE)} />
+      <mesh geometry={shell.rails} material={toon('#5c677d', ABOVE)} />
+      <mesh geometry={shell.glass} material={paneMaterial('above')} renderOrder={1} />
+      <mesh geometry={stuff.planters} material={toon('#e07a5f')}>
+        <Outlines thickness={0.018} color={INK} />
+      </mesh>
+      <mesh geometry={stuff.shrubs} material={toon('#52b788')} />
+      <mesh geometry={stuff.flowers} material={toon('#ff8fab')} />
+      <mesh geometry={stuff.bench} material={toon('#c9905a')}>
+        <Outlines thickness={0.018} color={INK} />
+      </mesh>
+      <mesh geometry={stuff.legs} material={toon('#495057')} />
+    </group>
+  );
+}
+
+// ---------- the rest of the building ----------
+
+const BAY = 5; // the facade's window repeat along the walls, metres
+
+let facadeTex: THREE.CanvasTexture | null = null;
+function facadeTexture() {
+  if (facadeTex) return facadeTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const { y, h } = WINDOW;
+  drawFacade(c.getContext('2d')!, 256, 256, WALL_H / FLOOR_HEIGHT, { x0: 0.12, x1: 0.88, y0: (y - h / 2) / FLOOR_HEIGHT, y1: (y + h / 2) / FLOOR_HEIGHT });
+  facadeTex = new THREE.CanvasTexture(c);
+  facadeTex.colorSpace = THREE.SRGBColorSpace;
+  facadeTex.wrapS = facadeTex.wrapT = THREE.RepeatWrapping;
+  facadeTex.anisotropy = 8;
+  return facadeTex;
+}
+
+/** The building's outer walls below your floor (down to the ground) and above it (up to the roof), as one textured ring. */
+function facadeGeometry(floor: number, top: number) {
+  const elev = floorElevation(floor);
+  const roof = (top + 1) * FLOOR_HEIGHT - elev;
+  const bands: [number, number][] = [];
+  if (elev > 0) bands.push([-elev, 0]);
+  if (roof > WALL_H) bands.push([WALL_H, roof]);
+  const X = HALF_W + WALL_T;
+  const Z = HALF_D + WALL_T;
+  const faces = [
+    { len: 2 * X, rot: 0, x: 0, z: Z },
+    { len: 2 * X, rot: Math.PI, x: 0, z: -Z },
+    { len: 2 * Z, rot: Math.PI / 2, x: X, z: 0 },
+    { len: 2 * Z, rot: -Math.PI / 2, x: -X, z: 0 },
+  ];
+  return merged(
+    bands.flatMap(([y0, y1]) =>
+      faces.map((f) => {
+        const g = new THREE.PlaneGeometry(f.len, y1 - y0);
+        const uv = g.attributes.uv;
+        // in metres, so the windows line up with the storeys whatever the band
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * f.len) / BAY, (y0 + elev + uv.getY(i) * (y1 - y0)) / FLOOR_HEIGHT);
+        return g.rotateY(f.rot).translate(f.x, (y0 + y1) / 2, f.z);
+      }),
+    ),
+  );
+}
+
+function Facade({ floor, top }: { floor: number; top: number }) {
+  const geo = useMemo(() => facadeGeometry(floor, top), [floor, top]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return <mesh geometry={geo} material={toonMap('facade', facadeTexture(), 'above')} />;
+}
+
+/** Everything outside the side walls, for floor `floor` of a building whose top floor is `top`. */
+export function Outside({ kind, floor, top }: { kind: FloorKind; floor: number; top: number }) {
+  return (
+    <group>
+      <SideDoors kind={kind} />
+      <Balconies kind={kind} floor={floor} top={Math.max(top, floor)} />
+      <Facade floor={floor} top={Math.max(top, floor)} />
+    </group>
+  );
+}

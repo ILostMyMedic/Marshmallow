@@ -158,9 +158,9 @@ marshmallow/
 
 **Done** (`server/pipeline/hardening.test.ts`): an office killed mid-task starts again and picks up where it left off; closing an issue or PR stops whoever works on it; a quiet session is nudged, then put back in line.
 
-## Then: game states
+## The game
 
-With phases 5 and 6 done, the server sends everything the game needs. Game work starts with a client-side **world model** (pure and tested): each worker's game state, derived from server events and local timers:
+The server sends everything the game needs. The game has a client-side **world model** (`client/src/world/model.ts`, pure and tested): each worker's game state, derived from server events and local timers:
 
 - at their desk working
 - idle
@@ -168,7 +168,35 @@ With phases 5 and 6 done, the server sends everything the game needs. Game work 
 - celebrating
 - arriving or leaving
 
-The 3D scene, faces, speech bubbles and idle activities all read that model, so none of them talks to the server directly.
+The 3D scene, faces, speech bubbles and idle activities all read that model, so none of them talks to the server directly. The view is cubefarm's: you're inside one floor (one repo) at a time, and the city and the rest of the tower are seen through its windows. Each phase ports a slice of cubefarm's `client/src/world/` (docs/porting-map.md), pure modules first with their tests.
+
+## Phase 9: the floor and its people
+
+1. React Three Fiber, toon materials and ink outlines (`materials.ts`, `Outlines.tsx`, `Toon.tsx`); the floor and desk layout (`layout.ts`).
+2. The world model, with working, idle and celebrating for now.
+3. The canvas and the overview camera, looking down into the floor with its near walls cut away (`Game.tsx`, `cameraMath.ts`, `rig.ts`), with adaptive resolution (`perf.tsx`, `dprControl.ts`).
+4. The building: the floor's room, the floors above and below as balconies and facade, and a few blocks of city outside (`Shell.tsx`, `Outside.tsx`, `cityLayout.ts`). A floor picker switches repos; the lobby holds the CEO.
+5. Workers: seeded looks (`appearance.ts`, `characterParts.ts`, `Figure.tsx`), seated at their desks, typing while they work, faces that follow their state (`face.ts`, `typing.ts`, `Character.tsx`), and activity signs over their heads.
+6. Desks with live monitors drawn from each worker's log, and name tags (`Desk.tsx`, `draw.ts`).
+7. The game becomes the main page; the debug page moves to `/debug`.
+
+**Done when:** `npm run dev -- --demo` opens on a floor of the demo office: each hired worker sits at a desk, types while their session runs (their monitor scrolling their log), looks pleased when their PR opens, and the floor picker moves between repos and the lobby. (Done: seen in a browser on the demo; the cheer is covered by `client/src/world/model.test.ts`.)
+
+## Phase 10: life in motion
+
+Walking (walk grid, paths, named spots), arrivals by elevator and leavers carrying a box, the merge celebration, speech bubbles about real work, the whiteboard Kanban, the day/night clock and synthesized sound effects.
+
+## Phase 11: idle activities
+
+The errand system, then coffee runs, fridge snacks, stretches, chats and desk visits, fidgets, naps after a long idle, stand-ups at the whiteboard when new issues land, and lunch.
+
+## Phase 12: the player
+
+First-person walking with collisions, `E` to use a desk's terminal, the whiteboard, the elevator or the console, saying hi to an idle worker, and the overview camera's click-a-worker.
+
+## Phase 13: the manager UI
+
+The setup wizard, the manager console, the worker panel (live terminal, message box, setup), the 2D Kanban, the phone overlay, toasts and the help screen.
 
 ## Watch out for
 

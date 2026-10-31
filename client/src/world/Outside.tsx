@@ -1,12 +1,15 @@
-// Adapted from cubefarm client/src/world/Outside.tsx (MIT): the balconies and the facade, and the side doors shut (they
-// slide open for the player in a later phase); the balcony lamps come with the day/night clock.
-import { useEffect, useMemo } from 'react';
+// Adapted from cubefarm client/src/world/Outside.tsx (MIT): the balconies, the facade and the side doors that slide open
+// for you; the balcony lamps come with the day/night clock, the doors' whoosh with the sounds.
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { doorOpen, resetDoors, tickDoors } from './doors';
 import { drawFacade } from './draw';
 import { BALCONY, BALCONY_OUT, BENCH, FLOOR_HEIGHT, HALF_D, HALF_W, PLANTER, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, balconyFurniture, floorElevation, sideSign, type FloorKind, type Side } from './layout';
 import { toon, toonMap } from './materials';
 import { INK, Outlines } from './Outlines';
 import { boxesGeometry, merged, type BoxSpec } from './shapes';
+import { playerAt } from './rig';
 import { paneMaterial } from './Shell';
 
 // Outside the side walls: the glass doors, the balconies (the lobby's is a patio on the ground), and the rest of the
@@ -21,6 +24,7 @@ const ABOVE = { cut: 'above' } as const;
 
 const LEAF_W = SIDE_DOOR.half + 0.04; // each of a door's two leaves, a little wider than half, so they meet
 const LEAF_H = SIDE_DOOR.h - 0.02;
+const SLIDE = SIDE_DOOR.half + 0.02; // how far each leaf slides into the wall
 const LEAVES = [0, 1, 2, 3]; // west north, west south, east north, east south
 
 /** A leaf's frame (lying along z, centred on z = 0), with its pull handle by the edge where the leaves meet (+z or -z). */
@@ -35,8 +39,8 @@ function leafFrame(meet: number) {
   ]);
 }
 
-/** The glass doors out to the balconies, shut. */
-function SideDoors({ kind }: { kind: FloorKind }) {
+/** The glass doors out to the balconies: two leaves each that slide apart into the wall while you're near and shut behind you. */
+function SideDoors({ kind, floor }: { kind: FloorKind; floor: number }) {
   const geo = useMemo(
     () => ({
       glass: new THREE.PlaneGeometry(LEAF_W - 0.1, LEAF_H - 0.2).rotateY(Math.PI / 2).translate(0, 0.14 + (LEAF_H - 0.2) / 2, 0),
@@ -45,13 +49,29 @@ function SideDoors({ kind }: { kind: FloorKind }) {
     [],
   );
   useEffect(() => () => [geo.glass, ...geo.frames].forEach((g) => g.dispose()), [geo]);
+  useEffect(() => {
+    resetDoors(kind, floor);
+    return () => resetDoors(kind, floor, false);
+  }, [kind, floor]);
+  const leaves = useRef<(THREE.Group | null)[]>([]);
+  useFrame((_, dt) => {
+    tickDoors(playerAt.x, playerAt.z, Math.min(dt, 0.05), () => undefined);
+    for (const i of LEAVES) {
+      const g = leaves.current[i];
+      if (!g) continue;
+      const side = SIDES[i >> 1];
+      const dir = i & 1 ? 1 : -1;
+      const z = SIDE_OPENINGS[kind][side].door + dir * (LEAF_W / 2 - 0.02 + doorOpen(side) * SLIDE);
+      if (g.position.z !== z) g.position.z = z;
+    }
+  });
   return (
     <group>
       {LEAVES.map((i) => {
         const side = SIDES[i >> 1];
         const dir = i & 1 ? 1 : -1;
         return (
-          <group key={i} position={[wallX(side), 0, SIDE_OPENINGS[kind][side].door + dir * (LEAF_W / 2 - 0.02)]}>
+          <group key={i} ref={(g) => void (leaves.current[i] = g)} position={[wallX(side), 0, SIDE_OPENINGS[kind][side].door + dir * (LEAF_W / 2 - 0.02)]}>
             <mesh geometry={geo.glass} material={paneMaterial('room')} renderOrder={1} />
             <mesh geometry={geo.frames[i & 1]} material={toon('#e9ecef', { cut: 'room' })} />
           </group>
@@ -218,7 +238,7 @@ function Facade({ floor, top }: { floor: number; top: number }) {
 export function Outside({ kind, floor, top }: { kind: FloorKind; floor: number; top: number }) {
   return (
     <group>
-      <SideDoors kind={kind} />
+      <SideDoors kind={kind} floor={floor} />
       <Balconies kind={kind} floor={floor} top={Math.max(top, floor)} />
       <Facade floor={floor} top={Math.max(top, floor)} />
     </group>

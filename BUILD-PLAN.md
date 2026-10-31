@@ -182,17 +182,23 @@ The 3D scene, faces, speech bubbles and idle activities all read that model, so 
 
 **Done when:** `npm run dev -- --demo` opens on a floor of the demo office: each hired worker sits at a desk, types while their session runs (their monitor scrolling their log), looks pleased when their PR opens, and the floor picker moves between repos and the lobby. (Done: seen in a browser on the demo; the cheer is covered by `client/src/world/model.test.ts`.)
 
-## Phase 10: life in motion
+## Phase 10: the player and the room
 
-Walking (walk grid, paths, named spots), arrivals by elevator and leavers carrying a box, the merge celebration, speech bubbles about real work, the whiteboard Kanban, the day/night clock and synthesized sound effects.
+1. You have a body: first-person walking (WASD, mouse look, collisions) on every floor and out on the balconies, and Tab between first person and the overview (`Player.tsx`, `rig.ts`).
+2. The room as cubefarm furnishes it: the whiteboard Kanban on the north wall with the floor's live issues and PRs, the kitchenette with the coffee machine and fridge, the couch corner, the water cooler, the wall clock, and a ping-pong table.
+3. `E` to use: a desk opens its worker's terminal, the whiteboard the floor's board (`interact.ts`).
 
-## Phase 11: idle activities
+**Done when:** in the demo you walk round a floor in first person, can't walk through walls or furniture, see the board fill and empty as issues are built and merged, and open a worker's terminal with `E`. (Done: seen in a browser on the demo; collisions and doors are tested in `layout.test.ts` and `doors.test.ts`.)
 
-The errand system, then coffee runs, fridge snacks, stretches, chats and desk visits, fidgets, naps after a long idle, stand-ups at the whiteboard when new issues land, and lunch.
+## Phase 11: idle life
 
-## Phase 12: the player
+Workers get up: walking (walk grid, paths, named spots), the errand system, coffee runs, fridge snacks, stretches, chats and desk visits, fidgets, naps after a long idle, stand-ups at the whiteboard when new issues land, lunch, ping-pong between idle workers, speech bubbles about real work, the merge celebration, and arrivals by elevator and leavers carrying a box.
 
-First-person walking with collisions, `E` to use a desk's terminal, the whiteboard, the elevator or the console, saying hi to an idle worker, and the overview camera's click-a-worker.
+**Done when:** in the demo, idle workers wander off for coffee, chat, nap and play ping-pong, come back to their desks for the next task, and cheer a merge.
+
+## Phase 12: the day and the senses
+
+The day/night clock (lunch and going home need it), synthesized sound effects, saying hi to an idle worker, and the overview camera's click-a-worker.
 
 ## Phase 13: the manager UI
 

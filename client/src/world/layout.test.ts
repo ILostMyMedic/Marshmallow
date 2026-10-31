@@ -1,6 +1,6 @@
 // Adapted from cubefarm client/src/world/layout.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { BALCONY, DESK, DESK_ROWS, deskPosition, deskRotation, EAST_DESKS, EAST_ROTATION, FLOOR_HEIGHT, floorElevation, isEastDesk, MAX_DESKS, SEATS, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WINDOW } from './layout';
+import { BALCONY, BALCONY_OUT, collide, DESK, DESK_ROWS, deskPosition, deskRotation, EAST_DESKS, EAST_ROTATION, FLOOR_HEIGHT, floorElevation, HALF_D, HALF_W, isEastDesk, lobbyColliders, MAX_DESKS, officeColliders, outsideAt, outsideColliders, PLAYER_RADIUS, rect, SEATS, shellColliders, SIDE_DOOR, SIDE_OPENINGS, sideDoorway, sideSign, SIDES, SPAWN, WALL_H, WALL_T, WINDOW, type Rect } from './layout';
 
 describe('the desks', () => {
   it('numbers the grid first, then the east wall: a desk for every seat on a floor', () => {
@@ -46,5 +46,129 @@ describe('outside: side doors, windows and balconies', () => {
       expect(spans[spans.length - 1][1]).toBeLessThan(BALCONY.maxZ);
     }
     expect(WINDOW.y + WINDOW.h / 2).toBeLessThan(WALL_H - 0.3);
+  });
+});
+
+// ---------- the player's colliders (adapted from cubefarm's layout.test.ts) ----------
+
+const R = 0.3;
+const box: Rect = { minX: 0, maxX: 2, minZ: 0, maxZ: 2 };
+/** True when a circle of radius r at (x, z) overlaps any rect (touching doesn't count). */
+const overlaps = (p: { x: number; z: number }, rects: Rect[], r = R) => rects.some((b) => p.x > b.minX - r && p.x < b.maxX + r && p.z > b.minZ - r && p.z < b.maxZ + r);
+const touches = (b: Rect, c: Rect) => b.minX < c.maxX && b.maxX > c.minX && b.minZ < c.maxZ && b.maxZ > c.minZ;
+const all = (kind: 'office' | 'lobby') => (kind === 'office' ? officeColliders() : lobbyColliders());
+/** Walks towards `b` in steps of at most 0.1 m (a frame's worth, as Player.tsx does) from `a`; returns where it ends up. */
+const walk = (a: { x: number; z: number }, b: { x: number; z: number }, rects: Rect[]) => {
+  let p = a;
+  for (let i = 0; i < 1000; i++) {
+    const d = Math.hypot(b.x - p.x, b.z - p.z);
+    if (d < 1e-9) break;
+    const k = Math.min(1, 0.1 / d);
+    p = collide(p.x + (b.x - p.x) * k, p.z + (b.z - p.z) * k, rects);
+  }
+  return p;
+};
+
+describe('collide', () => {
+  it('leaves a player who is clear of every rect alone, and lets them touch one', () => {
+    expect(collide(5, 5, [box], R)).toEqual({ x: 5, z: 5 });
+    expect(collide(-R, 1, [box], R)).toEqual({ x: -R, z: 1 });
+  });
+
+  it('pushes out through the nearest side, from a deep overlap too', () => {
+    expect(collide(-0.1, 1, [box], R).x).toBeCloseTo(-R);
+    expect(collide(2.1, 1, [box], R).x).toBeCloseTo(2 + R);
+    expect(collide(1, -0.2, [box], R).z).toBeCloseTo(-R);
+    expect(collide(1, 1.9, [box], R).z).toBeCloseTo(2 + R);
+    expect(collide(0.4, 1, [box], R).x).toBeCloseTo(-R);
+  });
+
+  it('pushes a corner overlap along the shallower axis only', () => {
+    const p = collide(-0.2, -0.1, [box], R);
+    expect(p.x).toBeCloseTo(-R);
+    expect(p.z).toBe(-0.1);
+  });
+
+  it('gets the player out of an inside corner, with a second pass when one push lands in another rect', () => {
+    const westWall: Rect = { minX: -1, maxX: 0, minZ: -5, maxZ: 5 };
+    const northWall: Rect = { minX: -5, maxX: 5, minZ: -1, maxZ: 0 };
+    expect(overlaps(collide(0.1, 0.2, [westWall, northWall], R), [westWall, northWall])).toBe(false);
+    const desk: Rect = { minX: 0, maxX: 1, minZ: 0, maxZ: 0.5 };
+    expect(overlaps(collide(0.25, 0.25, [desk, westWall], R), [desk, westWall])).toBe(false);
+    expect(collide(-0.1, 1, [box]).x).toBeCloseTo(-PLAYER_RADIUS);
+  });
+
+  it('builds rects around their centre', () => {
+    expect(rect(1, 2, 4, 6)).toEqual({ minX: -1, maxX: 3, minZ: -1, maxZ: 5 });
+  });
+
+  it('spawns the player somewhere free on every floor', () => {
+    expect(collide(SPAWN.x, SPAWN.z, officeColliders())).toEqual({ x: SPAWN.x, z: SPAWN.z });
+    expect(collide(SPAWN.x, SPAWN.z, lobbyColliders())).toEqual({ x: SPAWN.x, z: SPAWN.z });
+  });
+
+  it("keeps the elevator's shut doors shut", () => {
+    expect(walk({ x: 0, z: SPAWN.z }, { x: 0, z: HALF_D + 2 }, officeColliders()).z).toBeLessThan(HALF_D);
+  });
+
+  it("gives the east wall's desks and their chairs solids, turned to face the wall", () => {
+    const office = officeColliders();
+    for (let s = MAX_DESKS; s < SEATS; s++) {
+      const { x, z } = deskPosition(s);
+      expect(office.some((b) => b.minX === x - (DESK.d + 0.1) / 2 && b.minZ === z - (DESK.w + 0.1) / 2), `desk ${s}`).toBe(true);
+    }
+  });
+});
+
+describe('walking outside', () => {
+  it.each(['office', 'lobby'] as const)('leaves a gap in each %s side wall for its door, and keeps the rest of the wall solid', (kind) => {
+    const shell = shellColliders(kind);
+    for (const side of SIDES) {
+      const s = sideSign(side);
+      const d = sideDoorway(kind, side);
+      expect(d.maxZ - d.minZ).toBeCloseTo(SIDE_DOOR.half * 2);
+      expect(shell.filter((b) => touches(b, d))).toEqual([]);
+      const wall = shell.filter((b) => b.minX === d.minX && b.maxX === d.maxX);
+      expect(wall.map((b) => [b.minZ, b.maxZ])).toEqual([
+        [-HALF_D, d.minZ],
+        [d.maxZ, HALF_D],
+      ]);
+      // no walking out through a window
+      for (const z of SIDE_OPENINGS[kind][side].windows) expect(Math.abs(walk({ x: s * (HALF_W - 1), z }, { x: s * (HALF_W + 1.5), z }, all(kind)).x)).toBeLessThan(HALF_W);
+    }
+  });
+
+  it.each(['office', 'lobby'] as const)('lets you walk from the %s floor straight out of each door to the railing, and back', (kind) => {
+    const rects = all(kind);
+    for (const side of SIDES) {
+      const s = sideSign(side);
+      const z = SIDE_OPENINGS[kind][side].door;
+      const inside = { x: s * (HALF_W - 2), z };
+      expect(collide(inside.x, inside.z, rects), `${kind} ${side} inside`).toEqual(inside);
+      const railing = { x: s * (BALCONY_OUT - BALCONY.railT - PLAYER_RADIUS - 0.01), z };
+      expect(walk(inside, railing, rects), `${kind} ${side} out`).toEqual(railing);
+      expect(walk(railing, inside, rects), `${kind} ${side} back`).toEqual(inside);
+      expect(s * walk(railing, { x: s * (BALCONY_OUT + 2), z }, rects).x).toBeCloseTo(BALCONY_OUT - BALCONY.railT - PLAYER_RADIUS);
+    }
+  });
+
+  it.each(['office', 'lobby'] as const)("keeps the room's furniture out of the way of the %s doors", (kind) => {
+    const shell = shellColliders(kind);
+    const outside = outsideColliders(kind);
+    const same = (b: Rect, c: Rect) => b.minX === c.minX && b.maxX === c.maxX && b.minZ === c.minZ && b.maxZ === c.maxZ;
+    const furniture = all(kind).filter((b) => !shell.some((w) => same(w, b)) && !outside.some((o) => same(o, b)));
+    for (const side of SIDES) {
+      const s = sideSign(side);
+      const z = SIDE_OPENINGS[kind][side].door;
+      const front: Rect = { minX: s < 0 ? -HALF_W : HALF_W - 2, maxX: s < 0 ? -HALF_W + 2 : HALF_W, minZ: z - SIDE_DOOR.half - 0.3, maxZ: z + SIDE_DOOR.half + 0.3 };
+      expect(furniture.filter((b) => touches(b, front)), `${kind} ${side}`).toEqual([]);
+    }
+  });
+
+  it('knows when the player is out', () => {
+    expect(outsideAt(0)).toBeNull();
+    expect(outsideAt(HALF_W)).toBeNull();
+    expect(outsideAt(-HALF_W - WALL_T)).toBe('west');
+    expect(outsideAt(HALF_W + 1)).toBe('east');
   });
 });

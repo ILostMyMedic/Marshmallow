@@ -145,7 +145,7 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [ ] **CEO walks the floors** · S
 - [ ] **Welcome tour** for new hires · S
 - [ ] **Hoops, toss and catch** with toys (needs physics toys) · M → `toyErrands.ts`
-- [ ] **Ping-pong** between workers · L → `toys/pong*`
+- [x] **Ping-pong** between workers · L → `toys/pong*`
 - [ ] **Roof breaks** (needs the roof) · S
 - [ ] **Office dog**: naps, fetches, rides the elevator · L → `toys/dog*`
 - [ ] **Roomba** · M

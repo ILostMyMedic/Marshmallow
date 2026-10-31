@@ -1,6 +1,8 @@
-// Adapted from cubefarm client/src/world/draw.ts (MIT): the terminal, name tags, signs, glass and the facade; the
-// whiteboard, the app screen and the browser pane come with their phases.
-import type { ActivityKind, LogLine, Worker } from '../../../shared/types';
+// Adapted from cubefarm client/src/world/draw.ts (MIT): the terminal, name tags, signs, glass, the facade and the
+// whiteboard; the app screen and the browser pane are cut.
+import type { ActivityKind, Floor, LogLine, Worker } from '../../../shared/types';
+import type { CardTone, KanbanCard, KanbanColumns } from '../kanban';
+import { seededAppearance } from './appearance';
 
 // 2D canvas painters for everything in the office that shows text: the desks' monitors, signs and name tags.
 
@@ -262,4 +264,165 @@ export function drawFacade(ctx: CanvasRenderingContext2D, w: number, h: number, 
   ctx.fillRect((x0 + x1) / 2 - 3, top, 6, bottom - top);
   ctx.fillStyle = '#1f1d2b';
   ctx.fillRect(x0 - 5, bottom + 5, x1 - x0 + 10, 2);
+}
+
+// ---------- the whiteboard (adapted from cubefarm draw.ts: drawKanban, drawNote) ----------
+
+/** `text` in at most `maxLines` lines no wider than `maxWidth`, the last one cut short with … if it all doesn't fit. */
+export function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (ctx.measureText(next).width <= maxWidth) cur = next;
+    else {
+      if (cur) lines.push(cur);
+      cur = w;
+      if (lines.length === maxLines) break;
+    }
+  }
+  if (lines.length < maxLines && cur) lines.push(cur);
+  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
+    let last = lines[maxLines - 1];
+    while (last.length > 1 && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
+    lines[maxLines - 1] = `${last}…`;
+  }
+  return lines;
+}
+
+/** Shorten text with an ellipsis until it fits in max pixels, in the context's current font. */
+function fitText(ctx: CanvasRenderingContext2D, text: string, max: number) {
+  let t = text;
+  while (t.length > 2 && ctx.measureText(t).width > max) t = `${t.slice(0, -2)}…`;
+  return t;
+}
+
+const COLS: { key: keyof KanbanColumns; title: string; chip: string; note: string }[] = [
+  { key: 'backlog', title: '📋 Backlog', chip: '#ffd166', note: '#fff3b0' },
+  { key: 'progress', title: '🔨 In progress', chip: '#4cc9f0', note: '#cfeefd' },
+  { key: 'qa', title: '🔍 In QA', chip: '#ff9f68', note: '#ffe3cf' },
+  { key: 'ready', title: '✅ Ready to merge', chip: '#80ed99', note: '#d8f9df' },
+  { key: 'merged', title: '🎉 Merged', chip: '#c77dff', note: '#eadcff' },
+];
+/** A toned card's sticky colour on the board. */
+const TONE: Record<CardTone, string> = { warn: '#ffd8a8', bad: '#ffc9c9', good: '#d8f9df' };
+
+/** Where drawKanban puts column `ci` on a canvas `w` pixels wide: its left edge and width (the stand-up's spots line up with them). */
+export function kanbanColumnSpan(ci: number, w: number) {
+  const colW = (w - 80) / COLS.length;
+  return { x0: 40 + ci * colW, colW };
+}
+
+const NOTE = { top: 96, h: 104, gap: 12, perCol: 2 };
+
+/** How many notes fit in a column on a canvas `h` pixels tall (one slot goes to "+N more" when there are more). */
+export const kanbanCapacity = (h: number) => Math.floor((h - NOTE.top - 70) / (NOTE.h + NOTE.gap)) * NOTE.perCol;
+
+/** Where drawKanban puts the `i`th note of column `ci` on a `w` wide canvas. */
+function kanbanNoteRect(ci: number, i: number, w: number) {
+  const { x0, colW } = kanbanColumnSpan(ci, w);
+  const nw = (colW - 48) / 2;
+  return { x: x0 + 16 + (i % NOTE.perCol) * (nw + 16), y: NOTE.top + 68 + Math.floor(i / NOTE.perCol) * (NOTE.h + NOTE.gap), w: nw, h: NOTE.h };
+}
+
+/** The floor's board: its name and sync, then the five columns of sticky notes. */
+export function drawKanban(ctx: CanvasRenderingContext2D, w: number, h: number, floor: Floor, cols: KanbanColumns) {
+  ctx.fillStyle = '#fbfbf8';
+  ctx.fillRect(0, 0, w, h);
+  // faint marker smudges
+  ctx.fillStyle = 'rgba(120,140,170,0.05)';
+  for (let i = 0; i < 6; i++) ctx.fillRect((i * 431) % w, (i * 97) % h, 260, 40);
+
+  ctx.textBaseline = 'middle';
+  ctx.font = `500 26px ${SANS}`;
+  const synced = floor.lastSync ? `synced ${new Date(floor.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'syncing…';
+  const status = `${floor.autoAssign ? '⚡ auto-assign on · ' : ''}${synced}`;
+  const statusW = ctx.measureText(status).width;
+  ctx.font = `700 46px ${SANS}`;
+  const nameW = Math.min(ctx.measureText(floor.fullName).width, w - 160 - statusW);
+  ctx.fillStyle = '#2d3142';
+  ctx.fillText(fitText(ctx, floor.fullName, nameW), 40, 48);
+  ctx.font = `500 26px ${SANS}`;
+  ctx.fillStyle = '#6c7086';
+  ctx.fillText(status, 40 + nameW + 28, 52);
+
+  const top = NOTE.top;
+  COLS.forEach((c, ci) => {
+    const { x0, colW } = kanbanColumnSpan(ci, w);
+    const cards = cols[c.key];
+    roundRect(ctx, x0 + 8, top, colW - 16, 52, 26);
+    ctx.fillStyle = c.chip;
+    ctx.fill();
+    ctx.fillStyle = '#1f2233';
+    ctx.font = `600 30px ${SANS}`;
+    ctx.fillText(`${c.title}  ${cards.length}`, x0 + 30, top + 27);
+    if (ci > 0) {
+      ctx.strokeStyle = '#d9dbe3';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x0, top);
+      ctx.lineTo(x0, h - 30);
+      ctx.stroke();
+    }
+    const capacity = kanbanCapacity(h);
+    const shown = cards.length > capacity ? cards.slice(0, capacity - 1) : cards;
+    shown.forEach((card, i) => {
+      const n = kanbanNoteRect(ci, i, w);
+      drawNote(ctx, n.x, n.y, n.w, n.h, card, card.tone ? TONE[card.tone] : c.note);
+    });
+    if (cards.length > shown.length) {
+      ctx.fillStyle = '#6c7086';
+      ctx.font = `600 26px ${SANS}`;
+      const n = kanbanNoteRect(ci, shown.length, w);
+      ctx.fillText(`+${cards.length - shown.length} more`, n.x + 14, n.y + n.h / 2);
+    }
+    if (cards.length === 0) {
+      ctx.fillStyle = '#b4b7c5';
+      ctx.font = `italic 500 26px ${SANS}`;
+      ctx.fillText(c.key === 'backlog' ? 'no open issues' : 'nothing here yet', x0 + 30, top + 110);
+    }
+  });
+}
+
+/** One sticky note: its number, its title in two lines, who's on it (a dot in their shirt colour) and its note. */
+function drawNote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, card: KanbanCard, color: string) {
+  const tilt = (((card.number * 37) % 7) - 3) * 0.006;
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(tilt);
+  ctx.translate(-w / 2, -h / 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(4, 6, w, h);
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  ctx.fillRect(0, 0, w, 10);
+
+  ctx.fillStyle = '#2d3142';
+  ctx.font = `700 22px ${SANS}`;
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${card.prNumber ? 'PR ' : ''}#${card.number}`, 14, 12);
+  ctx.font = `500 19px ${SANS}`;
+  wrap(ctx, card.title, w - 28, 2).forEach((l, i) => ctx.fillText(l, 14, 38 + i * 21));
+
+  ctx.textBaseline = 'middle';
+  if (card.worker) {
+    ctx.fillStyle = seededAppearance(card.worker).shirt;
+    ctx.beginPath();
+    ctx.arc(22, h - 15, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2d3142';
+    ctx.font = `600 17px ${SANS}`;
+    ctx.fillText(card.worker.name, 36, h - 14);
+  }
+  if (card.note) {
+    ctx.font = `500 16px ${SANS}`;
+    ctx.fillStyle = '#5c6078';
+    ctx.textAlign = 'right';
+    ctx.fillText(card.note, w - 12, h - 14);
+    ctx.textAlign = 'left';
+  }
+  ctx.restore();
+  ctx.textBaseline = 'middle';
 }

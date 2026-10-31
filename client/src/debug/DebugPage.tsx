@@ -8,7 +8,7 @@ import { CLAUDE_MODELS } from '../../../shared/models';
 import { command, floorPath, query } from '../api';
 import { qaKey, useStore } from '../store';
 import { activityIcon, momentText, taskText } from './describe';
-import { LiveTerminal } from './LiveTerminal';
+import { LiveTerminal } from '../ui/LiveTerminal';
 
 type Run = (method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown) => void;
 

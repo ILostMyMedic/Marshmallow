@@ -1,5 +1,5 @@
-// Adapted from cubefarm client/src/world/camera/cameraMath.ts (MIT): the overview ("dollhouse") orbit; the building view
-// and the follow cam come with the player.
+// Adapted from cubefarm client/src/world/camera/cameraMath.ts (MIT): the overview ("dollhouse") orbit and the flights
+// between it and first person; the building view and the follow cam are cut.
 
 // Camera poses for the overview, as plain numbers (Game.tsx puts them on the three.js camera). Pure and allocation-free:
 // every function writes into an `out` it's given. Yaw and pitch are Euler 'YXZ', yaw 0 looking north (-Z); an orbit is a
@@ -20,6 +20,17 @@ export interface Pose {
 
 export const newPose = (): Pose => ({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, fov: 72, near: 0.05 });
 
+export function copyPose(a: Pose, out: Pose) {
+  out.x = a.x;
+  out.y = a.y;
+  out.z = a.z;
+  out.yaw = a.yaw;
+  out.pitch = a.pitch;
+  out.fov = a.fov;
+  out.near = a.near;
+  return out;
+}
+
 export interface Orbit {
   fx: number;
   fy: number;
@@ -31,6 +42,17 @@ export interface Orbit {
 }
 
 export const newOrbit = (): Orbit => ({ fx: 0, fy: 0, fz: 0, yaw: 0, el: 0, dist: 10, fov: 60 });
+
+export function copyOrbit(a: Orbit, out: Orbit) {
+  out.fx = a.fx;
+  out.fy = a.fy;
+  out.fz = a.fz;
+  out.yaw = a.yaw;
+  out.el = a.el;
+  out.dist = a.dist;
+  out.fov = a.fov;
+  return out;
+}
 
 /** The shortest signed turn from angle a to angle b, in (-π, π]. */
 export function angleDelta(a: number, b: number) {
@@ -51,6 +73,36 @@ export function orbitPose(o: Orbit, out: Pose) {
   out.pitch = -o.el;
   out.fov = o.fov;
   out.near = nearFor(o.dist);
+  return out;
+}
+
+/** Aims a pose at (fx, fy, fz) from where it is. */
+export function aimAt(p: Pose, fx: number, fy: number, fz: number) {
+  const dx = p.x - fx;
+  const dz = p.z - fz;
+  p.yaw = Math.atan2(dx, dz);
+  p.pitch = Math.atan2(fy - p.y, Math.hypot(dx, dz));
+  return p;
+}
+
+/** Smooth in and out, 0 to 1. */
+export const ease = (t: number) => {
+  const k = Math.min(1, Math.max(0, t));
+  return k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2;
+};
+
+/**
+ * Part way (t, 0 to 1) from pose a to pose b, the short way round in yaw. The near plane stays close until late, so
+ * nothing near the camera is cut off while it's still close to it.
+ */
+export function blendPose(a: Pose, b: Pose, t: number, out: Pose) {
+  out.x = a.x + (b.x - a.x) * t;
+  out.y = a.y + (b.y - a.y) * t;
+  out.z = a.z + (b.z - a.z) * t;
+  out.yaw = a.yaw + angleDelta(a.yaw, b.yaw) * t;
+  out.pitch = a.pitch + (b.pitch - a.pitch) * t;
+  out.fov = a.fov + (b.fov - a.fov) * t;
+  out.near = b.near > a.near ? a.near + (b.near - a.near) * t ** 4 : a.near + (b.near - a.near) * t;
   return out;
 }
 

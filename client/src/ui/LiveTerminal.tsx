@@ -100,6 +100,11 @@ export function LiveTerminal({ workerId }: { workerId: string }) {
     connect();
 
     const input = term.onData((data) => send({ t: 'input', data }));
+    // Esc belongs to the CLI (it interrupts Claude Code) while you're typing in the terminal, not to the panel.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') e.stopPropagation();
+    };
+    el.addEventListener('keydown', onKey);
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(fitAndTell);
@@ -112,6 +117,7 @@ export function LiveTerminal({ workerId }: { workerId: string }) {
       cancelAnimationFrame(frame);
       ro.disconnect();
       input.dispose();
+      el.removeEventListener('keydown', onKey);
       ws?.close();
       term.dispose();
     };

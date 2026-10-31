@@ -1,17 +1,20 @@
-// The game: the floor you're looking at in 3D, from above with its near walls and the floors above cut away, its
-// workers at their desks, and the city round the building. A picker along the bottom moves between floors and the
-// lobby. Adapted from cubefarm client/src/world/Game.tsx (MIT): the canvas, lights and sky; the overview camera's
-// controls are rewritten (cubefarm's live in camera/rig.ts, with the first-person player).
+// The game: the floor you're on in 3D, walked in first person or looked down on in the overview (rig.ts), its workers at
+// their desks and its furniture, and the city round the building. A picker along the bottom moves between floors and
+// the lobby; panels (a terminal, the board) open over the view. Adapted from cubefarm client/src/world/Game.tsx and
+// camera/CameraRig.tsx (MIT): the canvas, lights and sky, and the overview's mouse.
 import { useEffect, useMemo } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../store';
-import { dampOrbit, newOrbit, newPose, orbitPose, OVERVIEW, overviewOrbit, panOrbit, type Orbit } from './cameraMath';
+import { HUD } from '../ui/HUD';
+import { Overlays } from '../ui/Overlays';
+import { OVERVIEW } from './cameraMath';
 import { City } from './City';
-import { setCut } from './cutaway';
-import { floorElevation } from './layout';
+import { floorElevation, lobbyColliders, officeColliders } from './layout';
 import { Lobby, OfficeFloor } from './OfficeFloor';
 import { AdaptiveResolution, currentDpr } from './perf';
+import { Player } from './Player';
+import { bindCamera, orbitBy, panBy, setViewport, zoomBy } from './rig';
 import { useView } from './view';
 
 const SKY = '#bfe3ff';
@@ -30,87 +33,54 @@ function Lights() {
 }
 
 /**
- * The overview: an orbit round the floor, fitted to the window to start with. Drag to turn it (and tilt it), the wheel
- * zooms, a right-drag (or shift-drag) pans. The walls facing the camera are cut away as it turns (cutaway.ts).
+ * Hands the camera and the view's size to the rig, and takes the overview's mouse: a drag turns it round the floor (and
+ * tilts it), a right-drag or shift-drag pans, the wheel zooms. Mouse events, so the player's quiet guard can swallow
+ * them after a click that opened something.
  */
-function OverviewCamera() {
+function CameraRig() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
   const dom = useThree((s) => s.gl.domElement);
-  const st = useMemo(() => ({ cur: newOrbit(), goal: newOrbit(), pose: newPose(), fit: 1, placed: false }), []);
-
-  // Fit the floor to the window, and again when it's resized (keeping how far in the manager has zoomed).
   useEffect(() => {
-    const aspect = size.width / Math.max(1, size.height);
-    const fitted = overviewOrbit(st.placed ? st.goal.yaw : 0, aspect, newOrbit());
-    const zoom = st.placed ? st.goal.dist / st.fit : 1;
-    st.fit = fitted.dist;
-    if (!st.placed) {
-      Object.assign(st.goal, fitted);
-      Object.assign(st.cur, fitted);
-      st.placed = true;
-    } else st.goal.dist = fitted.dist * zoom;
-  }, [size.width, size.height, st]);
-
+    bindCamera(camera);
+    return () => bindCamera(null);
+  }, [camera]);
+  useEffect(() => setViewport(size.width, size.height), [size.width, size.height]);
   useEffect(() => {
     let drag: { x: number; y: number; pan: boolean } | null = null;
-    const zoomTo = (o: Orbit, d: number) => (o.dist = Math.min(st.fit * OVERVIEW.maxZoom, Math.max(OVERVIEW.minDist, d)));
-    const down = (e: PointerEvent) => {
-      drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
-      dom.setPointerCapture(e.pointerId);
+    const overview = () => useView.getState().mode === 'overview' && !useView.getState().overlay;
+    const down = (e: MouseEvent) => {
+      if (overview()) drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
     };
-    const move = (e: PointerEvent) => {
+    const move = (e: MouseEvent) => {
       if (!drag) return;
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
       drag.x = e.clientX;
       drag.y = e.clientY;
-      const g = st.goal;
-      if (drag.pan) {
-        const perPx = (2 * g.dist * Math.tan((g.fov * Math.PI) / 360)) / Math.max(1, dom.clientHeight);
-        panOrbit(g, -dx * perPx, (dy * perPx) / Math.sin(g.el));
-      } else {
-        g.yaw -= dx * 0.006;
-        g.el = Math.min(OVERVIEW.maxEl, Math.max(OVERVIEW.minEl, g.el + dy * 0.004));
-      }
+      if (drag.pan) panBy(dx, dy);
+      else orbitBy(dx, dy);
     };
-    const up = (e: PointerEvent) => {
-      drag = null;
-      if (dom.hasPointerCapture(e.pointerId)) dom.releasePointerCapture(e.pointerId);
-    };
+    const up = () => (drag = null);
     const wheel = (e: WheelEvent) => {
+      if (!overview()) return;
       e.preventDefault();
-      zoomTo(st.goal, st.goal.dist * Math.exp(e.deltaY * 0.0012));
+      zoomBy(e.deltaY);
     };
     const menu = (e: Event) => e.preventDefault();
-    dom.addEventListener('pointerdown', down);
-    dom.addEventListener('pointermove', move);
-    dom.addEventListener('pointerup', up);
-    dom.addEventListener('pointercancel', up);
+    dom.addEventListener('mousedown', down);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
     dom.addEventListener('wheel', wheel, { passive: false });
     dom.addEventListener('contextmenu', menu);
     return () => {
-      dom.removeEventListener('pointerdown', down);
-      dom.removeEventListener('pointermove', move);
-      dom.removeEventListener('pointerup', up);
-      dom.removeEventListener('pointercancel', up);
+      dom.removeEventListener('mousedown', down);
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
       dom.removeEventListener('wheel', wheel);
       dom.removeEventListener('contextmenu', menu);
     };
-  }, [dom, st]);
-
-  useFrame((_, delta) => {
-    dampOrbit(st.cur, st.goal, Math.min(delta, 0.1), 8);
-    const p = orbitPose(st.cur, st.pose);
-    camera.position.set(p.x, p.y, p.z);
-    camera.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
-    if (camera.fov !== p.fov || camera.near !== p.near) {
-      camera.fov = p.fov;
-      camera.near = p.near;
-      camera.updateProjectionMatrix();
-    }
-    setCut(st.cur.yaw);
-  });
+  }, [dom]);
   return null;
 }
 
@@ -149,6 +119,8 @@ export function Game() {
   const shown = picked !== null && (picked === 0 || floors.some((f) => f.floor === picked)) ? picked : (busiest?.floor ?? 0);
   const floor = floors.find((f) => f.floor === shown) ?? null;
   const top = floors.reduce((n, f) => Math.max(n, f.floor), 0);
+  const lobby = !floor;
+  const colliders = useMemo(() => (lobby ? lobbyColliders() : officeColliders()), [lobby]);
 
   if (!loaded) return <div className="game-loading">Connecting to the office…</div>;
   return (
@@ -169,19 +141,22 @@ export function Game() {
         <color attach="background" args={[SKY]} />
         <fog attach="fog" args={[HAZE, 90, 320]} />
         <Lights />
-        <OverviewCamera />
+        <CameraRig />
+        <Player floor={shown} colliders={colliders} />
         <AdaptiveResolution />
-        {floor ? <OfficeFloor key={floor.id} floorId={floor.id} floor={floor.floor} top={top} color={floor.color} /> : <Lobby top={top} />}
+        {floor ? <OfficeFloor key={floor.id} floor={floor} top={top} /> : <Lobby top={top} />}
         <City elevation={floorElevation(shown)} />
       </Canvas>
       <header className="game-title">
         <strong>{floor ? floor.fullName : 'Lobby'}</strong>
         {floor?.summary && <span>{floor.summary}</span>}
       </header>
+      <HUD />
       <FloorPicker shown={shown} />
       <a className="game-debug" href="/debug">
         Debug page
       </a>
+      <Overlays />
     </div>
   );
 }

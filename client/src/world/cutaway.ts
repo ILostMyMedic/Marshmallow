@@ -8,7 +8,7 @@ import { HALF_D, HALF_W, WALL_H } from './layout';
 const OPEN = 1e6;
 // In from the walls' inner faces, so the window sills (which stick 0.11 m into the room) go with their wall.
 const WALL_CUT = 0.15;
-const CEILING = new THREE.Plane(new THREE.Vector3(0, -1, 0), WALL_H - 0.08);
+const CEILING = new THREE.Plane(new THREE.Vector3(0, -1, 0), OPEN);
 const SIDE_X = new THREE.Plane(new THREE.Vector3(-1, 0, 0), OPEN);
 const SIDE_Z = new THREE.Plane(new THREE.Vector3(0, 0, -1), OPEN);
 
@@ -20,11 +20,19 @@ export const CUT_PLANES: Record<Cut, THREE.Plane[]> = { room: [CEILING, SIDE_X, 
 
 const sides = { x: 0, z: 0 };
 
-/** Cuts away the walls facing a camera on bearing `yaw`. */
+/** Cuts away the ceiling, what's above your floor and the walls facing a camera on bearing `yaw` (the overview). */
 export function setCut(yaw: number) {
+  CEILING.constant = WALL_H - 0.08;
   nearSides(yaw, sides);
   SIDE_X.constant = sides.x ? HALF_W - WALL_CUT : OPEN;
   SIDE_X.normal.set(-sides.x || -1, 0, 0);
   SIDE_Z.constant = sides.z ? HALF_D - WALL_CUT : OPEN;
   SIDE_Z.normal.set(0, 0, -sides.z || -1);
+}
+
+/** Nothing cut away: first person, where you see the ceiling and, out on a balcony, the floors above. */
+export function cutOff() {
+  CEILING.constant = OPEN;
+  SIDE_X.constant = OPEN;
+  SIDE_Z.constant = OPEN;
 }

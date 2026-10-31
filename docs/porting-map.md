@@ -201,3 +201,13 @@ Each game item in FEATURES.md sections 7 to 11 names its cubefarm source. The wo
 - **Rewritten:** `model.ts` (from cubefarm's spread-out trackers: working, idle or celebrating from status and moments), a seated-only `Character.tsx`, `City.tsx` (instanced toon boxes with windows painted per face in metres; cubefarm's is tied to its sky), `Game.tsx` with the overview's controls (cubefarm's live in `camera/rig.ts` with the player), a thin `OfficeFloor.tsx` and `Lobby`, and the floor picker.
 - **Waiting for their phases:** walking, errands, the elevator (a shut door for now), the whiteboard, sounds, the day/night clock (fixed daylight), first person.
 
+### Phase 10: the player and the room
+
+**Done.** Things that differ from cubefarm:
+- **Copied or adapted with their tests:** `layout.ts`'s colliders (no toy heights; the furniture's spots named once: `COUCH`, `KITCHEN`, `COOLER`, `CLOCK`, `PONG_TABLE`, `OFFICE_PLANTS`, with cubefarm's values; plants are solid; the shut elevator doorway is a collider; `lobbyColliders` covers only what the lobby draws), `doors.ts`, `look.ts`, `lookLockRules.ts`, and cameraMath's pose helpers.
+- **The rig** (`rig.ts`): first person and the overview only, with the flights between them; floor changes are instant. The overview's mouse writes the rig's goal (`Game.tsx` `CameraRig`), and the Player steps the rig while it has the camera. Tab-local state (mode, overlay, focus, locked) lives in `view.ts`, not the office store.
+- **The player** (`Player.tsx`): walking, looking and E; toys, held things, the gamepad, perches, photo mode, saved spots and key bindings are cut. `window.__mmPlayer` places the camera for checks in a browser.
+- **Furniture as it stands still** (`Props.tsx`, `PongTable.tsx`): the coffee machine, mug stack and fridge keep cubefarm's places on the counter for the errands; brewing, mugs and the fridge door come with idle life. The pong scoreboard and leaderboard are cut.
+- **The whiteboard:** `client/src/kanban.ts` (kanbanFor and qaCardNote, with tests), `draw.ts` `drawKanban` with fixed tones, and `KanbanBoard.tsx` without stickies, strings or stats. Wall-hung things carry the room's cut.
+- **Panels:** `ui/Panel.tsx`, `ui/Overlays.tsx` (a worker's terminal and the board, read-only), `ui/HUD.tsx`; `LiveTerminal` moved to `ui/` and keeps Esc for the CLI.
+

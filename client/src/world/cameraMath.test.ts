@@ -1,6 +1,6 @@
 // Adapted from cubefarm client/src/world/camera/cameraMath.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { allInView, angleDelta, dampOrbit, fitDistance, nearestQuad, nearSides, newOrbit, newPose, orbitPose, OVERVIEW, overviewOrbit, panOrbit, quadYaw } from './cameraMath';
+import { aimAt, allInView, angleDelta, blendPose, dampOrbit, ease, fitDistance, nearestQuad, nearSides, newOrbit, newPose, orbitPose, OVERVIEW, overviewOrbit, panOrbit, quadYaw } from './cameraMath';
 import { HALF_D, HALF_W, WALL_H } from './layout';
 
 const forward = (p: { yaw: number; pitch: number }) => [-Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch), -Math.cos(p.yaw) * Math.cos(p.pitch)];
@@ -60,7 +60,34 @@ describe('the overview', () => {
   });
 });
 
+describe('aimAt', () => {
+  it('turns a pose to face a point', () => {
+    const p = aimAt({ ...newPose(), x: 3, y: 2, z: 4 }, 0, 1, 0);
+    const f = forward(p);
+    const d = [-3, -1, -4];
+    const n = Math.hypot(...d);
+    for (let i = 0; i < 3; i++) expect(f[i]).toBeCloseTo(d[i] / n);
+  });
+});
+
 describe('poses in motion', () => {
+  it('blends the short way round and ends exactly on the goal', () => {
+    const a = { ...newPose(), yaw: 3, x: 0 };
+    const b = { ...newPose(), yaw: -3, x: 10, near: 1 };
+    const mid = blendPose(a, b, 0.5, newPose());
+    expect(mid.x).toBeCloseTo(5);
+    expect(Math.abs(angleDelta(mid.yaw, Math.PI))).toBeLessThan(0.01); // through π, not 0
+    expect(mid.near).toBeLessThan(0.2); // the near plane moves out late
+    expect(blendPose(a, b, 1, newPose())).toMatchObject({ x: 10, near: 1 });
+  });
+
+  it('eases from 0 to 1', () => {
+    expect(ease(0)).toBe(0);
+    expect(ease(1)).toBe(1);
+    expect(ease(0.5)).toBeCloseTo(0.5);
+    expect(ease(0.25)).toBeLessThan(0.25);
+  });
+
   it('turns the short way round', () => {
     expect(angleDelta(0.1, -0.1)).toBeCloseTo(-0.2);
     expect(angleDelta(3, -3)).toBeCloseTo(2 * Math.PI - 6);

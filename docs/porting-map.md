@@ -90,6 +90,16 @@ Every ported file gets the header `Adapted from cubefarm <path> (MIT).`; the fir
 
 ## Phase 5: Claude sessions
 
+**Done.** Things that differ from cubefarm:
+- **Claude Code only:** `clis.ts` and `cliRunner.ts` lost the Codex and OpenCode branches, the Box branches (phase 7 brings them back) and the keepers. `claudeCommand()` runs the Claude Code the Agent SDK bundles, so the hooks match the version the office was written against.
+- **Local models** (new): `modelEnv` gives a worker on `ollama/<name>` the server's `ANTHROPIC_BASE_URL`, a dummy `ANTHROPIC_AUTH_TOKEN`, an empty `ANTHROPIC_API_KEY`, and the local name for every model Claude Code reaches for (main, the haiku/sonnet/opus defaults and subagents). `launchArgs` asks for the local name and leaves out `--effort`. The status line's cost and limits are ignored for local models: Claude Code prices a model it doesn't know as if it were Claude's.
+- **No inherited MCP servers:** cubefarm layers the office's servers on top of the manager's own; Marshmallow adds `--strict-mcp-config`, so a worker that approves its own tool calls never reaches the manager's servers or claude.ai connectors. The manager's settings, skills and plugins still load.
+- **Format helpers** live in `server/sessions/format.ts`, not in a runner file.
+- **Terminals:** `server/sessions/terminals.ts` keeps one `WorkerTerminal` per worker, saves the dirty ones every 10 s to `<home>/terminals/<id>.ansi`, and serves `/ws/term?worker=<id>`. The demo writes its scripted sessions into the same terminal.
+- **Settings:** `server/settings.ts` validates `PATCH /api/settings`; a worker's model and effort go through `PATCH /api/workers/:id`. The debug page has a default-model field, a model field per worker and a terminal per worker.
+- **Desk setup:** `server/machines/deskSetup.ts` was copied with its test. Preparing a desk closes the worker's CLI waiting at its prompt first, since Windows can't clear a folder that a process has as its working directory.
+- **Verified** on the sandbox: issue #3 went build → QA → merge on `ollama/gpt-oss:20b` (PR #5), and issue #1 on Opus 5.5 (PR #6), with the Phase 4 answer in its prompt.
+
 | Marshmallow | cubefarm | Verdict | Notes |
 | --- | --- | --- | --- |
 | `server/sessions/session.ts` | `server/agentRunner.ts`: the types at the top (`SessionOptions`, `LogEntry`, `SessionResult`, `SessionCallbacks`, `SessionHandle`) and its helpers (`describeTool`, `summariseResult`, `tidyPaths`, `todoLines`, `resultText`, `screenshotFile`, `newScreenshots`, `clip`) | Adapt | Leave the `box` and `office` fields until phases 6 and 7 need them. |

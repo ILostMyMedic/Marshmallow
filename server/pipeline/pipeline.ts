@@ -4,6 +4,7 @@
 // Adapted from cubefarm server/swarm.ts (MIT): reconcilePulls, stopAgent, resetAgent.
 import type { Backend } from '../backend/backend.ts';
 import type { Floors } from '../floors.ts';
+import type { Terminals } from '../sessions/terminals.ts';
 import type { Store } from '../store.ts';
 import { Build } from './build.ts';
 import { clearTask, type Ctx } from './context.ts';
@@ -30,9 +31,10 @@ export interface Pipeline {
   sweep(): Promise<void>;
 }
 
-export function createPipeline(store: Store, backend: Backend, floors: Floors): Pipeline {
+/** `terminals`: each worker's terminal, which their sessions run in (null in tests that don't watch them). */
+export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null): Pipeline {
   const usage = new Usage(store);
-  const sessions = new Sessions(store, backend, { limited: (at) => usage.limited(at), usageWarning: (info) => usage.warned(info) });
+  const sessions = new Sessions(store, backend, { limited: (at) => usage.limited(at), usageWarning: (info) => usage.warned(info) }, terminals);
   const ctx = { store, backend, sessions, floors, usage, prepStrikes: new Map(), soon: (ms?: number) => scheduler.soon(ms) } as Ctx;
   ctx.build = new Build(ctx);
   ctx.qa = new Qa(ctx);

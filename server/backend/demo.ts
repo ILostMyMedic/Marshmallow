@@ -3,7 +3,9 @@
 // start.
 // Adapted from cubefarm server/demo.ts (MIT).
 import path from 'node:path';
+import type { LogEntry } from '../../shared/types.ts';
 import type { MachineProvider } from '../machines/machines.ts';
+import type { SessionCallbacks, SessionOptions } from '../sessions/session.ts';
 import type { Backend } from './backend.ts';
 import { FakeGitHub } from './demoGithub.ts';
 import { fakeSession } from './demoSessions.ts';
@@ -26,6 +28,36 @@ const DEFAULT_TIMING: DemoTiming = {
   checksMs: () => 12_000 + Math.random() * 10_000,
   closeAfterMergeMs: 5_000,
 };
+
+// How each kind of log line looks in the worker's terminal.
+const ANSI: Record<LogEntry['kind'], (text: string) => string> = {
+  text: (t) => t,
+  tool: (t) => `\x1b[36m${t}\x1b[0m`,
+  result: (t) => `\x1b[2m${t}\x1b[0m`,
+  system: (t) => `\x1b[2m${t}\x1b[0m`,
+  error: (t) => `\x1b[31m${t}\x1b[0m`,
+  manager: (t) => `\x1b[35m${t}\x1b[0m`,
+  done: (t) => `\x1b[32m${t}\x1b[0m`,
+  thinking: (t) => `\x1b[2;3m${t}\x1b[0m`,
+};
+
+/** A fake session's lines also go into the worker's terminal, as a real CLI would draw them. */
+function inTerminal(o: SessionOptions, cb: SessionCallbacks): SessionCallbacks {
+  const term = o.terminal;
+  if (!term) return cb;
+  term.note(`── Claude Code (demo)${o.label ? ` · ${o.label}` : ''} ──`);
+  return {
+    ...cb,
+    log: (entries) => {
+      for (const e of entries) term.write(`${ANSI[e.kind](e.text)}\r\n`);
+      cb.log(entries);
+    },
+    finished: (r) => {
+      term.note(r.ok ? '── session ended ──' : `── session ended: ${r.errors.join('; ')} ──`);
+      cb.finished(r);
+    },
+  };
+}
 
 export interface DemoBackend extends Backend {
   github: FakeGitHub;
@@ -86,7 +118,7 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
     ensureClone: () => wait(timing.cloneMs),
     mainDir: (fullName) => `/demo/${fullName}/main`,
     machines,
-    startSession: (o, cb) => fakeSession(o, cb, { github, desk: desks.get(o.cwd) ?? null, rand, stepMs: timing.stepMs }),
+    startSession: (o, cb) => fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.cwd) ?? null, rand, stepMs: timing.stepMs }),
     reset: () => {
       github.reset();
       desks.clear();

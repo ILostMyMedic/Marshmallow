@@ -6,6 +6,7 @@ import type { Activity, Worker } from '../../shared/types.ts';
 import type { Backend } from '../backend/backend.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../sessions/session.ts';
+import type { Terminals } from '../sessions/terminals.ts';
 import type { Store } from '../store.ts';
 
 /** A screenshot a session took. */
@@ -40,10 +41,17 @@ export class Sessions {
     private readonly backend: Backend,
     /** What Claude says about the subscription's usage during any session (the pacing listens). */
     private readonly usage: Pick<SessionCallbacks, 'limited' | 'usageWarning'> = {},
+    /** Each worker's terminal, which their sessions run (or print) in; none in tests that don't need one. */
+    private readonly terminals: Terminals | null = null,
   ) {}
 
   isRunning(workerId: string): boolean {
     return this.running.has(workerId);
+  }
+
+  /** The worker's terminal, if they have one (a CLI may be waiting at its prompt in it). */
+  terminalOf(workerId: string) {
+    return this.terminals?.existing(workerId) ?? null;
   }
 
   /**
@@ -58,7 +66,7 @@ export class Sessions {
     this.store.patchWorker(workerId, { status: 'working', activity: this.signOf(working, rt) });
     try {
       rt.handle = this.backend.startSession(
-        { ...opts, workerId },
+        { ...opts, workerId, terminal: this.terminals?.for(workerId) },
         {
           log: (entries) => {
             if (this.running.get(workerId) !== rt || !this.store.hasWorker(workerId)) return;

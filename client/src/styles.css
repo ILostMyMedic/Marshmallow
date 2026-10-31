@@ -165,3 +165,42 @@ td {
 .moments li {
   padding: 2px 0;
 }
+
+.model-field {
+  width: 16ch;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.live-term {
+  margin: 6px 0 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #1b1b29;
+}
+
+.live-term-screen {
+  height: 360px;
+  padding: 6px;
+}
+
+.live-term-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  color: #c8c8d8;
+  background: #26263a;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6c6f93;
+}
+
+.live-dot-on {
+  background: #50fa7b;
+}

@@ -1,11 +1,13 @@
 // The debug page: every floor with its workers, queue and pull requests, the office's messages and the latest
 // moments. It stays on as the admin view once the game exists. In the demo it can also hire and let go of pretend
 // workers, and fake Claude's usage warning or limit (server/demoRoutes.ts).
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { isBusy, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
+import { CLAUDE_MODELS } from '../../../shared/models';
 import { command, floorPath, query } from '../api';
 import { qaKey, useStore } from '../store';
 import { activityIcon, momentText, taskText } from './describe';
+import { LiveTerminal } from './LiveTerminal';
 
 type Run = (method: 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown) => void;
 
@@ -19,6 +21,7 @@ export function DebugPage() {
   const version = useStore((s) => s.version);
   const floors = useStore((s) => s.floors);
   const usage = useStore((s) => s.usage);
+  const settings = useStore((s) => s.settings);
   const [error, setError] = useState('');
 
   // What a command changes arrives over /ws, so only a refusal needs showing here.
@@ -41,6 +44,7 @@ export function DebugPage() {
         )}
         {version && <span className="muted">v{version}</span>}
         <span className="spacer" />
+        <ModelField label="default model" value={settings.defaultModel} placeholder="claude-opus-5-5" onCommit={(v) => v && run('PATCH', '/api/settings', { defaultModel: v })} />
         <ConnectRepo run={run} />
         {demo && (
           <>
@@ -194,6 +198,8 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
   const team = Object.values(workers)
     .filter((w) => w.floorId === floor.id)
     .sort((a, b) => a.desk - b.desk);
+  const defaultModel = useStore((s) => s.settings.defaultModel);
+  const [openTerm, setOpenTerm] = useState<string | null>(null);
   const name = (id: string | null) => (id && workers[id]?.name) || '—';
   const fp = floorPath(floor.id);
 
@@ -229,12 +235,14 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                 <th scope="col">Task</th>
                 <th scope="col">Doing</th>
                 <th scope="col">Last line</th>
+                <th scope="col">Model</th>
                 <th scope="col" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
               {team.map((w) => (
-                <tr key={w.id}>
+                <Fragment key={w.id}>
+                <tr>
                   <th scope="row">{w.name}</th>
                   <td>
                     <span className={`status status-${w.status}`}>{w.status}</span>
@@ -244,7 +252,11 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                   <td>{taskText(w.task) || <span className="muted">—</span>}</td>
                   <td>{w.activity ? `${activityIcon(w.activity.kind)} ${w.activity.detail}` : <span className="muted">—</span>}</td>
                   <td className="last-line">{logs[w.id]?.at(-1)?.text}</td>
+                  <td>
+                    <ModelField value={w.model} placeholder={defaultModel} onCommit={(v) => run('PATCH', `/api/workers/${w.id}`, { model: v })} />
+                  </td>
                   <td className="actions">
+                    <button onClick={() => setOpenTerm(openTerm === w.id ? null : w.id)}>{openTerm === w.id ? 'Hide terminal' : 'Terminal'}</button>
                     <button disabled={!isBusy(w.status)} onClick={() => run('POST', `/api/workers/${w.id}/stop`)}>
                       Stop
                     </button>
@@ -254,6 +266,14 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                     <button onClick={() => run('DELETE', `/api/workers/${w.id}`)}>Let go</button>
                   </td>
                 </tr>
+                {openTerm === w.id && (
+                  <tr>
+                    <td colSpan={7}>
+                      <LiveTerminal workerId={w.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -361,3 +381,36 @@ function Moments() {
     </section>
   );
 }
+
+/** A model name, saved when you press Enter or leave the field; empty means the office default. */
+function ModelField({ value, placeholder, onCommit, label }: { value: string; placeholder: string; onCommit: (v: string) => void; label?: string }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => draft.trim() !== value && onCommit(draft.trim());
+  const input = (
+    <input
+      className="model-field"
+      value={draft}
+      placeholder={placeholder}
+      list="model-suggestions"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      aria-label={label ?? 'model'}
+    />
+  );
+  return label ? (
+    <label className="connect">
+      {label} {input}
+      <datalist id="model-suggestions">
+        {MODEL_SUGGESTIONS.map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
+    </label>
+  ) : (
+    input
+  );
+}
+
+const MODEL_SUGGESTIONS = [...CLAUDE_MODELS, 'ollama/gpt-oss:20b', 'ollama/qwen3:8b'];

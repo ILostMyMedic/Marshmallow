@@ -3,6 +3,7 @@
 // Adapted from cubefarm server/agentRunner.ts (MIT).
 import type { EffortLevel, LogEntry, TaskKind } from '../../shared/types.ts';
 import type { UsageWarning } from '../pipeline/pacing.ts';
+import type { WorkerTerminal } from './terminal.ts';
 
 export interface SessionOptions {
   cwd: string;
@@ -28,6 +29,8 @@ export interface SessionOptions {
   /** Leave the CLI waiting at its prompt when the task is done, for the manager and for follow-ups. */
   keepAlive?: boolean;
   workerId?: string;
+  /** The worker's terminal: the real CLI runs in it, the demo prints into it. */
+  terminal?: WorkerTerminal;
 }
 
 export interface SessionResult {

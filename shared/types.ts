@@ -274,6 +274,16 @@ export type Moment =
   | { type: 'qaFailed'; at: number; floorId: string; prNumber: number; qaWorkerId: string | null }
   | { type: 'merged'; at: number; floorId: string; prNumber: number; devWorkerId: string | null };
 
+/** Server to browser on /ws/term: a worker's terminal. */
+export type TermServerMessage =
+  | { t: 'snapshot'; data: string; cols: number; rows: number; live: boolean } // the screen and scrollback so far
+  | { t: 'data'; data: string }
+  | { t: 'size'; cols: number; rows: number } // another viewer resized the terminal
+  | { t: 'live'; live: boolean }; // a CLI is (or is no longer) running in it
+
+/** Browser to server on /ws/term: keystrokes go to the running CLI; the size is the viewer's fitted terminal. */
+export type TermClientMessage = { t: 'input'; data: string } | { t: 'resize'; cols: number; rows: number };
+
 /** Everything the server sends over /ws. */
 export type ServerEvent = StateEvent | Moment;
 

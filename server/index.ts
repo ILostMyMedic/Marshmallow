@@ -13,7 +13,10 @@ import { demoRoutes } from './demoRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
 import { createPipeline } from './pipeline/pipeline.ts';
+import { handleHook, releaseClis, setOfficeUrl } from './sessions/cliRunner.ts';
+import { Terminals } from './sessions/terminals.ts';
 import { route } from './route.ts';
+import { EFFORTS, settingsPatch } from './settings.ts';
 import { Store } from './store.ts';
 import { hireWorker, letGo } from './team/workers.ts';
 
@@ -28,7 +31,8 @@ await store.load();
 const demo = DEMO ? createDemoBackend({ home: HOME_DIR }) : null;
 const backend = demo ?? realBackend;
 const floors = new Floors(store, backend);
-const pipeline = createPipeline(store, backend, floors);
+const terminals = new Terminals(path.join(HOME_DIR, 'terminals'));
+const pipeline = createPipeline(store, backend, floors, terminals);
 void floors.syncAll();
 setInterval(() => void floors.syncAll(), SYNC_INTERVAL_MS).unref();
 pipeline.scheduler.start(SCHEDULER_INTERVAL_MS);
@@ -36,6 +40,9 @@ setTimeout(() => void pipeline.sweep(), 60_000).unref();
 setInterval(() => void pipeline.sweep(), DESK_SWEEP_INTERVAL_MS).unref();
 
 const app = express();
+// Workers' CLIs calling back: hooks and the status line (a tool result can be a large screenshot, hence the limit). The
+// token in the path is the session's; unknown tokens get an empty answer.
+app.post('/api/hooks/:token', express.json({ limit: '64mb' }), (req, res) => void res.json(handleHook(String(req.params.token), req.body)));
 app.use(express.json({ limit: '1mb' }));
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const num = (v: unknown) => {
@@ -74,7 +81,29 @@ app.patch(
   }),
 );
 app.post('/api/floors/:floor/workers', route((req) => hireWorker(store, pipeline, String(req.params.floor))));
-app.delete('/api/workers/:id', route((req) => letGo(store, pipeline, String(req.params.id))));
+app.delete(
+  '/api/workers/:id',
+  route((req) => {
+    letGo(store, pipeline, String(req.params.id));
+    terminals.remove(String(req.params.id));
+  }),
+);
+// A worker's model (a Claude model, or ollama/<name>) and effort; '' falls back to the office default
+app.patch(
+  '/api/workers/:id',
+  route((req) => {
+    const w = store.worker(String(req.params.id));
+    const patch: { model?: string; effort?: (typeof EFFORTS)[number] | '' } = {};
+    if (req.body?.model !== undefined) patch.model = str(req.body.model).trim();
+    if (req.body?.effort !== undefined) {
+      const effort = str(req.body.effort);
+      if (effort !== '' && !EFFORTS.includes(effort as (typeof EFFORTS)[number])) throw new HttpError(400, `effort must be one of ${EFFORTS.join(', ')}, or empty`);
+      patch.effort = effort as (typeof EFFORTS)[number] | '';
+    }
+    return store.patchWorker(w.id, patch);
+  }),
+);
+app.patch('/api/settings', route((req) => store.updateSettings(settingsPatch(req.body))));
 app.post('/api/workers/:id/stop', route((req) => pipeline.stopWorker(String(req.params.id))));
 app.post('/api/workers/:id/reset', route((req) => pipeline.resetWorker(String(req.params.id))));
 if (demo) app.use('/api/demo', demoRoutes(store, demo, pipeline));
@@ -102,16 +131,25 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const server = http.createServer(app);
+// Two sockets: /ws carries the office's state to every tab, /ws/term?worker=<id> one worker's terminal to whoever opened it.
 const wss = new WebSocketServer({ noServer: true });
+const terms = new WebSocketServer({ noServer: true });
 wss.on('connection', (ws) => store.addClient(ws));
+terms.on('connection', (ws, req) => {
+  const id = new URL(req.url ?? '', 'http://localhost').searchParams.get('worker') ?? '';
+  if (!store.hasWorker(id)) return ws.close(4404, 'No such worker');
+  terminals.attach(id, ws);
+});
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
-  if (pathname !== '/ws') return void socket.destroy();
-  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : null;
+  if (!target) return void socket.destroy();
+  target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
 });
 
 server.listen(PORT, HOST, () => {
   const port = (server.address() as AddressInfo).port;
+  setOfficeUrl(`http://127.0.0.1:${port}`);
   console.log(`\n  Marshmallow ${VERSION} on http://localhost:${port}${DEMO ? '  (DEMO MODE: fake GitHub + fake workers)' : ''}`);
   console.log(`     state: ${STATE_FILE}\n`);
   if (!DEMO) {
@@ -128,9 +166,10 @@ const shutdown = (signal: string) => {
   closing = true;
   console.log(`\n  ${signal}: saving and closing…`);
   setTimeout(() => process.exit(0), 5_000).unref();
-  for (const ws of wss.clients) ws.terminate();
+  releaseClis();
+  for (const ws of [...wss.clients, ...terms.clients]) ws.terminate();
   server.close();
-  void Promise.all([store.flush(), demo?.github.flush()])
+  void Promise.all([store.flush(), demo?.github.flush(), terminals.saveAll()])
     .catch((err) => console.error('  could not save the state:', err))
     .finally(() => process.exit(0));
 };

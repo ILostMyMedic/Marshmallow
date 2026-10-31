@@ -130,7 +130,7 @@ export class Store {
     }
     this.settings = { ...DEFAULT_SETTINGS, ...saved.settings, cloud: cloudSettings(DEFAULT_CLOUD, saved.settings?.cloud) };
     this.office = saved.officeId ?? '';
-    for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, teamSize: f.teamSize ?? null, cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
+    for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, teamSize: f.teamSize ?? null, held: f.held ?? [], cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
     for (const w of saved.workers ?? []) this.workers.set(w.id, { ...w, activity: null, sessionId: w.sessionId ?? null, leaving: w.leaving ?? false });
     for (const q of saved.qa ?? []) this.qa.set(qaKey(q.floorId, q.prNumber), q);
     for (const [id, lines] of Object.entries(saved.logs ?? {})) {

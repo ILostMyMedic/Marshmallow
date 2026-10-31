@@ -9,7 +9,7 @@ import { qaBranch, qaSystemPrompt } from '../prompts/prompts.ts';
 import { qaInstructions } from '../prompts/qaPrompt.ts';
 import type { SessionOptions } from '../sessions/session.ts';
 import type { QaState } from '../store.ts';
-import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, promptFloor, releaseDesk, sessionOptions, slugify, stillPreparing, stuck, type Ctx } from './context.ts';
+import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, prepared, promptFloor, releaseDesk, sessionOptions, slugify, stillPreparing, stuck, type Ctx } from './context.ts';
 import { prepareDesk } from './desk.ts';
 import { evidenceFiles, parseReport, QA_SCHEMA, renderQaComment, type QaReport } from './qaReport.ts';
 import { QA_STOPPED } from './rules/prOwnership.ts';
@@ -85,10 +85,12 @@ export class Qa {
       { kind: 'qa', issueNumber: rec.issueNumber, title: pull?.title ?? `PR #${prNumber}`, branch, prNumber, prUrl: pull?.url ?? null },
       `▶ Testing PR #${prNumber}${pull ? `: ${pull.title}` : ''} (round ${rec.round})`,
     );
-    void this.test(workerId, floorId, prNumber, branch).catch((err) => {
-      if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, oneLine(err));
-      this.requeue(floorId, prNumber);
-    });
+    void this.test(workerId, floorId, prNumber, branch)
+      .catch((err) => {
+        if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, oneLine(err));
+        this.requeue(floorId, prNumber, workerId);
+      })
+      .finally(() => prepared(this.ctx, workerId));
   }
 
   private async test(workerId: string, floorId: string, n: number, branch: string) {
@@ -102,15 +104,16 @@ export class Qa {
       pr = await gh.prDetails(floor.fullName, n);
     } catch (err) {
       if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, `Couldn't read PR #${n}: ${oneLine(err)}`);
-      this.requeue(floorId, n);
+      this.requeue(floorId, n, workerId);
       return;
     }
     const issueNumber = rec.issueNumber ?? pr.closesIssues[0] ?? null;
     const issue = issueNumber ? await gh.issueDetails(floor.fullName, issueNumber).catch(() => null) : null;
-    if (!stillPreparing(this.ctx, workerId)) return this.requeue(floorId, n);
+    if (!stillPreparing(this.ctx, workerId)) return this.requeue(floorId, n, workerId);
     if (pr.state !== 'OPEN') {
       clearTask(this.ctx, workerId);
       store.removeQa(floorId, n);
+      this.ctx.closures.pullClosed(floorId, pr);
       return;
     }
     // A conflicting PR goes back to its developer first; one that's only behind is brought up to date.
@@ -129,7 +132,7 @@ export class Qa {
       } catch (err) {
         store.appendLog(workerId, [{ kind: 'system', text: `Couldn't bring PR #${n} up to date (${oneLine(err)}); testing it as it is.` }]);
       }
-      if (!stillPreparing(this.ctx, workerId)) return this.requeue(floorId, n);
+      if (!stillPreparing(this.ctx, workerId)) return this.requeue(floorId, n, workerId);
     }
     store.patchQa(floorId, n, { testedSha: pr.headSha }, false);
     let desk;
@@ -139,7 +142,7 @@ export class Qa {
       jobDeskFailed(this.ctx, workerId, store.qaRecord(floorId, n), 'qa', oneLine(err), MAX_QA_FAILURES, null);
       return;
     }
-    if (!desk) return this.requeue(floorId, n);
+    if (!desk) return this.requeue(floorId, n, workerId);
 
     // A conflict fix for a PR QA failed on its last round also fixed QA's findings: it's a QA re-test.
     const failedConflict = rec.fixReason === 'conflict' && !rec.passedSha;
@@ -213,7 +216,7 @@ export class Qa {
       releaseDesk(this.ctx, workerId, floorId);
       void this.finished(workerId, floorId, n, end, opts)
         .catch((err) => console.warn(`  the end of a QA run went wrong: ${oneLine(err)}`))
-        .finally(() => afterSession(this.ctx, floorId));
+        .finally(() => afterSession(this.ctx, floorId, workerId));
     });
   }
 
@@ -225,6 +228,10 @@ export class Qa {
     const stopped = w.status === 'stopped';
     if (!rec) {
       if (!stopped) store.patchWorker(workerId, { status: 'done' }); // its PR closed meanwhile
+      return;
+    }
+    if (stopped && this.ctx.dropping.has(workerId)) {
+      this.resumable.delete(workerId); // given up (the watchdog, a reset): whoever gave it up saw to the record
       return;
     }
     const report = end.result.ok ? parseReport(end.result) : null;
@@ -302,8 +309,9 @@ export class Qa {
   }
 
   /** A QA run that never got going: the PR waits for a tester again. */
-  private requeue(floorId: string, n: number) {
+  /** The worker's QA run of the PR ended before it began: the PR waits for a tester again, unless someone else has it by now. */
+  private requeue(floorId: string, n: number, workerId: string) {
     const rec = this.ctx.store.findQa(floorId, n);
-    if (rec?.status === 'testing') this.ctx.store.patchQa(floorId, n, { status: 'queued', qaWorkerId: null });
+    if (rec?.status === 'testing' && rec.qaWorkerId === workerId) this.ctx.store.patchQa(floorId, n, { status: 'queued', qaWorkerId: null });
   }
 }

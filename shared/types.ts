@@ -154,6 +154,12 @@ export interface GhRepoSummary {
   updatedAt: string;
 }
 
+/** An open issue held back after its PR `pr` was closed without merging. */
+export interface HeldIssue {
+  issue: number;
+  pr: number;
+}
+
 /** One connected repository, one floor of the building. */
 export interface Floor {
   id: string; // "owner/name"
@@ -169,6 +175,7 @@ export interface Floor {
   summary: string; // the CEO's one-line read of the project, e.g. "3D browser game · Three.js + Vite"
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
   teamSize: number | null; // the size the CEO or the manager set, which the rules leave alone; null = the rules size it
+  held: HeldIssue[]; // open issues whose PR was closed without merging: they wait for the manager instead of auto-assign
   // GitHub's side: refreshed by every sync, never saved
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';
   cloneError: string | null;

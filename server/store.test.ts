@@ -30,6 +30,7 @@ const floor = (over: Partial<Floor> = {}): Floor => ({
   summary: '',
   qaBrief: '',
   teamSize: null,
+  held: [],
   cloneStatus: 'ready',
   cloneError: null,
   issues: [{ number: 1, title: 'An issue', body: '', url: '', labels: [], createdAt: '' }],

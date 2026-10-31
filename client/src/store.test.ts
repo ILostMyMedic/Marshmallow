@@ -41,6 +41,7 @@ const floor = (id: string, n: number): Floor => ({
   summary: '',
   qaBrief: '',
   teamSize: null,
+  held: [],
   cloneStatus: 'ready',
   cloneError: null,
   issues: [],

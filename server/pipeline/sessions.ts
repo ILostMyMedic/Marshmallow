@@ -31,10 +31,12 @@ interface Running {
   seen: SeenActivity | null;
   sessionId: string | null;
   shots: Shot[];
+  activeAt: number; // its latest output or tool activity (the watchdog's "quiet")
 }
 
 export class Sessions {
   private running = new Map<string, Running>();
+  private closing = false;
 
   constructor(
     private readonly store: Store,
@@ -47,6 +49,19 @@ export class Sessions {
 
   isRunning(workerId: string): boolean {
     return this.running.has(workerId);
+  }
+
+  /** When the worker's running session last showed signs of life; null without one. */
+  activeAt(workerId: string): number | null {
+    return this.running.get(workerId)?.activeAt ?? null;
+  }
+
+  /**
+   * The office is closing: sessions that end from here on (their CLIs stopped with it) change nothing, so the saved
+   * state still shows who was working on what, and the restart picks it up.
+   */
+  close() {
+    this.closing = true;
   }
 
   /** Heard when a Box's Claude Code turned out not to be signed in (the worker then waits for the manager). */
@@ -73,7 +88,7 @@ export class Sessions {
    */
   start(workerId: string, opts: SessionOptions, onEnd: (end: SessionEnd) => void): void {
     if (this.running.has(workerId)) throw new HttpError(409, 'They already have a session running');
-    const rt: Running = { handle: null, currentTool: null, seen: null, sessionId: opts.resumeSessionId ?? null, shots: [] };
+    const rt: Running = { handle: null, currentTool: null, seen: null, sessionId: opts.resumeSessionId ?? null, shots: [], activeAt: Date.now() };
     this.running.set(workerId, rt);
     const working = { ...this.store.worker(workerId), status: 'working' as const };
     this.store.patchWorker(workerId, { status: 'working', activity: this.signOf(working, rt) });
@@ -84,6 +99,7 @@ export class Sessions {
           log: (entries) => {
             if (this.running.get(workerId) !== rt || !this.store.hasWorker(workerId)) return;
             const now = Date.now();
+            rt.activeAt = now;
             for (const e of entries) {
               const a = lineActivity(e);
               if (a) rt.seen = { ...a, at: now };
@@ -93,6 +109,7 @@ export class Sessions {
           },
           tool: (name) => {
             rt.currentTool = name;
+            rt.activeAt = Date.now();
             if (this.running.get(workerId) === rt) this.refreshSign(workerId);
           },
           sessionId: (id) => {
@@ -108,6 +125,7 @@ export class Sessions {
           finished: (result) => {
             if (this.running.get(workerId) !== rt) return; // it ended already
             this.running.delete(workerId);
+            if (this.closing) return;
             if (this.store.hasWorker(workerId)) {
               const w = this.store.worker(workerId);
               this.store.patchWorker(workerId, { costUsd: w.costUsd + result.costUsd, turns: w.turns + result.turns, activity: null, endedAt: Date.now() });
@@ -135,11 +153,11 @@ export class Sessions {
     for (const id of [...this.running.keys()]) this.stop(id);
   }
 
-  /** Passes the manager's message to the worker's running session; false when they have none. */
-  send(workerId: string, text: string): boolean {
+  /** Passes a message (the manager's, or the office's) to the worker's running session; false when they have none. */
+  send(workerId: string, text: string, from = 'Manager'): boolean {
     const rt = this.running.get(workerId);
     if (!rt?.handle) return false;
-    this.store.appendLog(workerId, [{ kind: 'manager', text: `▶ Manager: ${text}` }]);
+    this.store.appendLog(workerId, [{ kind: 'manager', text: `▶ ${from}: ${text}` }]);
     rt.seen = { kind: 'talk', detail: 'your message', at: Date.now() };
     this.refreshSign(workerId);
     rt.handle.send(text);

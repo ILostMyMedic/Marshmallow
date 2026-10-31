@@ -160,6 +160,13 @@ Every ported file gets the header `Adapted from cubefarm <path> (MIT).`; the fir
 | `server/watchdog.ts` | `server/watchdog.ts`; `swarm.ts` watchdog section (~l.4689) | Copy + Rewrite | The office doctor's UI only if checked. |
 | `server/sessions/pty*.ts` | `ptyHost.ts`, `ptyClient.ts`, `ptyProtocol.ts` | Copy | Only if "terminal keeper" gets checked. |
 
+**Done.** Things that differ from cubefarm:
+- **Where things went:** the pure rules in `server/recovery/` (`reconcile.ts`, `restartRecovery.ts`, `qaOrphans.ts`, `watchdog.ts`) and `server/pipeline/rules/closeCleanup.ts`, with their tests; the wiring in `server/pipeline/restart.ts`, `closures.ts` and `watch.ts`. `reconcile.ts` drops `sessionStart` (nothing restores a missing desk before a session).
+- **Giving work up:** `context.ts` `giveUp` replaces `stopForClosure`, `dropTask` and `abandoned`: a worker in a session or setting up a desk (`ctx.preparing`, from `beginTask` until `prepared`) is stopped, and cleared only once that has ended (`settle`, from `afterSession` and `prepared`), so a late desk set-up can't run on into their next task. The manager's reset, the watchdog's requeue and closures all use it; `handBack` puts a QA run or fix back in its PR's queue first. A desk set-up that gives up only gives its PR back if the PR is still theirs.
+- **Restarts:** `Pipeline.restart` runs once at start, before the scheduler and before Box events come in (`hooksReady`), and does all of cubefarm's `reconcileRestart` and `finishRestart` in one go, without waiting for a sync (it needs only GitHub's answers about each task). Shutdown calls `Pipeline.close` first, so sessions ending with the office change nothing and the saved state still shows who was on what. Resumes count against the session limit; any over it start over from the queue. A Box worker whose CLI is gone resumes in their Box (`desk.ts` `resumeBox`).
+- **Closing:** a closed PR's issues are held in `Floor.held` (saved with the floor) until the manager's "Build again" (`DELETE /api/floors/:floor/held/:n`) or the issue closes. The CEO's `close_issue` and a task that finds its issue or PR closed tell `Closures` at once; a sync's asks catch the rest. PR previews and the ledger are cut.
+- **The watchdog:** automatic remedies only, every minute (`WATCHDOG_INTERVAL_MS`). The office doctor (findings, buttons, the "unclosed issue" check) is unchecked and cut; an item remedied within the hour is left alone. A quiet worker with no session to nudge goes straight back in line. A nudge is typed in as "▶ Office:".
+
 ## Not ported for now (unchecked in FEATURES.md)
 
 | cubefarm | Feature |

@@ -66,6 +66,8 @@ function fakeBox() {
     },
     browser: async () => false,
   };
+  /** Every CLI launched in the Box, oldest first. */
+  const launches = () => [...files].filter(([f]) => f.endsWith('/launch.json')).map(([, text]) => JSON.parse(text) as { args: string[]; events: string });
   /** The session's events file, once its CLI was started. */
   const eventsFile = () => {
     const launch = [...files].find(([f]) => f.endsWith('/launch.json'));
@@ -78,7 +80,7 @@ function fakeBox() {
     files.set(file, (files.get(file) ?? '') + line);
     for (const t of tails) if (t.file === file) t.onData(line);
   };
-  return { api, state, emit, eventsFile };
+  return { api, state, emit, eventsFile, launches };
 }
 
 let dir: string;
@@ -86,13 +88,13 @@ let box: ReturnType<typeof fakeBox>;
 let github: DemoBackend['github'];
 let offices: { pipeline: Pipeline; store: Store; terminals: Terminals }[] = [];
 
-/** An office: its own store, terminals and pipeline, on the same home, fake GitHub and fake Box. */
-async function office() {
+/** An office: its own store, terminals and pipeline, on the same home, fake GitHub and fake Box. `demo`: false resumes sessions as the real office does. */
+async function office(o: { demo?: boolean } = {}) {
   const demo = createDemoBackend({ home: null, timing: { stepMs: () => 1, prepareMs: 1, installMs: 1, cloneMs: 1, checksMs: () => 60_000, closeAfterMergeMs: 5, boxMs: 1 }, rand: () => 0.9 });
   if (github) Object.assign(demo, { github });
   github = demo.github;
   const cloud: CloudBackend = { ...demo.cloud, boxes: () => box.api, reconnect: reconnectBoxClis, detach: detachBoxClis };
-  const backend = { ...demo, startSession: startCliSession, cloud };
+  const backend = { ...demo, startSession: startCliSession, cloud, demo: o.demo ?? true };
   const store = new Store(path.join(dir, 'state.json'), { version: '0', demo: true });
   await store.load();
   const events: ServerEvent[] = [];
@@ -163,15 +165,15 @@ async function startThenStop() {
   return { ada, task };
 }
 
-/** The office starts again and picks Ada's CLI up. */
-async function restart() {
+/** The office starts again and picks up where it left off. */
+async function restart(o: { demo?: boolean } = {}) {
   holdHooks();
-  const b = await office();
+  const b = await office(o);
   await b.pipeline.ctx.cloud.init();
   const back = await b.pipeline.ctx.cloud.reconnect();
-  b.pipeline.reattach(back);
+  const counts = await b.pipeline.restart(back);
   hooksReady();
-  return { b, back };
+  return { b, back, counts };
 }
 
 describe('a Box worker across an office restart', () => {
@@ -207,8 +209,23 @@ describe('a Box worker across an office restart', () => {
   it('lets go of a CLI that vanished mid-turn (a paused Box loses its tmux), so its task can be given back', async () => {
     const { ada } = await startThenStop();
     box.state.alive = false; // no Stop and no exit: the turn never finished
-    const { b, back } = await restart();
+    const { b, back, counts } = await restart();
     expect(back).toEqual([]);
     expect(b.store.boxCli(ada.id)).toBeNull();
+    // The demo starts its sessions over: issue #1 goes back in line.
+    expect(counts).toMatchObject({ reattached: 0, resumed: 0, requeued: 1 });
+    expect(b.store.worker(ada.id)).toMatchObject({ status: 'idle', task: null });
+  }, 30_000);
+
+  it('resumes the session of a CLI that vanished mid-turn, told what it was doing', async () => {
+    const { ada, task } = await startThenStop();
+    box.state.alive = false;
+    const { b, counts } = await restart({ demo: false });
+    expect(counts).toMatchObject({ reattached: 0, resumed: 1, requeued: 0 });
+    expect(b.store.worker(ada.id)).toMatchObject({ status: 'working', task: { issueNumber: 1, branch: task.branch } });
+    // A new CLI in her Box, on her session, with the job restated.
+    await until(() => box.launches().some((l) => l.args.join(' ').includes('--resume s1')));
+    const launch = box.launches().find((l) => l.args.join(' ').includes('--resume s1'))!;
+    expect(launch.args.join(' ')).toContain(`working on issue #1`);
   }, 30_000);
 });

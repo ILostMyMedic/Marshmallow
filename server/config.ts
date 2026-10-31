@@ -59,5 +59,7 @@ export const SYNC_INTERVAL_MS = 45_000;
 export const SCHEDULER_INTERVAL_MS = 8_000;
 // How often each floor's desks and finished branches are swept (also at start and after a worker leaves).
 export const DESK_SWEEP_INTERVAL_MS = 30 * 60_000;
+/** How often the watchdog looks for stuck work. */
+export const WATCHDOG_INTERVAL_MS = 60_000;
 // Terminal lines kept per worker.
 export const LOG_BUFFER = 600;

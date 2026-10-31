@@ -9,7 +9,7 @@ import { WebSocketServer } from 'ws';
 import { localModel } from '../shared/models.ts';
 import { createDemoBackend } from './backend/demo.ts';
 import { realBackend } from './backend/real.ts';
-import { DEMO, DESK_SWEEP_INTERVAL_MS, HOME_DIR, homeProblem, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
+import { DEMO, DESK_SWEEP_INTERVAL_MS, HOME_DIR, homeProblem, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION, WATCHDOG_INTERVAL_MS } from './config.ts';
 import { demoRoutes } from './demoRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
@@ -33,16 +33,18 @@ const backend = demo ?? realBackend;
 const floors = new Floors(store, backend);
 const terminals = new Terminals(path.join(HOME_DIR, 'terminals'));
 const pipeline = createPipeline(store, backend, floors, terminals);
-// The cloud: saved keys, then Box workers' CLIs that kept working while the office was closed, back on their tasks.
-// Their events wait until then (hooksReady), so a turn that finished meanwhile finishes its task now.
+// Where the office left off: the cloud's saved keys, then every worker's task checked against GitHub. Finished work is
+// cleared, Box workers' CLIs that kept working are back on their tasks, and interrupted sessions resume or go back in
+// line. Box events wait until then (hooksReady), so a turn that finished meanwhile finishes its task now.
 await pipeline.ctx.cloud.init().catch((err) => console.warn(`  the cloud account couldn't be read: ${(err as Error).message}`));
-pipeline.reattach(await pipeline.ctx.cloud.reconnect().catch(() => []));
+await pipeline.restart(await pipeline.ctx.cloud.reconnect().catch(() => [])).catch((err) => console.warn(`  picking up after the restart went wrong: ${(err as Error).message}`));
 hooksReady();
 void floors.syncAll();
 setInterval(() => void floors.syncAll(), SYNC_INTERVAL_MS).unref();
 pipeline.scheduler.start(SCHEDULER_INTERVAL_MS);
 setTimeout(() => void pipeline.sweep(), 60_000).unref();
 setInterval(() => void pipeline.sweep(), DESK_SWEEP_INTERVAL_MS).unref();
+setInterval(() => pipeline.watchdog.tick(), WATCHDOG_INTERVAL_MS).unref();
 
 const app = express();
 // Workers' CLIs calling back: hooks and the status line (a tool result can be a large screenshot, hence the limit). The
@@ -88,6 +90,8 @@ app.post(
     return pipeline.ctx.questions.ask(String(req.params.floor), num(req.params.n), text, str(req.body?.from).trim() || 'The office');
   }),
 );
+// An issue held after its PR was closed goes back in line
+app.delete('/api/floors/:floor/held/:n', route((req) => pipeline.ctx.closures.release(String(req.params.floor), num(req.params.n))));
 app.post('/api/questions/:id/answer', route((req) => pipeline.ctx.questions.answer(num(req.params.id), str(req.body?.text))));
 app.patch(
   '/api/floors/:floor',
@@ -230,7 +234,9 @@ const shutdown = (signal: string) => {
   closing = true;
   console.log(`\n  ${signal}: saving and closing…`);
   setTimeout(() => process.exit(0), 5_000).unref();
-  // Box workers' CLIs carry on in their Boxes: the office lets go of them before its last save.
+  // Sessions ending with the office change nothing, so the restart finds who was on what; Box workers' CLIs carry on
+  // in their Boxes: the office lets go of them before its last save.
+  pipeline.close();
   releaseClis();
   backend.cloud.detach();
   for (const ws of [...wss.clients, ...terms.clients]) ws.terminate();

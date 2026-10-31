@@ -2,12 +2,17 @@
 // the dependencies installed. A failed install never fails the task: the worker is told to install them. A Box worker's
 // Box is woken and checked first (signed in, credentials there), before any cloning.
 // Adapted from cubefarm server/swarm.ts (MIT): prepare and installDeps.
-import type { Floor } from '../../shared/types.ts';
+import type { Floor, Worker } from '../../shared/types.ts';
 import { setUpDesk } from '../machines/deskSetup.ts';
 import { devPort, machineName, type DepsOutcome } from '../machines/machines.ts';
 import type { BoxTarget } from '../sessions/boxCli.ts';
 import { SignInNeeded } from '../team/cloud.ts';
 import { clearTask, stillPreparing, type Ctx } from './context.ts';
+
+/** The Box a resumed session runs in: none on this computer, null when the Box can't be had (it needs signing in, say). */
+export async function resumeBox(ctx: Ctx, w: Worker, floor: Floor): Promise<BoxTarget | undefined | null> {
+  return w.host === 'box' ? ctx.cloud.target(w, floor).catch(() => null) : undefined;
+}
 
 export interface Desk {
   cwd: string;

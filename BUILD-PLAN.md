@@ -154,7 +154,9 @@ marshmallow/
 
 1. Restart reconciliation: what was running, and whether to resume or requeue it (`reconcile.ts`, `restartRecovery.ts`).
 2. Closing cleanup, and a watchdog for stuck sessions (`closeCleanup.ts`, `watchdog.ts`).
-3. The terminal keeper, if checked (`ptyHost.ts`, `ptyClient.ts`).
+3. The terminal keeper, if checked (`ptyHost.ts`, `ptyClient.ts`). (Unchecked, so not built: local workers' CLIs stop with the office, and their sessions resume after it.)
+
+**Done** (`server/pipeline/hardening.test.ts`): an office killed mid-task starts again and picks up where it left off; closing an issue or PR stops whoever works on it; a quiet session is nudged, then put back in line.
 
 ## Then: game states
 

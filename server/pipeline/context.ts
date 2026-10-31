@@ -1,8 +1,8 @@
 // The pipeline's shared context: the office's parts each module works through, the modules themselves (a QA result
 // can send a PR back for a fix, a merge can requeue QA), and the small steps they all take.
-// Adapted from cubefarm server/swarm.ts (MIT): beginTask, clearTask, fail, stuck, jobDeskFailed.
+// Adapted from cubefarm server/swarm.ts (MIT): beginTask, clearTask, fail, stuck, jobDeskFailed, stopForClosure, dropTask.
 import { effectiveModel } from '../../shared/models.ts';
-import type { Floor, Task, Worker } from '../../shared/types.ts';
+import type { Floor, LogEntry, Task, Worker } from '../../shared/types.ts';
 import type { Backend } from '../backend/backend.ts';
 import type { Floors } from '../floors.ts';
 import { devPort, machineName } from '../machines/machines.ts';
@@ -10,6 +10,7 @@ import type { PromptFloor } from '../prompts/prompts.ts';
 import type { SessionOptions } from '../sessions/session.ts';
 import type { QaState, Store } from '../store.ts';
 import type { Build } from './build.ts';
+import type { Closures } from './closures.ts';
 import type { Fix } from './fix.ts';
 import type { Merge } from './merge.ts';
 import type { Qa } from './qa.ts';
@@ -35,8 +36,13 @@ export interface Ctx {
   team: Team;
   ceo: Ceo;
   cloud: CloudOffice;
+  closures: Closures;
   /** Failed desk preparations per PR and task (`${floorId}#${pr}:${task}`), in memory. */
   prepStrikes: Map<string, PrepStrikes>;
+  /** Workers whose desk is being set up for a task right now: from beginTask until its session starts or it gives up. */
+  preparing: Set<string>;
+  /** Workers whose task was given up while their session or desk set-up ran on, and the log line once they're clear (giveUp). */
+  dropping: Map<string, LogEntry | null>;
   /** Asks the scheduler for a pass shortly. */
   soon(ms?: number): void;
 }
@@ -71,6 +77,7 @@ export function sessionOptions(ctx: Ctx, w: Worker, floor: Floor, o: Pick<Sessio
 
 /** The worker starts a task: preparing their desk, the task's cost from zero. Synchronous, so the scheduler sees them busy at once. */
 export function beginTask(ctx: Ctx, workerId: string, task: Task, line: string) {
+  ctx.preparing.add(workerId);
   ctx.store.patchWorker(workerId, { status: 'preparing', task, activity: { kind: 'build', detail: 'setting up desk' }, startedAt: Date.now(), endedAt: null, costUsd: 0, turns: 0, lastError: null });
   ctx.store.appendLog(workerId, [{ kind: 'system', text: line }]);
 }
@@ -81,6 +88,58 @@ export const stillPreparing = (ctx: Ctx, workerId: string) => ctx.store.hasWorke
 /** The task is over: back to idle, holding nothing. */
 export function clearTask(ctx: Ctx, workerId: string) {
   if (ctx.store.hasWorker(workerId)) ctx.store.patchWorker(workerId, { status: 'idle', task: null, activity: null, lastError: null });
+}
+
+/**
+ * The worker's task ends without a result: its issue or PR closed, the watchdog put it back, the manager reset them.
+ * One in a session or still setting up a desk stops now and is cleared once that has ended (settle), so neither runs on
+ * into their next task; anyone else is cleared now. `why` goes in their log, e.g. "issue #5 was closed"; `cleared`
+ * replaces the line they get once clear.
+ */
+export function giveUp(ctx: Ctx, workerId: string, why: string | null, cleared?: LogEntry | null) {
+  const { store, sessions } = ctx;
+  if (!store.hasWorker(workerId)) return;
+  if (sessions.isRunning(workerId) || ctx.preparing.has(workerId)) {
+    ctx.dropping.set(workerId, cleared === undefined ? { kind: 'system', text: '↺ Cleared desk. Ready for new work.' } : cleared);
+    if (store.worker(workerId).status !== 'stopped') {
+      store.patchWorker(workerId, { status: 'stopped', activity: null, endedAt: Date.now(), lastError: why && `Stopped: ${why}` });
+      if (why) store.appendLog(workerId, [{ kind: 'system', text: `■ Stopped: ${why}.` }]);
+    }
+    sessions.stop(workerId);
+    return;
+  }
+  ctx.dropping.delete(workerId);
+  clearTask(ctx, workerId);
+  const line = cleared === undefined ? why && { kind: 'system' as const, text: `↺ ${why[0].toUpperCase()}${why.slice(1)}. Cleared desk.` } : cleared;
+  if (line) store.appendLog(workerId, [line]);
+  ctx.soon(200);
+}
+
+/** The QA run or fix the worker is on goes back in its PR's queue, without a strike (before they're given up). */
+export function handBack(ctx: Ctx, workerId: string) {
+  const { store } = ctx;
+  if (!store.hasWorker(workerId)) return;
+  for (const q of store.qaList(store.worker(workerId).floorId)) {
+    if (q.qaWorkerId === workerId && q.status === 'testing') store.patchQa(q.floorId, q.prNumber, { status: 'queued', qaWorkerId: null });
+    if (q.devWorkerId === workerId && q.status === 'fixing') store.patchQa(q.floorId, q.prNumber, { status: 'failed' });
+  }
+}
+
+/** A session or desk set-up ended: a worker whose task was given up meanwhile is cleared now. */
+export function settle(ctx: Ctx, workerId: string) {
+  const line = ctx.dropping.get(workerId);
+  if (line === undefined || ctx.sessions.isRunning(workerId) || ctx.preparing.has(workerId)) return;
+  ctx.dropping.delete(workerId);
+  if (!ctx.store.hasWorker(workerId)) return;
+  clearTask(ctx, workerId);
+  if (line) ctx.store.appendLog(workerId, [line]);
+  ctx.soon(200);
+}
+
+/** A task's desk set-up is over: its session started, or it gave up. */
+export function prepared(ctx: Ctx, workerId: string) {
+  ctx.preparing.delete(workerId);
+  settle(ctx, workerId);
 }
 
 /** The task failed: the worker shows why and sits out a cooldown (the scheduler's ERROR_COOLDOWN_MS). */
@@ -120,8 +179,12 @@ export function releaseDesk(ctx: Ctx, workerId: string, floorId: string) {
   void ctx.cloud.machinesFor(ctx.store.worker(workerId)).release(machineName(workerId), ctx.store.floor(floorId).fullName, devPort(workerId)).catch(() => undefined);
 }
 
-/** A session's outcome is handled: the floor syncs (it lists the new PR, and auto-merge looks again), then the next work. */
-export function afterSession(ctx: Ctx, floorId: string) {
+/**
+ * A session's outcome is handled: a worker whose task was given up meanwhile is cleared, the floor syncs (it lists the
+ * new PR, and auto-merge looks again), then the next work.
+ */
+export function afterSession(ctx: Ctx, floorId: string, workerId: string) {
+  settle(ctx, workerId);
   if (ctx.store.hasFloor(floorId)) void ctx.floors.sync(floorId).catch(() => undefined);
   ctx.soon(500);
 }

@@ -5,8 +5,8 @@ import type { Floor, IssueInfo } from '../../shared/types.ts';
 import { depsPromptLine, devPort, machineName } from '../machines/machines.ts';
 import { devBranch, devSystemPrompt } from '../prompts/prompts.ts';
 import type { SessionOptions } from '../sessions/session.ts';
-import { afterSession, beginTask, clearTask, failTask, minutesSince, oneLine, promptFloor, releaseDesk, sessionOptions, slugify, stillPreparing, type Ctx } from './context.ts';
-import { prepareDesk } from './desk.ts';
+import { afterSession, beginTask, clearTask, failTask, minutesSince, oneLine, prepared, promptFloor, releaseDesk, sessionOptions, slugify, stillPreparing, type Ctx } from './context.ts';
+import { prepareDesk, resumeBox } from './desk.ts';
 import { managerQuestion } from './questions.ts';
 import type { SessionEnd } from './sessions.ts';
 
@@ -32,10 +32,12 @@ export class Build {
     const w = this.ctx.store.worker(workerId);
     const branch = devBranch(issue.number, slugify(w.name));
     beginTask(this.ctx, workerId, { kind: 'issue', issueNumber: issue.number, title: issue.title, branch, prNumber: null, prUrl: null }, `▶ Issue #${issue.number}: ${issue.title}`);
-    void this.run(workerId, floorId, issue, branch).catch((err) => {
-      if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, oneLine(err));
-      this.ctx.soon();
-    });
+    void this.run(workerId, floorId, issue, branch)
+      .catch((err) => {
+        if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, oneLine(err));
+        this.ctx.soon();
+      })
+      .finally(() => prepared(this.ctx, workerId));
   }
 
   private async run(workerId: string, floorId: string, issue: IssueInfo, branch: string) {
@@ -46,7 +48,8 @@ export class Build {
     if (live === 'CLOSED') {
       store.appendLog(workerId, [{ kind: 'system', text: `Issue #${issue.number} is closed; nothing to do.` }]);
       clearTask(this.ctx, workerId);
-      afterSession(this.ctx, floorId);
+      this.ctx.closures.issueClosed(floorId, issue.number);
+      afterSession(this.ctx, floorId, workerId);
       return;
     }
     let desk;
@@ -100,12 +103,34 @@ export class Build {
     return true;
   }
 
+  /** A restart cut the worker's build off: their session resumes, told what they were doing. False when it can't. */
+  async resume(workerId: string, note: string): Promise<boolean> {
+    const { store } = this.ctx;
+    const w = store.worker(workerId);
+    const task = w.task;
+    if (task?.kind !== 'issue' || task.issueNumber == null || !task.branch || !w.sessionId || !store.hasFloor(w.floorId)) return false;
+    const floor = store.floor(w.floorId);
+    const box = await resumeBox(this.ctx, w, floor);
+    if (box === null) return false;
+    const cwd = this.ctx.cloud.machinesFor(w).deskDir(machineName(workerId), floor.fullName);
+    const systemAppend = devSystemPrompt({ worker: w, repo: promptFloor(floor), port: devPort(workerId), cwd, branch: task.branch });
+    const opts = sessionOptions(this.ctx, w, floor, { cwd, box, prompt: note, systemAppend, task: 'issue', subject: { issueNumber: task.issueNumber, prNumber: task.prNumber, title: task.title }, resumeSessionId: w.sessionId, keepAlive: true, label: `${w.name} · #${task.issueNumber} ${task.title}` });
+    try {
+      this.start(workerId, floor.id, opts);
+    } catch {
+      return false;
+    }
+    store.patchWorker(workerId, { lastError: null });
+    store.appendLog(workerId, [{ kind: 'manager', text: `▶ Office: ${note}` }]);
+    return true;
+  }
+
   private start(workerId: string, floorId: string, opts: SessionOptions) {
     this.ctx.sessions.start(workerId, opts, (end) => {
       releaseDesk(this.ctx, workerId, floorId);
       void this.finished(workerId, floorId, end, opts)
         .catch((err) => console.warn(`  the end of a build went wrong: ${oneLine(err)}`))
-        .finally(() => afterSession(this.ctx, floorId));
+        .finally(() => afterSession(this.ctx, floorId, workerId));
     });
   }
 

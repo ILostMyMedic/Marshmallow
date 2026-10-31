@@ -119,6 +119,7 @@ export function officeHandlers(ctx: Ctx, job: CeoJob, cap: IssueCap, ceoName: st
       const floor = floorNo(a.floor);
       checkCloseIssue({ floor: a.floor, number: a.number, state: await gh.issueState(floor.fullName, a.number), pulls: floor.pulls });
       await gh.closeIssue(floor.fullName, a.number, a.reason.trim(), 'not planned');
+      ctx.closures.issueClosed(floor.id, a.number); // whoever was building it stops
       cap.floors.add(floor.id);
       return `Closed #${a.number} on floor ${a.floor} as not planned.`;
     },

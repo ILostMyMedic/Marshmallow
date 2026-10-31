@@ -48,6 +48,7 @@ export class Floors {
       summary: '',
       qaBrief: '',
       teamSize: null,
+      held: [],
       cloneStatus: 'cloning',
       cloneError: null,
       issues: [],

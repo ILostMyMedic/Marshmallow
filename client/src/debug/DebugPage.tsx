@@ -327,9 +327,16 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
           {floor.issues.map((i) => {
             const pr = floor.pulls.find((p) => p.state === 'OPEN' && p.closesIssues.includes(i.number));
             const builder = team.find((w) => w.task?.kind === 'issue' && w.task.issueNumber === i.number);
+            const held = floor.held.find((h) => h.issue === i.number);
             return (
               <li key={i.number}>
-                #{i.number} {i.title} <span className="muted">· {pr ? `PR #${pr.number}` : builder ? `taken by ${builder.name}` : 'ready'}</span>
+                #{i.number} {i.title}{' '}
+                <span className="muted">· {pr ? `PR #${pr.number}` : builder ? `taken by ${builder.name}` : held ? `waits for you: PR #${held.pr} was closed` : 'ready'}</span>
+                {held && !pr && !builder && (
+                  <button className="link" onClick={() => run('DELETE', `/api/floors/${fp}/held/${i.number}`)}>
+                    Build again
+                  </button>
+                )}
               </li>
             );
           })}

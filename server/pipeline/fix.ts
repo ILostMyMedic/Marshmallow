@@ -7,8 +7,8 @@ import { depsPromptLine, devPort, machineName } from '../machines/machines.ts';
 import { devSystemPrompt, failedLogLines, noPushNudge, ownPrLine } from '../prompts/prompts.ts';
 import type { SessionOptions } from '../sessions/session.ts';
 import type { QaState } from '../store.ts';
-import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, promptFloor, releaseDesk, sessionOptions, stillPreparing, stuck, type Ctx } from './context.ts';
-import { prepareDesk } from './desk.ts';
+import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, prepared, promptFloor, releaseDesk, sessionOptions, stillPreparing, stuck, type Ctx } from './context.ts';
+import { prepareDesk, resumeBox } from './desk.ts';
 import { fixOutcome, MAX_FIX_FAILURES } from './rules/fixOutcome.ts';
 import { failedRunId, logTail, noChangeReason, unpushedFix } from './rules/prOwnership.ts';
 import type { SessionEnd } from './sessions.ts';
@@ -35,10 +35,12 @@ export class Fix {
       { kind: 'fix', issueNumber: rec.issueNumber, title: pull?.title ?? `PR #${prNumber}`, branch: headRef, prNumber, prUrl: pull?.url ?? null },
       `▶ Fixing PR #${prNumber}: ${REASONS[rec.fixReason ?? 'qa']}`,
     );
-    void this.fix(workerId, floorId, prNumber, headRef, author === workerId, author).catch((err) => {
-      if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, oneLine(err));
-      this.giveBack(floorId, prNumber, author);
-    });
+    void this.fix(workerId, floorId, prNumber, headRef, author === workerId, author)
+      .catch((err) => {
+        if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, oneLine(err));
+        this.giveBack(floorId, prNumber, author, workerId);
+      })
+      .finally(() => prepared(this.ctx, workerId));
   }
 
   private async fix(workerId: string, floorId: string, n: number, headRef: string, original: boolean, author: string | null) {
@@ -49,12 +51,13 @@ export class Fix {
       pr = await this.ctx.backend.github.prDetails(floor.fullName, n);
     } catch (err) {
       if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, `Couldn't read PR #${n}: ${oneLine(err)}`);
-      return this.giveBack(floorId, n, author);
+      return this.giveBack(floorId, n, author, workerId);
     }
-    if (!stillPreparing(this.ctx, workerId)) return this.giveBack(floorId, n, author);
+    if (!stillPreparing(this.ctx, workerId)) return this.giveBack(floorId, n, author, workerId);
     if (pr.state !== 'OPEN') {
       clearTask(this.ctx, workerId);
       store.removeQa(floorId, n);
+      this.ctx.closures.pullClosed(floorId, pr);
       return;
     }
     let desk;
@@ -64,10 +67,11 @@ export class Fix {
       jobDeskFailed(this.ctx, workerId, store.qaRecord(floorId, n), 'fix', oneLine(err), MAX_FIX_FAILURES, author);
       return;
     }
-    if (!desk) return this.giveBack(floorId, n, author);
+    if (!desk) return this.giveBack(floorId, n, author, workerId);
     const rec = store.qaRecord(floorId, n);
     const w = store.worker(workerId);
     const prompt = await this.prompt(floor, rec, pr, headRef, original);
+    if (!stillPreparing(this.ctx, workerId)) return this.giveBack(floorId, n, author, workerId);
     const systemAppend = devSystemPrompt({ worker: w, repo: promptFloor(floor), port: devPort(workerId), cwd: desk.cwd, branch: headRef, fixing: { pr: n, headRef }, depsLine: depsPromptLine(desk.deps) });
     this.start(
       workerId,
@@ -146,12 +150,35 @@ export class Fix {
     return true;
   }
 
+  /** A restart cut the worker's fix off: their session resumes, told what they were doing. False when it can't. */
+  async resume(workerId: string, note: string): Promise<boolean> {
+    const { store } = this.ctx;
+    const w = store.worker(workerId);
+    const task = w.task;
+    const n = task?.kind === 'fix' ? task.prNumber : null;
+    if (!task || n == null || !task.branch || !w.sessionId || !store.hasFloor(w.floorId) || store.findQa(w.floorId, n)?.status !== 'fixing') return false;
+    const floor = store.floor(w.floorId);
+    const box = await resumeBox(this.ctx, w, floor);
+    if (box === null) return false;
+    const cwd = this.ctx.cloud.machinesFor(w).deskDir(machineName(workerId), floor.fullName);
+    const systemAppend = devSystemPrompt({ worker: w, repo: promptFloor(floor), port: devPort(workerId), cwd, branch: task.branch, fixing: { pr: n, headRef: task.branch } });
+    const opts = sessionOptions(this.ctx, w, floor, { cwd, box, prompt: note, systemAppend, task: 'fix', subject: { issueNumber: task.issueNumber, prNumber: n, title: task.title }, resumeSessionId: w.sessionId, keepAlive: true, label: `${w.name} · fixing #${n} ${task.title}` });
+    try {
+      this.start(workerId, floor.id, n, opts);
+    } catch {
+      return false;
+    }
+    store.patchWorker(workerId, { lastError: null });
+    store.appendLog(workerId, [{ kind: 'manager', text: `▶ Office: ${note}` }]);
+    return true;
+  }
+
   private start(workerId: string, floorId: string, n: number, opts: SessionOptions) {
     this.ctx.sessions.start(workerId, opts, (end) => {
       releaseDesk(this.ctx, workerId, floorId);
       void this.finished(workerId, floorId, n, end, opts)
         .catch((err) => console.warn(`  the end of a fix went wrong: ${oneLine(err)}`))
-        .finally(() => afterSession(this.ctx, floorId));
+        .finally(() => afterSession(this.ctx, floorId, workerId));
     });
   }
 
@@ -212,8 +239,9 @@ export class Fix {
   }
 
   /** A fix that never got going: the PR waits for its author (or anyone) again. */
-  private giveBack(floorId: string, n: number, author: string | null) {
+  /** The worker's fix ended before it began: the PR waits for a fixer again, unless someone else has it by now. */
+  private giveBack(floorId: string, n: number, author: string | null, workerId: string) {
     const rec = this.ctx.store.findQa(floorId, n);
-    if (rec?.status === 'fixing') this.ctx.store.patchQa(floorId, n, { status: 'failed', devWorkerId: author });
+    if (rec?.status === 'fixing' && rec.devWorkerId === workerId) this.ctx.store.patchQa(floorId, n, { status: 'failed', devWorkerId: author });
   }
 }

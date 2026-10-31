@@ -5,6 +5,7 @@
 import { blockers, holdUps } from '../../shared/issues.ts';
 import { isBusy, type Floor, type IssueInfo, type Worker } from '../../shared/types.ts';
 import type { Ctx } from './context.ts';
+import { stillOpen } from './rules/closeCleanup.ts';
 import { fixGoesTo, pickTester, prepHeld } from './rules/handOut.ts';
 import { issueTaken } from './rules/issueClaims.ts';
 
@@ -24,15 +25,15 @@ export function isFree(w: Worker, now: number): boolean {
 }
 
 /**
- * The floor's issues a free worker may start, best first: not skipped, taken, waiting on another open issue or failed
- * too often; then those holding up the longest chain of other issues, the most issues, and the oldest.
+ * The floor's issues a free worker may start, best first: not skipped, held for the manager, taken, waiting on another
+ * open issue or failed too often; then those holding up the longest chain of other issues, the most issues, and the oldest.
  */
 export function readyIssues(floor: Floor, workers: Worker[], failedTooOften: (n: number) => boolean, now: number): IssueInfo[] {
   const open = new Set(floor.issues.map((i) => i.number));
   const claims = workers.filter((w) => w.floorId === floor.id).map((w) => ({ role: w.role, task: w.task?.kind ?? null, issueNumber: w.task?.issueNumber ?? null, status: w.status }));
   const holds = holdUps(floor.issues);
   return floor.issues
-    .filter((i) => !i.labels.some((l) => SKIP_LABELS.test(l)) && !issueTaken(i.number, claims, floor.pulls, now) && blockers(i.body, open).length === 0 && !failedTooOften(i.number))
+    .filter((i) => !i.labels.some((l) => SKIP_LABELS.test(l)) && !floor.held.some((h) => h.issue === i.number) && !issueTaken(i.number, claims, floor.pulls, now) && blockers(i.body, open).length === 0 && !failedTooOften(i.number))
     .sort((a, b) => {
       const x = holds.get(a.number)!;
       const y = holds.get(b.number)!;
@@ -119,8 +120,9 @@ export class Scheduler {
     const free = this.available(floor);
     if (!free.length) return false;
     const now = Date.now();
-    // A PR the sync hasn't listed yet counts as open; one it lists as closed or merged doesn't.
-    const open = (n: number) => (floor.pulls.find((p) => p.number === n)?.state ?? 'OPEN') === 'OPEN';
+    // A PR the office doesn't know about yet counts as open; one it knows is closed or merged doesn't.
+    const known = this.ctx.closures.state(floor.id);
+    const open = (n: number) => stillOpen({ kind: 'pr', number: n }, known);
     const waiting = (status: 'queued' | 'failed', task: 'qa' | 'fix') =>
       store
         .qaList(floor.id)

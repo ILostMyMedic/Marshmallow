@@ -4,8 +4,8 @@ import { ERROR_COOLDOWN_MS, isFree, readyIssues } from './scheduler.ts';
 
 const NOW = 1_000_000_000;
 const issue = (number: number, o: Partial<IssueInfo> = {}): IssueInfo => ({ number, title: `#${number}`, body: '', url: '', labels: [], createdAt: '', ...o });
-const floor = (issues: IssueInfo[], pulls: Partial<PullInfo>[] = []): Floor =>
-  ({ id: 'o/r', issues, pulls: pulls.map((p) => ({ state: 'OPEN', headRefName: 'x', closesIssues: [], mergedAt: null, ...p })) }) as Floor;
+const floor = (issues: IssueInfo[], pulls: Partial<PullInfo>[] = [], held: Floor['held'] = []): Floor =>
+  ({ id: 'o/r', issues, held, pulls: pulls.map((p) => ({ state: 'OPEN', headRefName: 'x', closesIssues: [], mergedAt: null, ...p })) }) as Floor;
 const worker = (o: Partial<Worker> = {}): Worker => ({ id: 'w', floorId: 'o/r', role: 'worker', status: 'idle', task: null, endedAt: null, ...o }) as Worker;
 
 describe('readyIssues', () => {
@@ -29,6 +29,10 @@ describe('readyIssues', () => {
     expect(readyIssues(f, [gaveUp], () => false, NOW).map((i) => i.number)).toEqual([1]);
     const elsewhere = worker({ floorId: 'o/other', status: 'working', task: { kind: 'issue', issueNumber: 1, title: '', branch: null, prNumber: null, prUrl: null } });
     expect(readyIssues(f, [elsewhere], () => false, NOW).map((i) => i.number)).toEqual([1]);
+  });
+
+  it('leaves an issue whose PR was closed for the manager', () => {
+    expect(readyIssues(floor([issue(1), issue(2)], [], [{ issue: 1, pr: 9 }]), [], () => false, NOW).map((i) => i.number)).toEqual([2]);
   });
 });
 

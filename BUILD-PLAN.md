@@ -196,11 +196,22 @@ Workers get up: walking (walk grid, paths, named spots), the errand system, coff
 
 **Done when:** in the demo, idle workers wander off for coffee, chat, nap and play ping-pong, come back to their desks for the next task, and cheer a merge. (Done: seen in a browser on the demo, from hires arriving by elevator through a stand-up, builds, QA and merges to gong runs, coffee, snacks, chats, a ping-pong game and a leaver with a box; the rules are tested in `client/src/world/*.test.ts`.)
 
-## Phase 12: the day and the senses
+## Phase 12: you in the office
 
-The day/night clock (lunch and going home need it), synthesized sound effects, saying hi to an idle worker, and the overview camera's click-a-worker.
+1. Your own character: a body you see when you look down, holding what you carry, and all of you in the overview (`Me.tsx`), in a look you pick in an editor with a live preview (`myLook.ts`, `ui/LookPanel.tsx`).
+2. What E does grows from opening panels to acting in the room (`view.ts` actions and what you hold, `actions.ts`).
+3. Say hi to an idle worker: they answer about their work and wave back.
+4. Coffee and snacks: take a mug, brew it at the machine and sip it; grab a snack from the fridge.
+5. Ride the elevator: its doors open as you come near, you choose a floor in the cabin, and arrive in the cabin on that floor.
+6. Ping-pong against a worker: pick up a paddle, and a free worker comes to play you.
 
-## Phase 13: the manager UI
+**Done when:** in the demo you pick your look, see your body in first person and yourself in the overview, say hi to a worker, make a coffee and drink it, eat a snack, ride the elevator to another floor, and play a game of ping-pong against a worker. (Done: seen in a browser on the demo, every step of it; the new rules are tested in `myLook.test.ts`, `elevatorRide.test.ts`, `sip.test.ts`, `chatterEvents.test.ts` and the pong tests.)
+
+## Phase 13: the day and the senses
+
+The day/night clock (lunch and going home need it), synthesized sound effects, and the overview camera's click-a-worker.
+
+## Phase 14: the manager UI
 
 The setup wizard, the manager console, the worker panel (live terminal, message box, setup), the 2D Kanban, the phone overlay, toasts and the help screen.
 

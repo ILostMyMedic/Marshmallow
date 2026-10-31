@@ -208,9 +208,9 @@ export const OFFICE_PLANTS: [number, number, number][] = [
 
 const plantRect = ([x, z, s]: [number, number, number]) => rect(x, z, 0.6 * s, 0.6 * s);
 
-/** What the player can't walk through on an office floor. */
-export function officeColliders(): Rect[] {
-  const out = [...shellColliders('office'), elevatorDoorway(), ...outsideColliders('office')];
+/** What can't be walked through on an office floor. `doorway`: the elevator's, shut (the player's opens with its doors). */
+export function officeColliders(doorway = true): Rect[] {
+  const out = [...shellColliders('office'), ...(doorway ? [elevatorDoorway()] : []), ...outsideColliders('office')];
   for (let s = 0; s < SEATS; s++) {
     const { x, z } = deskPosition(s);
     if (isEastDesk(s)) {
@@ -246,11 +246,11 @@ export const LOBBY_PLANTS: [number, number, number][] = [
   [HALF_W - 0.9, HALF_D - 0.9, 1.2],
 ];
 
-/** What the player can't walk through in the lobby: only what it draws so far. */
-export function lobbyColliders(): Rect[] {
+/** What can't be walked through in the lobby: only what it draws so far. `doorway` as for officeColliders. */
+export function lobbyColliders(doorway = true): Rect[] {
   return [
     ...shellColliders('lobby'),
-    elevatorDoorway(),
+    ...(doorway ? [elevatorDoorway()] : []),
     ...outsideColliders('lobby'),
     rect(CEO_DESK.x, CEO_DESK.z, DESK.w + 0.1, DESK.d + 0.1),
     rect(CEO_DESK.x, CEO_DESK.z + 0.8, 0.7, 0.6),

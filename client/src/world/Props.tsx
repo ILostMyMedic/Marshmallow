@@ -1,14 +1,19 @@
 // Adapted from cubefarm client/src/world/Props.tsx and toys/mugLook.tsx (MIT): the floor's furniture. The coffee
 // machine (CoffeeMachine.tsx), the mug stack and the fridge (KitchenFridge.tsx) keep cubefarm's places on the counter:
-// the errands' spots are measured from them.
-import { useRef } from 'react';
+// the errands' spots are measured from them. E on the mug stack takes you a mug, or puts yours back (cubefarm's
+// dispenser, without the physics).
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { onAction } from './actions';
 import { CoffeeMachine } from './CoffeeMachine';
+import { useInteractable } from './interact';
 import { Fridge } from './KitchenFridge';
 import { shade, toon } from './materials';
-import { MUG_SIZE, MugLook } from './mugLook';
+import { MUG_SIZE, MugLook, tintMug } from './mugLook';
+import './sipping'; // E sips what you hold (it registers with actions.ts): loaded with the floor, wherever you carry it
 import { Ball, Box, Cyl } from './Toon';
+import { useView } from './view';
 
 type P = [number, number, number];
 
@@ -63,11 +68,30 @@ export function CoffeeTable({ position, rotationY = 0 }: { position: P; rotation
 
 const MUG_COLORS = ['#ef476f', '#118ab2', '#ffd166'];
 
+let mugSeq = 1;
+
+/** E on the mug stack: a fresh, empty mug (in the stack's colours, in turn) for empty hands, or yours put back. */
+function mugsAction() {
+  const view = useView.getState();
+  if (view.held?.kind === 'mug') return view.setHeld(null);
+  if (view.held) return view.showToast('🙌 Your hands are full');
+  const id = `mug-player-${mugSeq}`;
+  tintMug(id, MUG_COLORS[(mugSeq - 1) % MUG_COLORS.length]);
+  mugSeq++;
+  view.setHeld({ kind: 'mug', id, sips: 0 });
+}
+
 /** Three mugs stacked rim-down on a little stand round a pole, beside the coffee machine. */
 function MugStack({ position }: { position: P }) {
   const { h } = MUG_SIZE;
+  const held = useView((s) => s.held?.kind ?? null);
+  const ref = useInteractable<THREE.Group>(
+    held === null ? { id: 'mugs', label: 'Take a mug', action: { kind: 'mugs' } } : held === 'mug' ? { id: 'mugs', label: 'Put the mug back', action: { kind: 'mugs' } } : null,
+    2.8,
+  );
+  useEffect(() => onAction('mugs', mugsAction), []);
   return (
-    <group position={position}>
+    <group ref={ref} position={position}>
       <Cyl r={0.1} h={0.03} position={[0, 0.015, 0]} color="#adb5bd" outline />
       <Cyl r={0.012} h={0.42} position={[0, 0.24, 0]} color="#6c757d" />
       {MUG_COLORS.map((c, i) => (
@@ -76,6 +100,10 @@ function MugStack({ position }: { position: P }) {
         </group>
       ))}
       <Box size={[0.04, 0.05, 0.05]} position={[0, 0.47, 0]} color="#6c757d" shadow={false} />
+      {/* an easier target than the thin stack */}
+      <mesh visible={false} position={[0, 0.24, 0]}>
+        <boxGeometry args={[0.2, 0.48, 0.2]} />
+      </mesh>
     </group>
   );
 }

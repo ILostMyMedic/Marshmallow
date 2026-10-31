@@ -1,12 +1,14 @@
-// The panel open over the 3D view (view.ts overlay): a worker's terminal, or a floor's board. Adapted from cubefarm
-// client/src/ui/Overlays.tsx, TerminalView.tsx and KanbanView.tsx (MIT): read-only for now; the worker panel's message
-// box and setup, and the board's actions, come with the manager UI.
+// The panel open over the 3D view (view.ts overlay): a worker's terminal, a floor's board, the elevator's buttons or
+// your look. Adapted from cubefarm client/src/ui/Overlays.tsx, TerminalView.tsx and KanbanView.tsx (MIT): read-only
+// for now; the worker panel's message box and setup, and the board's actions, come with the manager UI.
 import { useMemo } from 'react';
 import type { Worker } from '../../../shared/types';
 import { kanbanFor, type KanbanCard, type KanbanColumns } from '../kanban';
 import { useStore } from '../store';
 import { useView } from '../world/view';
+import { ElevatorPanel } from './ElevatorPanel';
 import { LiveTerminal } from './LiveTerminal';
+import { LookPanel } from './LookPanel';
 import { Panel } from './Panel';
 
 /** What a worker is on, in a few words. */
@@ -109,5 +111,7 @@ export function Overlays() {
   const overlay = useView((s) => s.overlay);
   if (overlay?.kind === 'terminal') return <TerminalView workerId={overlay.workerId} />;
   if (overlay?.kind === 'kanban') return <KanbanView floorId={overlay.floorId} />;
+  if (overlay?.kind === 'elevator') return <ElevatorPanel />;
+  if (overlay?.kind === 'look') return <LookPanel />;
   return null;
 }

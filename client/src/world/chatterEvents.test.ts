@@ -1,7 +1,7 @@
 // Adapted from cubefarm client/src/world/chatterEvents.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
 import type { Floor, LogLine, PullInfo, QaRecord, Task, Worker } from '../../../shared/types';
-import { authorOf, currentWork, lastFile, logNews, momentNews, slowChecks, storeNews, type OfficeSlice } from './chatterEvents';
+import { authorOf, currentWork, greeting, lastFile, logNews, momentNews, SHIPPED_MS, slowChecks, storeNews, type OfficeSlice } from './chatterEvents';
 
 const T = 1_000_000;
 
@@ -144,5 +144,21 @@ describe('the log', () => {
     expect(lastFile(lines)).toBe('store.ts');
     expect(currentWork(lines, T)).toEqual({ work: 'think', detail: null });
     expect(currentWork(lines, T + 60_000)).toBeNull();
+  });
+});
+
+describe('greeting', () => {
+  it('answers with their work: shipped, fixing, in QA, testing, working, or free', () => {
+    const merged = pull(5, { state: 'MERGED', mergedAt: new Date(T - 60_000).toISOString() });
+    const mood = (w: Worker, pulls: PullInfo[] = [], qas: QaRecord[] = []) => greeting(w, office([], qas, pulls), 'Sam', T).mood;
+    expect(mood(worker('ada', { task: task({ prNumber: 5 }) }), [merged])).toBe('shipped');
+    expect(greeting(worker('ada', { task: task({ prNumber: 5 }) }), office([], [], [merged]), 'Sam', T + SHIPPED_MS).mood).toBe('free');
+    expect(mood(worker('ada', { status: 'working', task: task({ kind: 'fix', prNumber: 5 }) }))).toBe('fixing');
+    expect(mood(worker('ada', { task: task({ prNumber: 5 }) }), [pull(5)], [qa({ status: 'testing' })])).toBe('inQa');
+    expect(mood(worker('ada', { status: 'working', task: task({ kind: 'qa', prNumber: 5 }) }))).toBe('testing');
+    expect(mood(worker('ada', { status: 'working', task: task({ issueNumber: 3 }) }))).toBe('working');
+    expect(mood(worker('ada'))).toBe('free');
+    expect(mood(worker('boss', { role: 'ceo' }))).toBe('ceo');
+    expect(greeting(worker('ada'), office([]), 'Sam', T)).toMatchObject({ kind: 'greet', manager: 'Sam' });
   });
 });

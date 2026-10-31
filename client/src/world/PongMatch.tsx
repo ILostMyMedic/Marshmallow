@@ -1,21 +1,24 @@
-// Adapted from cubefarm client/src/world/toys/PingPong.tsx (MIT): the match only, on pongSim.ts's plain ball instead of
-// a Rapier body. The table's colliders, the ends you press E at, the player's paddle, the ball's band and trail, the
-// sounds, the leaderboard's report and the probe are cut.
+// Adapted from cubefarm client/src/world/toys/PingPong.tsx (MIT): the match on pongSim.ts's plain ball instead of a
+// Rapier body. The table's colliders, the ball's band and trail, the sounds and the leaderboard's report are cut; the
+// ends you press E at are the hanging paddles (PongTable.tsx), and the paddle in your hand is your body's to draw.
 
-// Ping-pong between workers at the table (PongTable.tsx draws this): the ball, and the match runner (pongRunner.ts)
-// stepping it at the physics rate whatever the frame rate. While it's on screen the errands (pongErrands.ts) get the
-// match's seats, so idle workers come and play; it goes with the floor, and the match with it.
+// Ping-pong at the table (PongTable.tsx draws this): the ball, and the match runner (pongRunner.ts) stepping it at the
+// physics rate whatever the frame rate. While it's on screen the errands (pongErrands.ts) get the match's seats, so
+// idle workers come and play (you too, once E on a paddle picks it up), and window.__mmPong is up; it goes with the
+// floor, and the match with it.
 
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type * as THREE from 'three';
+import { onAction } from './actions';
 import { toon } from './materials';
 import { bodyState, say } from './people';
 import { setPongSeats } from './pongErrands';
 import { PONG } from './pongPhysics';
+import { installPongProbe } from './pongProbe';
 import { PongRunner } from './pongRunner';
 import { SimBall } from './pongSim';
-import { claimSeat, leaveSeat, npcPong, readySeat, resetPong, seatOf, startNpcMatch, tableFree, wantsOpponent } from './pongState';
+import { claimSeat, joinPong, leaveSeat, npcPong, readySeat, resetPong, seatOf, startNpcMatch, tableFree, wantsOpponent } from './pongState';
 
 /** At most this many steps a frame, so a long frame (a tab coming back) doesn't stall catching up. */
 const MAX_STEPS = 6;
@@ -34,7 +37,11 @@ export const PongMatch = memo(function PongMatch() {
 
   useEffect(() => {
     setPongSeats({ seatOf, wantsOpponent, tableFree, claimSeat, startNpcMatch, readySeat, leaveSeat, npcPong });
+    const offPaddle = onAction('paddle', (a) => void joinPong(a.end));
+    const offProbe = installPongProbe(sim.runner);
     return () => {
+      offProbe();
+      offPaddle();
       setPongSeats(null);
       sim.runner.stop();
       resetPong(); // leaving the floor: nobody plays here any more

@@ -1,17 +1,26 @@
 // You, on foot: WASD (or the arrows) walk, Shift runs, the mouse looks round once a click has captured it, E (or a
-// click) uses what the crosshair is on, and Tab flies up to the overview and back. Walls, furniture and shut doors
-// stop you (layout.ts collide, doors.ts). While the overview has the camera, the keys pan it instead.
-// Adapted from cubefarm client/src/world/Player.tsx (MIT): walking, looking and using things; toys, held things, the
-// gamepad, perches, photo mode, saved spots and key bindings are cut.
+// click) uses what the crosshair is on (or sips what you hold), G puts down what you hold, C opens your look, and Tab
+// flies up to the overview and back. Walls, furniture and shut doors stop you (layout.ts collide, doors.ts, the
+// elevator's doors: elevatorRide.ts); a ride in the elevator leaves you in its cabin on the new floor. With a ping-pong
+// paddle in hand the mouse moves the paddle, a click serves, and the camera stands behind your end of the table. While
+// the overview has the camera, the keys pan it instead. Your body is Me.tsx's, drawn where this leaves you (playerAt).
+// Adapted from cubefarm client/src/world/Player.tsx (MIT): walking, looking, using and holding things, sips and the
+// paddle; toys, the gamepad, perches, photo mode, saved spots and key bindings are cut.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { act, heldTakesE } from './actions';
 import { shutDoorways } from './doors';
+import { elevatorShut, takeArrival } from './elevatorRide';
 import { interactables } from './interact';
 import { collide, EYE_HEIGHT, SPAWN, type Rect } from './layout';
 import { createLookFilter, filterLookDelta, LOOK_RADIANS_PER_PX, resetLookFilter, useLookPrefs } from './look';
 import { watchLookLock } from './lookLock';
+import { useMe } from './myLook';
+import { fromOwn, type End } from './pongPhysics';
+import { paddle, pongCamera, pongClick, pongMouse, tickPaddle } from './pongState';
 import { arriveOnFloor, exitView, lookAllowed, playerAt, rigInput, rigOwnsCamera, setHomeLook, stepRig, tapView } from './rig';
+import { sipPose, tickSip } from './sipping';
 import { useView, type Focus } from './view';
 
 let canvasEl: HTMLCanvasElement | null = null;
@@ -44,13 +53,28 @@ function lockPointer(el: HTMLCanvasElement, options?: PointerLockOptions): Promi
   }
 }
 
-/** E (or a click while looking round): use what the crosshair is on. */
-function interact() {
-  const { focus, openOverlay } = useView.getState();
-  if (!focus) return;
+/** E: what you hold gets first go (a sip), then what the crosshair is on; a click (`withHeld` false) goes straight to the target. */
+function interact(withHeld = true) {
+  const { focus } = useView.getState();
+  if ((withHeld && heldTakesE(focus?.action.kind ?? null)) || !focus) return;
   hushMouse();
+  act(focus.action); // a panel takes the mouse back; something done in the room leaves you looking round
+}
+
+/** G: put down what you hold (a paddle: you leave the table). */
+function putDown() {
+  const { held, setHeld, showToast } = useView.getState();
+  if (!held) return;
+  setHeld(null);
+  if (held.kind === 'mug') showToast('☕ You leave the mug on the side');
+}
+
+/** Your look, the first time you walk the floor without one of your own. */
+function lookFirstTime() {
+  if (useMe.getState().chosen) return false;
   if (document.pointerLockElement) document.exitPointerLock();
-  openOverlay(focus.action);
+  useView.getState().openOverlay({ kind: 'look' });
+  return true;
 }
 
 const MOVE = {
@@ -61,11 +85,18 @@ const MOVE = {
   run: ['ShiftLeft', 'ShiftRight'],
 } as const;
 const held = (keys: Set<string>, codes: readonly string[]) => codes.some((c) => keys.has(c));
+const playingAt = (): End | null => {
+  const h = useView.getState().held;
+  return h?.kind === 'paddle' ? h.end : null;
+};
 
 const isTyping = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement | null;
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 };
+
+/** Where you stand at your end of the table: behind your paddle, a little to its left, so it's in your right hand. */
+const BAT_STANCE = { back: 0.42, left: 0.3 };
 
 export function Player({ colliders, floor }: { colliders: Rect[]; floor: number }) {
   const { camera, gl } = useThree();
@@ -76,6 +107,8 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
   const center = useMemo(() => new THREE.Vector2(0, 0), []);
   const frame = useRef(0);
   const lookFilter = useMemo(createLookFilter, []);
+  /** Where you stood before picking up a paddle, to step back to when you put it down. */
+  const beforePong = useRef<{ x: number; z: number } | null>(null);
   useEffect(() => setHomeLook(() => look.current), []);
 
   // For checks in a browser (Playwright): where you stand, and putting you somewhere facing a way (degrees).
@@ -91,21 +124,27 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     };
   }, [camera, floor]);
 
-  // Arrive in front of the elevator whenever the floor changes.
+  // A new floor: in the elevator's cabin after a ride, else in front of the elevator. A paddle stays with its table;
+  // a mug or a snack comes with you.
   useEffect(() => {
-    if (!rigOwnsCamera()) camera.position.set(SPAWN.x, EYE_HEIGHT, SPAWN.z);
-    look.current = { yaw: SPAWN.yaw, pitch: -0.05 };
-    arriveOnFloor({ x: SPAWN.x, z: SPAWN.z, ...look.current });
+    if (playingAt()) useView.getState().setHeld(null);
+    beforePong.current = null;
+    const at = takeArrival() ?? SPAWN;
+    if (!rigOwnsCamera()) camera.position.set(at.x, EYE_HEIGHT, at.z);
+    look.current = { yaw: at.yaw, pitch: -0.05 };
+    arriveOnFloor({ x: at.x, z: at.z, ...look.current });
   }, [floor, camera]);
 
   useEffect(() => {
     canvasEl = gl.domElement;
-    // Left button only. If the mouse is captured, act on the crosshair's target (like E); otherwise this press just
-    // captures the mouse, so the click that locks never also acts.
+    // Left button only. If the mouse is captured, act on the crosshair's target (like E) or serve at the table;
+    // otherwise this press just captures the mouse, so the click that locks never also acts.
     const onMouseDown = (e: MouseEvent) => {
       if (e.button !== 0 || !lookAllowed()) return;
       if (document.pointerLockElement !== gl.domElement) return requestLook();
-      if (!useView.getState().overlay) interact();
+      if (useView.getState().overlay) return;
+      if (playingAt()) pongClick();
+      else interact(false);
     };
     const onQuietMouse = (e: MouseEvent) => {
       if (performance.now() >= quietUntil) return;
@@ -114,13 +153,17 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     };
     const onLockChange = () => {
       resetLookFilter(lookFilter);
-      useView.getState().setLocked(document.pointerLockElement === gl.domElement);
+      const locked = document.pointerLockElement === gl.domElement;
+      useView.getState().setLocked(locked);
+      // Esc at the table: you've stepped away, so the paddle goes back on its hook
+      if (!locked && playingAt()) useView.getState().setHeld(null);
     };
     const onMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement || !document.hasFocus()) return;
       const d = filterLookDelta(lookFilter, e.movementX, e.movementY, e.timeStamp);
       if (!d) return;
       const { sensitivity, invertY } = useLookPrefs.getState();
+      if (playingAt()) return pongMouse(d[0], d[1], sensitivity); // playing: the mouse moves the paddle
       const k = LOOK_RADIANS_PER_PX * sensitivity;
       look.current.yaw -= d[0] * k;
       look.current.pitch = Math.max(-1.35, Math.min(1.35, look.current.pitch - d[1] * k * (invertY ? -1 : 1)));
@@ -131,12 +174,18 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       if (view.overlay) return;
       keys.current.add(e.code);
       if (e.code === 'Escape' && view.mode !== 'first') return exitView();
-      if (e.code === 'KeyE' && !e.repeat && view.mode === 'first') interact();
+      if (e.repeat) return;
+      if (e.code === 'KeyE' && view.mode === 'first' && !playingAt()) interact();
+      if (e.code === 'KeyG' && view.mode === 'first') putDown();
+      if (e.code === 'KeyC' && view.mode === 'first') {
+        if (document.pointerLockElement) document.exitPointerLock();
+        view.openOverlay({ kind: 'look' });
+      }
       if (e.code === 'Tab') {
         e.preventDefault(); // not on to the next button
-        if (e.repeat) return;
+        if (playingAt()) view.setHeld(null); // up from the table first
         tapView();
-        if (useView.getState().mode === 'first' && useLookPrefs.getState().grabOnClose) requestLook();
+        if (useView.getState().mode === 'first' && !lookFirstTime() && useLookPrefs.getState().grabOnClose) requestLook();
       }
     };
     const onKeyUp = (e: KeyboardEvent) => keys.current.delete(e.code);
@@ -171,6 +220,7 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     const strafe = (held(k, MOVE.right) ? 1 : 0) - (held(k, MOVE.left) ? 1 : 0);
     const running = held(k, MOVE.run);
     const speed = running ? 6.5 : 3.6;
+    tickSip();
 
     // the overview has the camera (rig.ts): you stay where you were standing, and the keys pan it
     if (rigOwnsCamera()) {
@@ -180,6 +230,28 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       if (view.focus) view.setFocus(null);
       stepRig(dt);
       return;
+    }
+
+    // at the ping-pong table: the camera stands behind your end, and you stand at it with the paddle in hand
+    const end = playingAt();
+    if (end) {
+      tickPaddle(dt);
+      beforePong.current ??= { x: camera.position.x, z: camera.position.z };
+      const v = pongCamera(end);
+      camera.position.set(v.x + v.shake.x, v.y + v.shake.y, v.z + v.shake.z);
+      camera.rotation.set(v.pitch, v.yaw, 0, 'YXZ');
+      const at = fromOwn(end, Math.max(paddle.back, 0) + BAT_STANCE.back, paddle.lat - BAT_STANCE.left);
+      playerAt.x = at.x;
+      playerAt.z = at.z;
+      playerAt.yaw = v.yaw;
+      look.current = { yaw: v.yaw, pitch: -0.05 }; // put the paddle down and you still face the table
+      if (view.focus) view.setFocus(null);
+      return;
+    }
+    if (beforePong.current) {
+      // back from the table: where you stood when you picked the paddle up, looking at the table still
+      camera.position.set(beforePong.current.x, EYE_HEIGHT, beforePong.current.z);
+      beforePong.current = null;
     }
 
     const { yaw, pitch } = look.current;
@@ -193,13 +265,16 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
       let p = collide(camera.position.x + dx, camera.position.z + dz, colliders);
       const shut = shutDoorways(); // a side door still sliding open
       if (shut.length) p = collide(p.x, p.z, shut);
+      const lift = elevatorShut(); // the elevator's doors, unless they're open
+      if (lift.length) p = collide(p.x, p.z, lift);
       camera.position.x = p.x;
       camera.position.z = p.z;
       moving = true;
     }
     bob.current += moving ? dt * speed * 2.2 : 0;
     camera.position.y = EYE_HEIGHT + (moving ? Math.sin(bob.current) * 0.035 : 0);
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    // a sip tips your head back a little (the last gulp more)
+    camera.rotation.set(pitch + sipPose.head, yaw, 0, 'YXZ');
     playerAt.x = camera.position.x;
     playerAt.z = camera.position.z;
     playerAt.yaw = yaw;

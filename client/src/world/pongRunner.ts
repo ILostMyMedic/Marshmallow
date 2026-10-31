@@ -1,18 +1,38 @@
-// Adapted from cubefarm client/src/world/toys/pongRunner.ts (MIT): two workers only, on pongSim.ts's plain ball. The
-// player's paddle, contact and autopilot, the rematch, the probe's drills, forced rallies and live view, the sounds and
-// the leaderboard's report are cut.
+// Adapted from cubefarm client/src/world/toys/pongRunner.ts (MIT): on pongSim.ts's plain ball instead of a Rapier
+// body. The sounds, the room's "ooh" at a long rally and the leaderboard's report are cut.
 
 // Runs ping-pong on one ball: the serve (a toss and a hit), the rally (the air's pull and the table's bounce from
 // pongPhysics.ts, paddles meeting the ball), the umpire's calls and the score (pongRules.ts), the workers' play
-// (pongAi.ts) and their cheers and grumbles. Plain TypeScript over the ball's few rigid-body calls (pongSim.ts
-// PongBody), stepped before and after every ball step: PongMatch.tsx runs it at the table, the tests on a bare ball.
+// (pongAi.ts), the player's paddle, and the workers' cheers and grumbles. Plain TypeScript over the ball's few
+// rigid-body calls (pongSim.ts PongBody), stepped before and after every ball step: PongMatch.tsx runs it at the
+// table, the tests on a bare ball. The probe's drills and forced rallies (pongProbe.ts) run here too.
 
 import type { Gesture } from './body';
 import { aiServe, aiShot, atContact, contactFor, missChance, REACH, reachTo, READY, readyPaddle, skillFor, ratingOf, standFor, swingPaddle, type Contact, type Skill, type Wobble } from './pongAi';
-import { airStep, fromOwn, halfAt, offLine, otherEnd, overTable, ownFrame, PONG, solveShot, tableBounce, TABLE, type BallState, type End, type Shot, type V3 } from './pongPhysics';
+import {
+  airStep,
+  fromOwn,
+  halfAt,
+  isSmash,
+  offLine,
+  onHalf,
+  otherEnd,
+  overTable,
+  ownFrame,
+  PONG,
+  serveShot,
+  solveShot,
+  swingShot,
+  tableBounce,
+  TABLE,
+  type BallState,
+  type End,
+  type Shot,
+  type V3,
+} from './pongPhysics';
 import { newGame, newRally, rallyStep, scorePoint, serverOf, toHit, type Call, type Rally, type RallyEvent } from './pongRules';
 import type { PongBody } from './pongSim';
-import { bothReady, leaveSeat, pongMatch, setNpcPong, type Match } from './pongState';
+import { autopilot, bothReady, leaveSeat, paddle, paddleAt, paddleSwing, pongChanged, pongMatch, rematch, setNpcPong, shakeView, type Match, type Seat } from './pongState';
 
 export interface RunnerIo {
   /** Where a worker's body really is (people.ts bodyState); null to take them as being where they were sent. */
@@ -35,17 +55,22 @@ export const TIMING = {
   /** A worker's pause before tossing to serve (plus up to `serveJitter`). */
   serve: 0.9,
   serveJitter: 0.8,
-  /** After a game, how long the two linger before going back. */
+  /** After a game: how long the player has to click for a rematch, and how long two workers linger. */
+  rematch: 12,
   linger: 4,
   /** A rally with nothing happening this long is over. */
   stall: 3,
 };
 /** The toss: up at this speed from the hand, met on the way down at this height over the table. */
 const TOSS = { up: 2.2, hitY: TOP + 0.28 };
+/** How near (m) the player's paddle must be to the ball as it passes: across, up and down, and all round for a slow one. */
+export const PADDLE_HIT = { lat: 0.21, y: 0.32, near: 0.14 };
 
 /** Faces down the table from `end` (body.ts heading). */
 const facing = (end: End) => (end === 'west' ? -Math.PI / 2 : Math.PI / 2);
 const ENDS: readonly End[] = ['west', 'east'];
+const workerOf = (s: Seat | null | undefined) => (s?.kind === 'worker' ? s.id : null);
+const playerAtTable = (m: Match) => ENDS.find((e) => m.seats[e]?.kind === 'player');
 
 interface Plan {
   /** Clock time they start moving for the ball (their reaction), the contact they read, and when it comes. */
@@ -56,6 +81,7 @@ interface Plan {
   decided: boolean;
   willMiss: boolean;
   shot: Shot | null;
+  smash: boolean;
   wobble: Wobble | null;
   /** They've swung at this one (hit or whiffed): no second go. */
   swung: boolean;
@@ -71,6 +97,30 @@ interface AiEnd {
   sayUntil: number;
 }
 
+/** A ball the probe feeds at the player: its pace and spin, and where on the player's half it lands. */
+export interface DrillBall {
+  speed: number;
+  top: number;
+  side: number;
+  lat: number;
+  depth: number;
+}
+
+/** A drill from the probe: balls fed at the player, one at a time, each return checked. */
+interface Drill {
+  queue: DrillBall[];
+  results: { landed: boolean; why: string }[];
+}
+
+/** What the probe sees of the match in play. */
+export interface PongLive {
+  ball: { x: number; y: number; z: number; speed: number; top: number; side: number; live: boolean } | null;
+  returns: { tried: number; landed: number };
+  drill: { left: number; results: Drill['results'] } | null;
+  lastShot: { by: End; speed: number; top: number; side: number; landsAt: { x: number; z: number } | null; smash: boolean } | null;
+  forced: number;
+}
+
 export class PongRunner {
   /** The runner's clock (s), a step at a time. */
   t = 0;
@@ -79,13 +129,24 @@ export class PongRunner {
   private live = false;
   private b: BallState = { p: { x: 0, y: 0, z: 0 }, v: { x: 0, y: 0, z: 0 }, w: { x: 0, y: 0, z: 0 } };
   private prevP: V3 = { x: 0, y: 0, z: 0 };
+  private padBackPrev = paddle.back;
   private rally: Rally = newRally('west');
   private lastEventT = 0;
   private inNet = false;
   private parked = false;
   private serve: { by: End; tossed: boolean; tossAt: number; delay: number; lat: number } | null = null;
+  /** Who serves first in the rematch the player asked for (the loser). */
+  private nextFirst: End | null = null;
   private ai: Record<End, AiEnd> = { west: this.freshAi('west'), east: this.freshAi('east') };
   private skills = new Map<string, Skill>();
+  private drillState: Drill | null = null;
+  private drilled: Drill['results'] | null = null;
+  private returns = { tried: 0, landed: 0 };
+  private lastShot: PongLive['lastShot'] = null;
+  /** The autopilot's read of the ball coming to the player. */
+  private playerPlan: Plan | null = null;
+  /** The next this many worker returns are clean (the probe forcing a rally). */
+  forced = 0;
   private readonly rand: () => number;
 
   constructor(
@@ -144,7 +205,7 @@ export class PongRunner {
 
   // ---------- each step ----------
 
-  /** Before the ball's step: the match's phases, the air on the ball, the workers' feet and paddles. */
+  /** Before the ball's step: the match's phases, the air on the ball, the workers' feet and paddles, the player's paddle. */
   before() {
     this.t += STEP;
     const m = pongMatch();
@@ -155,6 +216,7 @@ export class PongRunner {
     }
     switch (m.phase) {
       case 'waiting':
+        if (this.drillState) break;
         this.park();
         if (bothReady(m)) this.startGame(m);
         break;
@@ -165,13 +227,15 @@ export class PongRunner {
         this.inPlay(m);
         break;
       case 'point':
-        if (this.t - this.phaseT > (m.last ? TIMING.point : TIMING.let)) this.toServe(m);
+        if (this.drillState && this.t - this.phaseT > 0.6) this.feedNext(m);
+        else if (!this.drillState && this.t - this.phaseT > (m.last ? TIMING.point : TIMING.let)) this.toServe(m);
         break;
       case 'over':
         this.afterGame(m);
         break;
     }
     this.moveWorkers(m);
+    this.movePaddle(m);
     this.prevP = this.body.translation();
   }
 
@@ -186,20 +250,8 @@ export class PongRunner {
     const v = this.body.linvel();
     const onTable = !this.parked && v.y < 0 && p.y <= TOP + R && this.prevP.y > TOP + R - 0.05 && overTable(p.x, p.z);
     if (onTable) this.tableTouch(p, v);
-    if (!this.live || !m || m.phase !== 'rally') return;
-    if (onTable) {
-      this.event(m, { kind: 'bounce', on: halfAt(p.x) });
-      if (m.phase !== 'rally') return;
-    }
-    const nearNet = Math.abs(p.x - TABLE.x) < R + PONG.net.t / 2 + 0.02 && p.y < NET_TOP + R && p.y > TOP && Math.abs(p.z - TABLE.z) < HALF_WID + PONG.net.overhang + R;
-    if (nearNet && !this.inNet) this.event(m, { kind: 'net' });
-    this.inNet = nearNet;
-    if (p.y < TOP - 0.05 && !overTable(p.x, p.z)) this.event(m, { kind: 'dead' });
-    else if (this.t - this.lastEventT > TIMING.stall) this.event(m, { kind: 'dead' });
-    if (m.phase === 'rally') {
-      const turn = toHit(this.rally);
-      if (turn) this.contact(m, turn, this.body.translation(), this.body.linvel());
-    }
+    if (this.live && m?.phase === 'rally') this.umpire(m, p, onTable);
+    this.padBackPrev = paddle.back;
   }
 
   /** The ball comes down on the table top: it bounces (pongPhysics), or, barely moving, settles on it and rolls. */
@@ -221,8 +273,12 @@ export class PongRunner {
     this.matchId = m?.id ?? -1;
     this.ai = { west: this.freshAi('west'), east: this.freshAi('east') };
     this.serve = null;
+    this.nextFirst = null;
+    this.drillState = null;
+    this.forced = 0;
+    this.playerPlan = null;
     for (const end of ENDS) {
-      const id = m?.seats[end]?.id;
+      const id = workerOf(m?.seats[end]);
       if (id) setNpcPong(id, null);
     }
   }
@@ -230,14 +286,18 @@ export class PongRunner {
   private setPhase(m: Match, phase: Match['phase']) {
     m.phase = phase;
     this.phaseT = this.t;
+    pongChanged();
   }
 
   private startGame(m: Match) {
-    m.game = newGame(this.rand() < 0.5 ? 'west' : 'east');
+    // the player serves first, or the loser of the last game in a rematch
+    m.game = newGame(this.nextFirst ?? playerAtTable(m) ?? (this.rand() < 0.5 ? 'west' : 'east'));
+    this.nextFirst = null;
     m.last = null;
     m.rally = 0;
     m.longest = 0;
     for (const end of ENDS) this.ai[end].plan = null;
+    this.playerPlan = null;
     this.toServe(m);
   }
 
@@ -245,6 +305,7 @@ export class PongRunner {
     this.serve = null;
     this.live = false;
     m.rally = 0;
+    m.ask = null;
     this.setPhase(m, 'serve');
   }
 
@@ -254,10 +315,13 @@ export class PongRunner {
     if (!seat || !bothReady(m)) return;
     if (!this.serve || this.serve.by !== by) this.serve = { by, tossed: false, tossAt: 0, delay: TIMING.serve + this.rand() * TIMING.serveJitter, lat: (this.rand() * 2 - 1) * 0.3 };
     const sv = this.serve;
+    const player = seat.kind === 'player';
     if (!sv.tossed) {
-      // the ball in hand, in front of them, until they toss it
-      this.hold(this.tossSpot(by));
-      if (this.t - this.phaseT <= sv.delay) return;
+      // the ball in hand, until they toss it: over the player's paddle, or in front of the worker
+      this.hold(player ? { ...paddleAt(by), y: TOSS.hitY - 0.06 } : this.tossSpot(by));
+      const go = player ? m.ask === 'serve' || (autopilot.on && this.t - this.phaseT > 0.6) : this.t - this.phaseT > sv.delay;
+      if (!go) return;
+      m.ask = null;
       sv.tossed = true;
       sv.tossAt = this.t;
       this.parked = false;
@@ -268,9 +332,11 @@ export class PongRunner {
     const p = this.body.translation();
     const v = this.body.linvel();
     if (v.y < 0 && p.y <= TOSS.hitY) {
-      const sol = solveShot(p, by, aiServe(this.skill(seat.id), by, this.rand));
+      const shot = seat.kind === 'player' ? serveShot(by, paddle.lat * 0.6, paddleSwing()) : aiServe(this.skill(seat.id), by, this.rand);
+      const sol = solveShot(p, by, shot);
       this.launch(sol.v, sol.w);
-      this.swung(by, p);
+      this.lastShot = { by, speed: shot.speed, top: shot.top, side: shot.side, landsAt: sol.land, smash: false };
+      if (!player) this.swung(by, p);
       this.rally = newRally(by);
       this.event(m, { kind: 'serve', by });
       this.inNet = false;
@@ -293,19 +359,44 @@ export class PongRunner {
     airStep(this.b, STEP);
     this.body.setLinvel(this.b.v, true);
     this.body.setAngvel(this.b.w, true);
-    for (const end of ENDS) if (m.seats[end]) this.think(end);
+    for (const end of ENDS) if (m.seats[end]?.kind === 'worker' && !this.drillState) this.think(end);
   }
 
-  /** They've had their game: a moment to take it in, then back to their desks. */
+  /** After a game: the player clicks for a rematch (the loser serving first); otherwise, a moment, then back to the desks. */
   private afterGame(m: Match) {
-    if (this.t - this.phaseT <= TIMING.linger) return;
+    const you = playerAtTable(m);
+    if (you && m.ask === 'rematch') {
+      m.ask = null;
+      this.nextFirst = m.last ? otherEnd(m.last.winner) : you;
+      rematch(m, this.nextFirst);
+      return;
+    }
+    if (this.t - this.phaseT <= (you ? TIMING.rematch : TIMING.linger)) return;
+    // the workers have had their game (the player stays, and a click for a rematch brings someone else)
     for (const end of ENDS) {
-      const id = m.seats[end]?.id;
+      const id = workerOf(m.seats[end]);
       if (id) leaveSeat(id);
     }
   }
 
   // ---------- the umpire ----------
+
+  /** The ball in play after its step: a bounce, the net, a dead ball, and whoever's turn it is meeting it. */
+  private umpire(m: Match, p: V3, onTable: boolean) {
+    if (onTable) {
+      this.event(m, { kind: 'bounce', on: halfAt(p.x) });
+      if (m.phase !== 'rally') return;
+    }
+    const nearNet = Math.abs(p.x - TABLE.x) < R + PONG.net.t / 2 + 0.02 && p.y < NET_TOP + R && p.y > TOP && Math.abs(p.z - TABLE.z) < HALF_WID + PONG.net.overhang + R;
+    if (nearNet && !this.inNet) this.event(m, { kind: 'net' });
+    this.inNet = nearNet;
+    if (p.y < TOP - 0.05 && !overTable(p.x, p.z)) this.event(m, { kind: 'dead' });
+    else if (this.t - this.lastEventT > TIMING.stall) this.event(m, { kind: 'dead' });
+    if (m.phase === 'rally') {
+      const turn = toHit(this.rally);
+      if (turn) this.contact(m, turn, this.body.translation(), this.body.linvel());
+    }
+  }
 
   private event(m: Match, e: RallyEvent) {
     this.lastEventT = this.t;
@@ -317,6 +408,14 @@ export class PongRunner {
   private called(m: Match, call: Call) {
     this.live = false;
     for (const end of ENDS) this.ai[end].plan = null;
+    this.playerPlan = null;
+    if (this.drillState) {
+      // a drill scores nothing: it only notes whether the player's return made it
+      const landed = 'point' in call && call.point === playerAtTable(m) && (call.why === 'missed' || call.why === 'double-bounce');
+      this.drillState.results.push({ landed, why: 'point' in call ? call.why : 'let' });
+      this.setPhase(m, 'point');
+      return;
+    }
     if (!('point' in call)) {
       m.last = null;
       this.setPhase(m, 'point');
@@ -333,7 +432,7 @@ export class PongRunner {
   /** Workers cheer a point won and grumble at one lost, and more so at the end of a game. */
   private react(m: Match, winner: End, game: boolean) {
     for (const end of ENDS) {
-      const id = m.seats[end]?.id;
+      const id = workerOf(m.seats[end]);
       if (!id) continue;
       const won = end === winner;
       const ai = this.ai[end];
@@ -347,17 +446,21 @@ export class PongRunner {
     }
   }
 
-  /** The ball reached someone's half: the worker there reads it properly now, and decides. */
+  /** The ball reached someone's half: a worker there reads it properly now, and decides. */
   private bounced(m: Match, on: End) {
-    if (toHit(this.rally) === on && m.seats[on]) this.decide(on, true);
+    if (toHit(this.rally) !== on) return;
+    if (m.seats[this.rally.striker]?.kind === 'player' && this.rally.hits > 0) this.returns.landed++; // the player's return made it over
+    if (m.seats[on]?.kind === 'worker' && !this.drillState) this.decide(on, true);
+    if (m.seats[on]?.kind === 'player' && autopilot.on) this.playerPlan = this.read(on, true);
   }
 
   // ---------- the workers ----------
 
-  /** Someone just hit it towards `end`: the worker there starts reading it once their reaction time is up. */
+  /** Someone just hit it towards `end`: a worker there starts reading it once their reaction time is up. */
   private planFor(m: Match, end: End) {
     const seat = m.seats[end];
-    if (seat) this.ai[end].plan = { readyAt: this.t + this.skill(seat.id).reaction, contact: null, hitT: 0, decided: false, willMiss: false, shot: null, wobble: null, swung: false };
+    if (seat?.kind === 'worker') this.ai[end].plan = { readyAt: this.t + this.skill(seat.id).reaction, contact: null, hitT: 0, decided: false, willMiss: false, shot: null, smash: false, wobble: null, swung: false };
+    if (seat?.kind === 'player' && autopilot.on) this.playerPlan = this.read(end, false);
   }
 
   /** Where the ball now in play will meet `end`'s paddle. */
@@ -365,14 +468,14 @@ export class PongRunner {
     const p = this.body.translation();
     const v = this.body.linvel();
     const c = contactFor({ p, v, w: this.b.w }, end, bounced);
-    return c ? { readyAt: this.t, contact: c, hitT: this.t + c.t, decided: bounced, willMiss: false, shot: null, wobble: null, swung: false } : null;
+    return c ? { readyAt: this.t, contact: c, hitT: this.t + c.t, decided: bounced, willMiss: false, shot: null, smash: false, wobble: null, swung: false } : null;
   }
 
   /** A worker's first read, once they've reacted: roughly where it's going (worse players misjudge it more). */
   private think(end: End) {
     const plan = this.ai[end].plan;
     if (!plan || plan.contact || this.t < plan.readyAt) return;
-    const id = pongMatch()?.seats[end]?.id;
+    const id = workerOf(pongMatch()?.seats[end]);
     if (!id) return;
     const c = contactFor({ p: this.body.translation(), v: this.body.linvel(), w: this.b.w }, end, false);
     if (!c) return;
@@ -383,7 +486,7 @@ export class PongRunner {
 
   /** After the bounce on their half: where it really meets them, whether they'll miss it, and the return they'll play. */
   private decide(end: End, bounced: boolean) {
-    const id = pongMatch()?.seats[end]?.id;
+    const id = workerOf(pongMatch()?.seats[end]);
     if (!id) return;
     const s = this.skill(id);
     const read = this.read(end, bounced);
@@ -397,9 +500,11 @@ export class PongRunner {
     const to = standFor(end, read.contact.p);
     const left = Math.max(0, read.hitT - this.t);
     const stretch = Math.max(0, Math.hypot(to.x - from.x, to.z - from.z) - s.move * left);
-    read.willMiss = this.rand() < missChance(s, read.contact, stretch);
-    const { shot, wobble } = aiShot(s, end, read.contact.p, this.rand);
+    const forced = this.forced > 0;
+    read.willMiss = !forced && this.rand() < missChance(s, read.contact, stretch);
+    const { shot, smash, wobble } = aiShot(forced ? { ...s, aim: 0.02 } : s, end, read.contact.p, this.rand);
     read.shot = shot;
+    read.smash = smash;
     read.wobble = wobble;
     read.readyAt = Math.min(ai.plan?.readyAt ?? this.t, this.t);
     ai.plan = read;
@@ -407,7 +512,8 @@ export class PongRunner {
 
   private contact(m: Match, end: End, p: V3, v: V3) {
     const seat = m.seats[end];
-    if (!seat || !atContact(end, p, v)) return;
+    if (seat?.kind === 'player') return this.playerContact(m, end, p, v);
+    if (seat?.kind !== 'worker' || this.drillState || !atContact(end, p, v)) return;
     const ai = this.ai[end];
     if (ai.plan?.swung) return;
     if (!ai.plan?.decided) this.decide(end, true);
@@ -416,16 +522,40 @@ export class PongRunner {
     this.swung(end, p);
     if (plan) plan.swung = true;
     if (!plan?.shot || plan.willMiss || reach > REACH + 0.25) return; // a whiff: the swing goes through, the ball doesn't come back
-    this.strike(m, end, p, plan.shot, plan.wobble);
+    if (this.forced > 0) this.forced--;
+    this.strike(m, end, p, plan.shot, plan.smash, plan.wobble);
+  }
+
+  /** The player's paddle meets the ball if it passed through the paddle's plane close enough (or a slow one came to it). */
+  private playerContact(m: Match, end: End, p: V3, v: V3) {
+    const o0 = ownFrame(end, this.prevP.x, this.prevP.z);
+    const o1 = ownFrame(end, p.x, p.z);
+    const rel0 = o0.back - this.padBackPrev;
+    const rel1 = o1.back - paddle.back;
+    let hit = false;
+    if (rel0 < 0 && rel1 >= 0) {
+      const k = rel0 / (rel0 - rel1);
+      const lat = o0.lat + (o1.lat - o0.lat) * k;
+      const y = this.prevP.y + (p.y - this.prevP.y) * k;
+      hit = Math.abs(lat - paddle.lat) <= PADDLE_HIT.lat && Math.abs(y - paddle.y) <= PADDLE_HIT.y;
+    } else hit = Math.hypot(o1.back - paddle.back, o1.lat - paddle.lat, p.y - paddle.y) <= PADDLE_HIT.near;
+    if (!hit) return;
+    const swing = paddleSwing();
+    this.strike(m, end, p, swingShot(end, p, { v, w: this.b.w }, swing), isSmash(p.y, swing));
   }
 
   /** A paddle sends the ball back with `shot`, off its line by `wobble`. */
-  private strike(m: Match, end: End, p: V3, shot: Shot, wobble: Wobble | null) {
+  private strike(m: Match, end: End, p: V3, shot: Shot, smash: boolean, wobble: Wobble | null = null) {
     const sol = solveShot(p, end, shot);
     this.launch(wobble ? offLine(sol.v, wobble) : sol.v, sol.w);
+    if (m.seats[end]?.kind === 'player') this.returns.tried++;
+    this.lastShot = { by: end, speed: shot.speed, top: shot.top, side: shot.side, landsAt: sol.land, smash };
+    const you = playerAtTable(m);
+    if (smash && you) shakeView(end === you ? 1 : 0.6);
     this.inNet = false;
     this.event(m, { kind: 'hit', by: end });
     m.rally++;
+    pongChanged();
     this.planFor(m, otherEnd(end));
   }
 
@@ -440,7 +570,7 @@ export class PongRunner {
     const serving = m.phase === 'serve' ? serverOf(m.game) : null;
     for (const end of ENDS) {
       const seat = m.seats[end];
-      if (!seat?.ready) continue;
+      if (seat?.kind !== 'worker' || !seat.ready) continue;
       const id = seat.id;
       if (!m.seats[otherEnd(end)]) {
         // nobody at the other end: they wait on their own (pongErrands.ts gives up after a while), not moved by the match
@@ -449,36 +579,123 @@ export class PongRunner {
       }
       const ai = this.ai[end];
       const at = this.io.bodyAt(id) ?? ai.stand;
-      let paddle: V3;
+      let paddleNow: V3;
       const plan = ai.plan;
       if (serving === end) {
         ai.stand = fromOwn(end, 0.55, this.serve?.lat ?? 0);
         const sv = this.serve;
         const hitAt = sv?.tossed ? sv.tossAt + (2 * TOSS.up) / PONG.gravity + 0.03 : this.t + 1;
-        paddle = sv?.tossed ? swingPaddle(end, { ...this.tossSpot(end), y: TOSS.hitY }, this.t, hitAt) : { ...readyPaddle(end, at), y: this.body.translation().y - 0.1 };
+        paddleNow = sv?.tossed ? swingPaddle(end, { ...this.tossSpot(end), y: TOSS.hitY }, this.t, hitAt) : { ...readyPaddle(end, at), y: this.body.translation().y - 0.1 };
       } else if (plan?.contact && this.t >= plan.readyAt) {
         ai.stand = standFor(end, plan.contact.p);
-        paddle = swingPaddle(end, plan.contact.p, this.t, plan.hitT);
+        paddleNow = swingPaddle(end, plan.contact.p, this.t, plan.hitT);
       } else if (ai.metAt && this.t - ai.swungAt < 0.35) {
-        paddle = swingPaddle(end, ai.metAt, this.t, ai.swungAt);
+        paddleNow = swingPaddle(end, ai.metAt, this.t, ai.swungAt);
       } else {
         if (m.phase !== 'rally' || toHit(this.rally) !== end) ai.stand = fromOwn(end, READY.back, READY.lat);
-        paddle = readyPaddle(end, at);
+        paddleNow = readyPaddle(end, at);
       }
       const mood = ai.mood && this.t < ai.mood.until ? ai.mood.gesture : null;
       if (ai.sayUntil && this.t > ai.sayUntil) {
         ai.sayUntil = 0;
         this.io.say?.(id, null);
       }
-      setNpcPong(id, { x: ai.stand.x, z: ai.stand.z, heading: facing(end), speed: this.skill(id).move, gesture: mood ?? 'paddle', paddle: mood ? null : paddle });
+      setNpcPong(id, { x: ai.stand.x, z: ai.stand.z, heading: facing(end), speed: this.skill(id).move, gesture: mood ?? 'paddle', paddle: mood ? null : paddleNow });
     }
+  }
+
+  /** The player's paddle: it rises and falls with an incoming ball by itself, and the autopilot (probe) plays for them. */
+  private movePaddle(m: Match) {
+    const end = playerAtTable(m);
+    if (!end) return;
+    const ball = this.body.translation();
+    const coming = this.live && (toHit(this.rally) === end || (halfAt(ball.x) !== end && this.rally.striker !== end));
+    let y = TOP + 0.2;
+    if (coming) y = Math.min(TOP + 0.95, Math.max(TOP + 0.06, ball.y));
+    if (autopilot.on && this.playerPlan?.contact) {
+      const c = this.playerPlan.contact;
+      const o = ownFrame(end, c.p.x, c.p.z);
+      // stand the paddle's plane just past where the ball will cross it, right on its line
+      const k = 0.35;
+      paddle.lat += (o.lat - paddle.lat) * k;
+      paddle.back += (o.back + 0.015 - paddle.back) * k;
+      y = c.p.y;
+    } else if (autopilot.on && !coming) {
+      paddle.lat *= 0.9;
+      paddle.back += (0.25 - paddle.back) * 0.1;
+    }
+    paddle.y += (y - paddle.y) * (coming ? 0.5 : 0.15);
+  }
+
+  // ---------- the probe ----------
+
+  /** Feeds `queue` balls at the player one at a time (they need to be at the table); each return is checked. */
+  drill(queue: DrillBall[]) {
+    const m = pongMatch();
+    if (!m || !playerAtTable(m)) return false;
+    if (m.id !== this.matchId) this.newMatch(m);
+    this.drillState = { queue: [...queue], results: [] };
+    this.drilled = null;
+    this.feedNext(m);
+    return true;
+  }
+
+  private feedNext(m: Match) {
+    const d = this.drillState;
+    const you = playerAtTable(m);
+    if (!d || !you) return;
+    const ball = d.queue.shift();
+    if (!ball) {
+      this.drilled = d.results;
+      this.drillState = null;
+      this.toServe(m);
+      return;
+    }
+    const far = otherEnd(you);
+    const from = { ...fromOwn(far, 0.25, ball.lat * 0.5), y: TOP + 0.28 };
+    // a good ball every time: a feed that can't make it over at its pace goes a little quicker
+    let sol = solveShot(from, far, { target: onHalf(you, ball.depth, ball.lat), speed: ball.speed, top: ball.top, side: ball.side });
+    for (let i = 1; i <= 4 && !sol.land; i++) sol = solveShot(from, far, { target: onHalf(you, ball.depth, ball.lat), speed: ball.speed + 0.6 * i, top: ball.top, side: ball.side });
+    this.parked = false;
+    this.body.setTranslation(from, true);
+    this.launch(sol.v, sol.w);
+    this.rally = { striker: far, serving: false, served: true, bounces: 0, net: false, hits: 1 };
+    this.lastEventT = this.t;
+    this.inNet = false;
+    this.prevP = { ...from };
+    this.setPhase(m, 'rally');
+    if (autopilot.on) this.playerPlan = this.read(you, false);
+  }
+
+  /** The probe asks for a serve now: the player's (as if they clicked) or the worker's. */
+  serveNow() {
+    const m = pongMatch();
+    if (!m || m.phase !== 'serve') return false;
+    const by = serverOf(m.game);
+    if (m.seats[by]?.kind === 'player') m.ask = 'serve';
+    else if (this.serve) this.serve.delay = 0;
+    return true;
+  }
+
+  liveView(): PongLive {
+    const p = this.body.translation();
+    const v = this.body.linvel();
+    const d = this.drillState;
+    const len = Math.hypot(v.x, v.z);
+    return {
+      ball: this.parked ? null : { x: p.x, y: p.y, z: p.z, speed: Math.hypot(v.x, v.y, v.z), top: len > 1e-6 ? (this.b.w.x * v.z - this.b.w.z * v.x) / len : 0, side: -this.b.w.y, live: this.live },
+      returns: { ...this.returns },
+      drill: d ? { left: d.queue.length, results: [...d.results] } : this.drilled && { left: 0, results: [...this.drilled] },
+      lastShot: this.lastShot,
+      forced: this.forced,
+    };
   }
 
   /** Stops everything (the table is going away). */
   stop() {
     const m = pongMatch();
     for (const end of ENDS) {
-      const id = m?.seats[end]?.id;
+      const id = workerOf(m?.seats[end]);
       if (id) setNpcPong(id, null);
     }
     this.park();

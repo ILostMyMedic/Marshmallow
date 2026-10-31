@@ -210,7 +210,7 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
       <mesh position={[0, (WALL_H + doorHeight) / 2, HALF_D + t / 2]} material={wall}>
         <boxGeometry args={[doorHalf * 2, WALL_H - doorHeight, t]} />
       </mesh>
-      <Elevator zDoor={HALF_D + t / 2} />
+      <Elevator zDoor={HALF_D + t / 2} accent={accent} />
 
       {/* skirting + accent stripe */}
       {[

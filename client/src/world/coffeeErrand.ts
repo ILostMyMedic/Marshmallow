@@ -1,6 +1,7 @@
 // The coffee break errand: coffeeBreak.ts's actor wired to the kitchenette's machine (CoffeeMachine.tsx) and the
-// people's hands and desks (people.ts). Imported by ErrandDirector.tsx, which registers it.
-// Adapted from cubefarm client/src/world/coffeeErrand.ts (MIT): the player's mug and the sounds are cut.
+// people's hands and desks (people.ts). The player goes first at the machine. Imported by ErrandDirector.tsx, which
+// registers it.
+// Adapted from cubefarm client/src/world/coffeeErrand.ts (MIT): the sounds are cut.
 import { useStore } from '../store';
 import { seededAppearance } from './appearance';
 import { BREAK, CoffeeBreak, fanciesCoffee, SPOTS, type BreakWorld } from './coffeeBreak';
@@ -15,7 +16,7 @@ let seq = 1;
 
 const world: BreakWorld = {
   slot: machine.slot,
-  playerFirst: () => false,
+  playerFirst: machine.playerFirst,
   line,
   seats,
   place: machine.place,
@@ -37,8 +38,9 @@ const world: BreakWorld = {
 registerErrand({
   name: 'coffee',
   max: BREAK.max,
-  // Now and then, a little before they'd get up to stretch.
-  when: (worker, s) => s.floor === 'office' && isFree(worker.status) && s.seatedFor >= s.restless * BREAK.early && fanciesCoffee(s.restless),
+  // Now and then, a little before they'd get up to stretch; not while the player's mug sits in the machine.
+  when: (worker, s) =>
+    s.floor === 'office' && isFree(worker.status) && s.seatedFor >= s.restless * BREAK.early && fanciesCoffee(s.restless) && !machine.playerOwns(),
   spot: [SPOTS.mugs],
   steps: [],
   act: (id) => new CoffeeBreak(id, world),

@@ -1,16 +1,19 @@
-// The current floor's fridge (fridge.ts has its rules): the door, the stock, and who stands at it (fridgeErrand.ts).
-// KitchenFridge.tsx draws it and runs its clock. One fridge is drawn at a time (the floor you're on); each floor keeps
-// its own stock for the session, while the door starts shut on every visit. window.__mmFridge reports it for QA.
-// Adapted from cubefarm client/src/world/fridgeState.ts (MIT): the player's E on the fridge, the tupperware's label and
-// the sounds are cut.
-import { closeDoor, doorTick, newDoor, newPantry, openDoor, restock, takeSnack, type Pantry, type SnackId, type Stock } from './fridge';
+// The current floor's fridge (fridge.ts has its rules): the door, the stock, who stands at it, the player's E on it and
+// the workers' hands in it (fridgeErrand.ts). KitchenFridge.tsx draws it and runs its clock. One fridge is drawn at a
+// time (the floor you're on); each floor keeps its own stock for the session, while the door starts shut on every
+// visit. window.__mmFridge reports it and __mmFridgeDo works it, for QA.
+// Adapted from cubefarm client/src/world/fridgeState.ts (MIT): the tupperware's label and the sounds are cut.
+import { DOOR, SNACKS, closeDoor, doorTick, isSnackId, newDoor, newPantry, openDoor, restock, takeSnack, type Pantry, type SnackId, type Stock } from './fridge';
 import { snackHolders } from './people';
+import { playerAt } from './rig';
+import { useView } from './view';
 
 const pantries = new Map<number, Pantry>();
 let pantry: Pantry | null = null;
 const door = newDoor();
 /** The worker at the door (one at a time). */
 let atDoor: string | null = null;
+let seq = 1;
 /** Where its door is (the middle of its front), for who is near; set once it's drawn. */
 export const fridgeAt = { x: 0, z: 0, on: false };
 
@@ -63,6 +66,9 @@ export function mountFridge(floor: number, x: number, z: number) {
 export const doorOpen = () => door.open;
 export const stockOf = (id: SnackId) => pantry?.stock[id] ?? 0;
 
+/** The player is standing at the fridge: the door stays open for them, and workers wait. */
+export const playerAtFridge = () => fridgeAt.on && Math.hypot(playerAt.x - fridgeAt.x, playerAt.z - fridgeAt.z) < DOOR.reach;
+
 function open(): boolean {
   if (!fridgeAt.on || !openDoor(door, performance.now() / 1000)) return false;
   changed();
@@ -83,15 +89,40 @@ function take(id: SnackId): boolean {
   return true;
 }
 
-/** The fridge's clock (KitchenFridge.tsx calls it a few times a second): the door closes by itself once nobody is at it, and the stock comes back. */
+/** The fridge's clock (KitchenFridge.tsx calls it a few times a second): the door closes by itself once everyone has walked away, and the stock comes back. */
 export function tickFridge() {
   const now = performance.now();
   if (pantry && restock(pantry, now) > 0) changed();
-  if (doorTick(door, now / 1000, atDoor !== null) === 'close') changed();
+  if (doorTick(door, now / 1000, playerAtFridge() || atDoor !== null) === 'close') changed();
 }
 
-/** The fridge as a worker on a snack break uses it: one at the door at a time. */
+// ---------- the player (E on the fridge) ----------
+
+/** E on the fridge: open or shut the door, or grab a snack (hands free, door open). */
+export function fridgeAction(op: 'door' | 'take', snack?: SnackId) {
+  const view = useView.getState();
+  if (op === 'door') {
+    if (!close()) open();
+    return;
+  }
+  if (!isSnackId(snack)) return;
+  const def = SNACKS[snack];
+  if (view.held) {
+    view.showToast(view.held.kind === 'snack' ? `${SNACKS[view.held.snack].emoji} One at a time: finish that one first (E)` : '🙌 Your hands are full');
+    return;
+  }
+  if (!take(snack)) {
+    if (door.open) view.showToast(`${def.emoji} Out of ${def.short}: more comes in every few minutes`);
+    return;
+  }
+  view.setHeld({ kind: 'snack', id: `snack-player-${seq++}`, snack, left: def.portions });
+}
+
+// ---------- the workers (fridgeErrand.ts) ----------
+
+/** The fridge as a worker on a snack break uses it: one at the door at a time, never while the player is at it. */
 export const fridge = {
+  playerBusy: playerAtFridge,
   /** Takes the door (true), or someone else has it. */
   claim(who: string): boolean {
     if (atDoor !== null && atDoor !== who) return false;
@@ -108,9 +139,38 @@ export const fridge = {
   take,
 };
 
+// ---------- probes ----------
+
 if (typeof window !== 'undefined' && !Object.getOwnPropertyDescriptor(window, '__mmFridge')) {
+  // atDoor is 'player', a worker's id or null; held is the snack in your hands and what's left of it.
   Object.defineProperty(window, '__mmFridge', {
-    get: () => ({ here: fridgeAt.on, open: door.open, atDoor, stock: { ...(pantry?.stock ?? {}) }, eating: snackHolders() }),
+    get: () => {
+      const h = useView.getState().held;
+      return {
+        here: fridgeAt.on,
+        open: door.open,
+        atDoor: playerAtFridge() ? 'player' : atDoor,
+        stock: { ...(pantry?.stock ?? {}) },
+        held: h?.kind === 'snack' ? { snack: h.snack, left: h.left } : null,
+        eating: snackHolders(),
+      };
+    },
+    enumerable: false,
+    configurable: false,
+  });
+  // __mmFridgeDo('open' | 'close' | 'take', snack?): work the fridge without aiming (pointer lock doesn't work headless).
+  // 'take' opens the door first if it's shut. Returns whether it happened.
+  Object.defineProperty(window, '__mmFridgeDo', {
+    value: (op: 'open' | 'close' | 'take', snack?: SnackId): boolean => {
+      if (op === 'open') return open() || door.open;
+      if (op === 'close') return close() || !door.open;
+      if (op !== 'take' || !isSnackId(snack)) return false;
+      open();
+      const before = useView.getState().held;
+      fridgeAction('take', snack);
+      const after = useView.getState().held;
+      return after !== before && after?.kind === 'snack';
+    },
     enumerable: false,
     configurable: false,
   });

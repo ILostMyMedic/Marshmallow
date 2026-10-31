@@ -1,23 +1,30 @@
 // Lives inside the Canvas: the people on the floor you're on talk. Lines come from what happens in the office (the
 // server's moments, the store's changes and everyone's new log lines, read by chatterEvents.ts), from a chat at the
-// cooler or the couch (ErrandDirector.tsx asks chatSay) and from their work. Each line is a timed speech bubble
+// cooler or the couch (ErrandDirector.tsx asks chatSay), from you saying hi (E on someone with nothing to do) and from
+// their work. Each line is a timed speech bubble
 // (people.ts `say`). At most MAX_SPEAKERS speak at once, the nearest the camera winning; PACE paces the rest. It runs in
 // useFrame, so it stops with the render loop, and nothing new starts while a panel covers the view.
 // window.__mmChatter shows the recent lines and who's speaking.
-// Adapted from cubefarm client/src/world/Chatter.tsx (MIT): the babble voices come with the sound effects, saying hi
-// comes with the player's greeting, the CEO's floor walk is cut, and the chatter level stays lively (no setting yet).
+// Adapted from cubefarm client/src/world/Chatter.tsx (MIT): the babble voices come with the sound effects, the CEO's
+// floor walk is cut, and the chatter level stays lively (no setting yet).
 import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Moment } from '../../../shared/types';
 import { useStore } from '../store';
 import type { BodyState } from './body';
-import { CI_SLOW, currentWork, DEMO_CI_SLOW, lastFile, logNews, momentNews, slowChecks, storeNews, type Said } from './chatterEvents';
+import { onAction } from './actions';
+import { CI_SLOW, currentWork, DEMO_CI_SLOW, greeting, lastFile, logNews, momentNews, slowChecks, storeNews, type Said } from './chatterEvents';
 import { chatterLine, type ChatterEvent, type ChatTopic } from './chatterLines';
 import { admitSpeaker, bubbleSeconds, DROP_NEW, LINE_TTL, MAX_SPEAKERS, mayTalk, PACE, PLAY, type Priority } from './chatterRules';
-import { bodyState, errandOf, liveBodies, say, saying } from './people';
+import { isFree } from './errands';
+import type { Pick as AimPick } from './interact';
+import { waveHello } from './Me';
+import { bodyState, errandOf, isSeated, liveBodies, say, saying } from './people';
+import { queueFidget } from './reactionFeed';
+import { playerAt } from './rig';
 import { momentsSince } from './reactions';
-import { useView } from './view';
+import { useView, type Focus } from './view';
 
 interface Line {
   who: string;
@@ -54,6 +61,8 @@ const MAX_PENDING = 40;
 const RECENT = 40;
 /** A line isn't picked again while it's among the floor's last few, if there's another way to say it. */
 const HEARD = 3;
+/** How far (m) a hit on someone counts as aiming at them rather than their desk. */
+const AIM_RADIUS = 0.42;
 /** People this close (m) take turns: nobody starts a line while a neighbour's is still up (their bubbles would overlap). */
 const TURN_RADIUS = 2;
 
@@ -124,10 +133,14 @@ function cut(slot: number) {
   speakers[slot] = null;
 }
 
-/** A slot for a line from `d` metres away: a free one, the farthest speaker's (cut off) when this one is nearer, or -1. */
-function takeSlot(d: number): number {
+/**
+ * A slot for a line from `d` metres away: a free one, the farthest speaker's (cut off) when this one is nearer, or -1.
+ * `force`: a full house cuts off the farthest anyway (someone answering you).
+ */
+function takeSlot(d: number, force = false): number {
   const active = speakers.flatMap((s, slot) => (s ? [{ d: s.d, slot }] : []));
-  const r = admitSpeaker(active, d);
+  let r = admitSpeaker(active, d);
+  if (r === DROP_NEW && force) r = active.reduce((far, s, i) => (s.d > active[far].d ? i : far), 0);
   if (r === DROP_NEW) return -1;
   if (r === PLAY) return speakers.findIndex((s) => !s);
   cut(active[r].slot);
@@ -296,11 +309,52 @@ export function chatSay(id: string, topic: ChatTopic, pr: number | null, venue: 
   else speak(id, { kind: 'chat', topic, pr, venue }, 'chat', slot, d, seconds);
 }
 
+/** Someone you can say hi to: they've nothing to do and they're here on the floor. */
+export function greetable(id: string) {
+  const w = useStore.getState().workers[id];
+  return !!w && isFree(w.status) && !!bodyState(id);
+}
+
+/**
+ * You said hi (E on them): you wave, and they answer straight away with a hello or a quip about their work, turning to
+ * wave back from their chair. False when they can't answer.
+ */
+export function greet(id: string): boolean {
+  const st = useStore.getState();
+  const w = st.workers[id];
+  const b = bodyState(id);
+  if (!w || !b || !greetable(id)) return false;
+  waveHello();
+  if (isSeated(id)) queueFidget(id, 'wave', playerAt.x, playerAt.z);
+  const mine = speakingSlot(id);
+  if (mine >= 0) cut(mine);
+  const d = distanceTo(b);
+  speak(id, greeting(w, st, st.settings.managerName, Date.now()), 'greet', takeSlot(d, true), d);
+  return true;
+}
+
+/**
+ * For a desk's target (Desk.tsx): aiming at its person, when they've nothing to do, says hi to them instead of using
+ * the desk. `desk` ends the hint: what aiming at the desk instead does ("for their terminal").
+ */
+export function greetPick(id: string, desk: string): AimPick {
+  return (point) => {
+    const b = bodyState(id);
+    if (!b || !greetable(id)) return null;
+    const top = headY(b) + 0.45;
+    if (Math.hypot(point.x - b.x, point.z - b.z) > AIM_RADIUS || point.y < 0.55 || point.y > top) return null;
+    const name = useStore.getState().workers[id]?.name ?? 'them';
+    const focus: Focus = { id: `greet-${id}`, label: `Say hi to ${name} 👋 · aim at the desk ${desk}`, action: { kind: 'greet', workerId: id } };
+    return focus;
+  };
+}
+
 // ---------- the component and the probe ----------
 
 export function Chatter() {
   const camera = useThree((s) => s.camera);
   useEffect(() => useStore.subscribe(onStore), []);
+  useEffect(() => onAction('greet', (a) => void greet(a.workerId)), []);
   useFrame(() => {
     const t = clock();
     camera.getWorldPosition(ear);
@@ -337,6 +391,7 @@ if (typeof window !== 'undefined') {
     get pending() {
       return pending.map((p) => ({ who: p.who, near: !!p.near, kind: p.event.kind, priority: p.priority }));
     },
+    greet,
     /** Makes someone on this floor say `text` now (QA), with the speaker cap; false when they're not here or it's full. */
     say(id: string, text: string) {
       const b = bodyState(id);

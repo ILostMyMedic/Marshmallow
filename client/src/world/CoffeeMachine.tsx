@@ -1,22 +1,30 @@
-// The kitchenette's coffee machine: a mug goes under the spout, the button is pressed, and it grinds and pours for a
-// few seconds. The rules are in coffee.ts; this draws them. There is one machine on screen (only the current floor is
-// drawn), so its state lives here and a floor change starts it afresh. Workers on a coffee break (coffeeBreak.ts) use
-// it through `machine`, one brew at a time. window.__mmCoffee reports it, for QA and Playwright.
-// Adapted from cubefarm client/src/world/CoffeeMachine.tsx (MIT): the player's mug and E on the machine are cut, and
-// the sounds come with the sound effects.
+// The kitchenette's coffee machine: put a mug under the spout, press the button, and it grinds and pours for a few
+// seconds; then take your coffee. The rules are in coffee.ts; this draws them. There is one machine on screen (only the
+// current floor is drawn), so its state lives here and a floor change starts it afresh. Workers on a coffee break
+// (coffeeBreak.ts) use it too, through `machine`: one brew at a time, the player first. window.__mmCoffee reports it
+// and __mmCoffeeDo works it, for QA and Playwright.
+// Adapted from cubefarm client/src/world/CoffeeMachine.tsx (MIT): the sounds come with the sound effects.
 import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { BREW, EMPTY, level, placeMug, pouring, pressButton, progress, takeMug, tick, FULL_SIPS, type BrewState } from './coffee';
-import type { Mug, Slot } from './coffeeBreak';
+import { onAction } from './actions';
+import { BREW, EMPTY, canPlace, level, placeMug, pouring, pressButton, progress, takeMug, tick, FULL_SIPS, type BrewState } from './coffee';
+import { PLAYER, type Mug, type Slot } from './coffeeBreak';
+import { useInteractable } from './interact';
 import { glow, toon } from './materials';
 import { MUG_SIZE, MugLook, Steam, mugColor } from './mugLook';
+import { playerAt } from './rig';
 import { Box, Cyl } from './Toon';
+import { useView } from './view';
 
 let state: BrewState = EMPTY;
 let brews = 0;
-// Whose mug is in the slot: a worker's id, or null (none, or one left behind for anyone).
+// Whose mug is in the slot: PLAYER, a worker's id, or null (none, or one left behind for anyone).
 let owner: string | null = null;
+// The player is beside the machine with a mug they could put in.
+let playerNear = false;
+// Where the spout is on the floor, for who is beside it (set once it's drawn).
+const spot = { x: 0, z: 0 };
 /** Workers waiting their turn at the machine, first in line first. */
 export const line: string[] = [];
 const listeners = new Set<() => void>();
@@ -28,12 +36,55 @@ function set(next: BrewState) {
   for (const fn of listeners) fn();
 }
 
+// ---------- the player (E on the machine) ----------
+
+export type CoffeeOp = 'place' | 'brew' | 'take';
+
+/** Aim at the machine and press E: put your mug under the spout, press the button, or take the mug. */
+export function coffeeAction(op: CoffeeOp) {
+  const view = useView.getState();
+  const now = performance.now();
+  set(tick(state, now));
+  if (op === 'place') {
+    const held = view.held;
+    if (held?.kind !== 'mug' || !canPlace(state, held.sips)) return;
+    view.setHeld(null);
+    set(placeMug(state, { id: held.id, sips: held.sips }));
+    owner = PLAYER;
+  } else if (op === 'brew') {
+    const r = pressButton(state, now);
+    if (r.result === 'busy') return; // already brewing: the button does nothing
+    if (r.result !== 'started') {
+      view.showToast(r.result === 'noMug' ? '☕ Put a mug under the machine first' : '☕ Your coffee is ready: take the mug');
+      return;
+    }
+    set(r.state);
+    brews++;
+  } else {
+    if (state.kind === 'empty') return;
+    if (view.held) {
+      view.showToast(view.held.kind === 'mug' ? '☕ One mug at a time: put yours back first' : '🙌 Your hands are full');
+      return;
+    }
+    const r = takeMug(state, now);
+    if (!r) return;
+    set(r.state);
+    view.setHeld({ kind: 'mug', id: r.mug.id, sips: r.mug.sips });
+  }
+}
+
+// ---------- workers (coffeeBreak.ts) ----------
+
 /** The machine as a worker on a coffee break sees and uses it. Workers only ever take their own mug, or one left for anyone. */
 export const machine = {
   slot(): Slot | null {
     const s = tick(state, performance.now());
     return s.kind === 'empty' ? null : { kind: s.kind, owner };
   },
+  /** The player's mug is in it, or they're beside it with a mug to put in: they go first. */
+  playerFirst: () => (state.kind !== 'empty' && owner === PLAYER) || playerNear,
+  /** The player's mug is sitting in it: no point going for a coffee. */
+  playerOwns: () => state.kind !== 'empty' && owner === PLAYER,
   place(who: string, mug: Mug): boolean {
     const next = placeMug(state, mug);
     if (next === state) return false;
@@ -63,16 +114,23 @@ export const machine = {
   },
 };
 
+// ---------- probes ----------
+
 if (typeof window !== 'undefined' && !Object.getOwnPropertyDescriptor(window, '__mmCoffee')) {
+  // The mug under the spout has the whole sips it would have if taken now; owner is 'player', a worker's id or null.
   Object.defineProperty(window, '__mmCoffee', {
     get: () => {
       const now = performance.now();
       const s = tick(state, now);
-      return { state: s.kind, progress: progress(s, now), level: level(s, now), brews, owner: s.kind === 'empty' ? null : owner, line: [...line] };
+      const lvl = level(s, now);
+      const mug = s.kind === 'empty' ? null : { id: s.mug.id, sips: Math.round(lvl) };
+      return { state: s.kind, mug, progress: progress(s, now), level: lvl, brews, owner: s.kind === 'empty' ? null : owner, line: [...line] };
     },
     enumerable: false,
     configurable: false,
   });
+  // __mmCoffeeDo('place' | 'brew' | 'take'): work the machine without aiming (pointer lock doesn't work headless).
+  Object.defineProperty(window, '__mmCoffeeDo', { value: (op: CoffeeOp) => coffeeAction(op), enumerable: false, configurable: false });
 }
 
 // ---------- drawing ----------
@@ -91,6 +149,8 @@ const lightReady = glow('#80ed99');
 /** The coffee machine, standing on the counter at `position` (the counter top under its middle), its front facing -x. */
 export function CoffeeMachine({ position }: { position: [number, number, number] }) {
   const [view, setView] = useState(state);
+  const heldSips = useView((s) => (s.held?.kind === 'mug' ? s.held.sips : null));
+  const root = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
   const steam = useRef<THREE.Group>(null);
   const stream = useRef<THREE.Mesh>(null);
@@ -105,15 +165,37 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
     setView(state);
     const fn = () => setView(state);
     listeners.add(fn);
+    const g = root.current;
+    if (g) {
+      g.updateWorldMatrix(true, false);
+      const at = g.localToWorld(new THREE.Vector3(SLOT.x, 0, 0));
+      spot.x = at.x;
+      spot.z = at.z;
+    }
+    const stop = onAction('coffee', (a) => coffeeAction(a.op));
     return () => {
+      stop();
       listeners.delete(fn);
       state = EMPTY;
       owner = null;
+      playerNear = false;
     };
   }, []);
 
+  const tray = useInteractable<THREE.Group>(
+    view.kind !== 'empty'
+      ? { id: 'coffee:slot', label: view.kind === 'ready' ? 'Take coffee' : 'Take mug', action: { kind: 'coffee', op: 'take' } }
+      : heldSips !== null && canPlace(view, heldSips)
+        ? { id: 'coffee:slot', label: 'Put mug under the machine', action: { kind: 'coffee', op: 'place' } }
+        : null,
+    2.8,
+  );
+  const button = useInteractable<THREE.Group>({ id: 'coffee:button', label: 'Brew coffee', action: { kind: 'coffee', op: 'brew' } }, 2.8);
+
   useFrame(() => {
     const now = performance.now();
+    const held = useView.getState().held;
+    playerNear = held?.kind === 'mug' && canPlace(state, held.sips) && Math.hypot(playerAt.x - spot.x, playerAt.z - spot.z) < 2.6;
     if (state.kind === 'brewing') set(tick(state, now));
     const brewing = state.kind === 'brewing';
     const p = progress(state, now);
@@ -157,7 +239,7 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
   });
 
   return (
-    <group position={position}>
+    <group ref={root} position={position}>
       {/* rumbles while it brews */}
       <group ref={body}>
         <Box size={[0.45, 0.55, 0.4]} position={[0.05, 0.28, 0]} color="#343a40" outline />
@@ -169,10 +251,14 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
           <circleGeometry args={[0.02, 12]} />
         </mesh>
         {/* the brew button: lights up while brewing, green when the coffee is ready */}
-        <group position={[-0.18, 0.42, -0.06]}>
+        <group ref={button} position={[-0.18, 0.42, -0.06]}>
           <Cyl r={0.045} h={0.02} rotation={[0, 0, Math.PI / 2]} color="#212529" />
           <mesh position={[-0.012, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={view.kind === 'brewing' ? lightBrewing : view.kind === 'ready' ? lightReady : lightOff}>
             <cylinderGeometry args={[0.032, 0.034, 0.018, 18]} />
+          </mesh>
+          {/* an easier target than the button itself */}
+          <mesh visible={false}>
+            <boxGeometry args={[0.08, 0.13, 0.13]} />
           </mesh>
         </group>
         <group ref={steam} position={[0.05, 0.56, -0.08]} visible={false}>
@@ -184,14 +270,19 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
           ))}
         </group>
       </group>
-      {/* drip tray and the mug slot */}
-      <Box size={[0.2, SLOT.tray, 0.26]} position={[SLOT.x, SLOT.tray / 2, 0]} color="#6c757d" outline />
-      {view.kind !== 'empty' && (
-        <group position={[SLOT.x, SLOT.tray + MUG_SIZE.h / 2, 0]} rotation={ROT_HANDLE}>
-          <MugLook color={mugColor(view.mug.id)} sips={0} steam={false} />
-          {view.kind === 'ready' && <Steam y={MUG_SIZE.h / 2} sips={FULL_SIPS} />}
-        </group>
-      )}
+      {/* drip tray and the mug slot, aimed at as one */}
+      <group ref={tray}>
+        <Box size={[0.2, SLOT.tray, 0.26]} position={[SLOT.x, SLOT.tray / 2, 0]} color="#6c757d" outline />
+        {view.kind !== 'empty' && (
+          <group position={[SLOT.x, SLOT.tray + MUG_SIZE.h / 2, 0]} rotation={ROT_HANDLE}>
+            <MugLook color={mugColor(view.mug.id)} sips={0} steam={false} />
+            {view.kind === 'ready' && <Steam y={MUG_SIZE.h / 2} sips={FULL_SIPS} />}
+          </group>
+        )}
+        <mesh visible={false} position={[SLOT.x, 0.09, 0]}>
+          <boxGeometry args={[0.22, 0.18, 0.28]} />
+        </mesh>
+      </group>
       <mesh ref={coffee} position={[SLOT.x, SLOT.tray, 0]} rotation={[-Math.PI / 2, 0, 0]} visible={false} material={toon(COFFEE)}>
         <circleGeometry args={[1, 20]} />
       </mesh>

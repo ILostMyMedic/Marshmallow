@@ -534,3 +534,211 @@ button.link {
   text-decoration: underline;
   font-size: 0.85rem;
 }
+
+/* the look editor (ui/LookPanel.tsx) */
+.look {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.look-preview {
+  height: 320px;
+  border-radius: 14px;
+  border: 2px solid #ece4d4;
+  background: radial-gradient(circle at 50% 35%, #fff6dd, #f1e4c8);
+  position: sticky;
+  top: 0;
+}
+
+.look-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.look-row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.look-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #5c6078;
+}
+
+.look-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.look-pill {
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 2px 10px;
+  font: 600 0.8rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  color: #1f1d2b;
+  cursor: pointer;
+}
+
+.look-pill.on {
+  background: #ffd166;
+}
+
+.look-pill:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.look-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #1f1d2b;
+  cursor: pointer;
+}
+
+.look-swatch.on {
+  box-shadow: 0 0 0 3px #ffd166;
+}
+
+.look-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .look {
+    grid-template-columns: 1fr;
+  }
+  .look-preview {
+    position: static;
+    height: 240px;
+  }
+}
+
+/* the elevator's buttons (ui/ElevatorPanel.tsx) */
+.elevator-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.elevator-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  border: 2px solid #1f1d2b;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 8px 12px;
+  font: 500 0.95rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  color: #1f1d2b;
+  cursor: pointer;
+}
+
+.elevator-button:disabled {
+  cursor: default;
+  background: #fff6dd;
+}
+
+.elevator-number {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid #1f1d2b;
+  color: #ffffff;
+  font-weight: 700;
+  text-shadow: 0 1px 0 #1f1d2b;
+}
+
+/* the view going dark for a moment while the elevator moves (world/elevatorRide.ts) */
+.ride-fade {
+  position: absolute;
+  inset: 0;
+  background: #0d0c14;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  z-index: 5;
+}
+
+.ride-fade.dark {
+  opacity: 1;
+}
+
+/* a passing note over the view (view.ts toast) */
+.hud-toast {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid #1f1d2b;
+  background: #fffdf5;
+  box-shadow: 0 3px 0 #1f1d2b;
+  font: 600 0.95rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* playing ping-pong (ui/PongHud.tsx) */
+.hud-pong {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.hud-pong-score {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 2px solid #1f1d2b;
+  background: #fffdf5;
+  box-shadow: 0 3px 0 #1f1d2b;
+  font: 600 1rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.hud-pong-score b {
+  font-size: 1.5rem;
+  min-width: 1.2em;
+  text-align: center;
+}
+
+.hud-pong-score i {
+  font-style: normal;
+  color: #5c6078;
+}
+
+.hud-pong-serving::before {
+  content: "🏓 ";
+}
+
+.hud-pong-status {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(31, 29, 43, 0.75);
+  color: #ffffff;
+  font: 500 0.9rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}

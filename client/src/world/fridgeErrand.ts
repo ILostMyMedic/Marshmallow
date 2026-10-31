@@ -1,6 +1,7 @@
 // The snack break errand: snackBreak.ts's actor wired to the kitchenette fridge (fridgeState.ts) and the people's
-// hands and speech bubbles (people.ts). Imported by ErrandDirector.tsx, which registers it.
-// Adapted from cubefarm client/src/world/fridgeErrand.ts (MIT): the player at the fridge and the sounds are cut.
+// hands and speech bubbles (people.ts); nobody goes to the door while the player stands at it. Imported by
+// ErrandDirector.tsx, which registers it.
+// Adapted from cubefarm client/src/world/fridgeErrand.ts (MIT): the sounds are cut.
 import { BREAK } from './coffeeBreak';
 import { isFree, registerErrand } from './errands';
 import { fridge, fridgeAt } from './fridgeState';
@@ -8,7 +9,7 @@ import { say, setHandSnack } from './people';
 import { fanciesSnack, SNACK, SNACK_SPOTS, SnackBreak, type FridgeWorld } from './snackBreak';
 
 const world: FridgeWorld = {
-  playerBusy: () => false,
+  playerBusy: fridge.playerBusy,
   claim: fridge.claim,
   release: fridge.release,
   isOpen: fridge.isOpen,

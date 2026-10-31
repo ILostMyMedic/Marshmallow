@@ -1,9 +1,10 @@
 // Who on a floor has something to say, and what: from the server's moments (a PR opened, QA's verdict, a merge and a
 // teammate's "Nice one!"), from how the office changed (someone starting an issue or a fix, asking whoever tests their
 // PR to look at it, a conflict, red or slow CI, an error) and from the new lines in someone's log (tests going green or
-// red, a fix pushed, a merge conflict). Pure, so every rule is tested; Chatter.tsx feeds it the store and speaks.
+// red, a fix pushed, a merge conflict); and what they answer when you say hi. Pure, so every rule is tested; Chatter.tsx
+// feeds it the store and speaks.
 // Adapted from cubefarm client/src/world/chatterEvents.ts (MIT): PRs opening, QA verdicts and merges come from moments
-// instead of diffs, and the player's greeting comes with saying hi.
+// instead of diffs.
 import type { Floor, LogLine, Moment, PullInfo, QaRecord, Worker } from '../../../shared/types';
 import { readLog, shortFile, workOf, type ChatterEvent, type WorkKind } from './chatterLines';
 import type { Priority } from './chatterRules';
@@ -169,4 +170,22 @@ export function currentWork(lines: readonly LogLine[], now: number, freshMs = 45
     }
   }
   return null;
+}
+
+/** A merge stays someone's news for a greeting this long (ms). */
+export const SHIPPED_MS = 10 * 60_000;
+
+/** What someone says when you say hi: a quip about their work (a fresh merge, QA, a fix) or just hello. */
+export function greeting(w: Worker, office: Pick<OfficeSlice, 'qa' | 'floors'>, manager: string, now: number): Extract<ChatterEvent, { kind: 'greet' }> {
+  const pr = w.task?.prNumber ?? null;
+  const base = { kind: 'greet' as const, manager, pr, issue: w.task?.issueNumber ?? null };
+  if (w.role === 'ceo') return { ...base, mood: 'ceo' };
+  const pull = pr != null ? office.floors.find((f) => f.id === w.floorId)?.pulls.find((p) => p.number === pr) : undefined;
+  const qa = pr != null ? office.qa[`${w.floorId}#${pr}`] : undefined;
+  if (w.task?.kind === 'qa') return { ...base, mood: isBusy(w) && pr != null ? 'testing' : 'free' };
+  if (pull?.state === 'MERGED' && pull.mergedAt && now - Date.parse(pull.mergedAt) < SHIPPED_MS) return { ...base, mood: 'shipped' };
+  if (isBusy(w) && w.task?.kind === 'fix') return { ...base, mood: 'fixing' };
+  if (pull?.state === 'OPEN' && (qa?.status === 'queued' || qa?.status === 'testing')) return { ...base, mood: 'inQa' };
+  if (isBusy(w) && w.task?.issueNumber != null) return { ...base, mood: 'working' };
+  return { ...base, mood: 'free' };
 }

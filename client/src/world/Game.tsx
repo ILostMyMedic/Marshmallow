@@ -12,6 +12,8 @@ import { OVERVIEW } from './cameraMath';
 import { Chatter } from './Chatter';
 import { City } from './City';
 import { floorElevation, lobbyColliders, officeColliders } from './layout';
+import { useRide } from './elevatorRide';
+import { Me } from './Me';
 import { Lobby, OfficeFloor } from './OfficeFloor';
 import { AdaptiveResolution, currentDpr } from './perf';
 import { Player } from './Player';
@@ -86,6 +88,12 @@ function CameraRig() {
 }
 
 /** Floors and the lobby, along the bottom: which one the view shows. */
+/** The view goes dark for a moment while the elevator carries you between floors. */
+function RideFade() {
+  const dark = useRide((s) => s.phase === 'dark');
+  return <div className={`ride-fade${dark ? ' dark' : ''}`} />;
+}
+
 function FloorPicker({ shown }: { shown: number }) {
   const floors = useStore((s) => s.floors);
   const workers = useStore((s) => s.workers);
@@ -121,7 +129,13 @@ export function Game() {
   const floor = floors.find((f) => f.floor === shown) ?? null;
   const top = floors.reduce((n, f) => Math.max(n, f.floor), 0);
   const lobby = !floor;
-  const colliders = useMemo(() => (lobby ? lobbyColliders() : officeColliders()), [lobby]);
+  // The floor on screen is the one you're on, for the elevator's sign and buttons, until a ride or the picker moves you.
+  const setFloor = useView((s) => s.setFloor);
+  useEffect(() => {
+    if (loaded && picked !== shown) setFloor(shown);
+  }, [loaded, picked, shown, setFloor]);
+  // the elevator's doorway opens and shuts with its doors (elevatorRide.ts elevatorShut)
+  const colliders = useMemo(() => (lobby ? lobbyColliders(false) : officeColliders(false)), [lobby]);
 
   if (!loaded) return <div className="game-loading">Connecting to the office…</div>;
   return (
@@ -146,6 +160,7 @@ export function Game() {
         <Player floor={shown} colliders={colliders} />
         <AdaptiveResolution />
         <Chatter />
+        <Me />
         {floor ? <OfficeFloor key={floor.id} floor={floor} top={top} /> : <Lobby top={top} />}
         <City elevation={floorElevation(shown)} />
       </Canvas>
@@ -158,6 +173,7 @@ export function Game() {
       <a className="game-debug" href="/debug">
         Debug page
       </a>
+      <RideFade />
       <Overlays />
     </div>
   );

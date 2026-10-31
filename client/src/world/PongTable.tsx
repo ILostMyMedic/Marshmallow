@@ -1,8 +1,9 @@
 // Adapted from cubefarm client/src/world/PongTable.tsx (MIT): the table, its net, a cup of balls and the paddles hanging
-// on its side, taken down while someone plays with them; the match itself is PongMatch.tsx's. The scoreboard and the
-// leaderboard are cut.
+// on its side, taken down while someone plays with them; E at an end picks its paddle up to play (cubefarm's toys/
+// PingPong.tsx TableEnd); the match itself is PongMatch.tsx's. The scoreboard and the leaderboard are cut.
 import { memo, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
+import { useInteractable } from './interact';
 import { PONG_TABLE } from './layout';
 import { toon } from './materials';
 import { INK, Outlines } from './Outlines';
@@ -10,6 +11,7 @@ import { PongMatch } from './PongMatch';
 import type { End } from './pongPhysics';
 import { paddleTaken, subscribePong } from './pongState';
 import { Box, Cyl } from './Toon';
+import { useView } from './view';
 
 const T = PONG_TABLE;
 const TOP_T = 0.03; // the playing surface's thickness
@@ -68,12 +70,25 @@ function netMaterial() {
   return netMat;
 }
 
-/** A paddle on its hook on the table's south side near `end`, gone while someone plays with it. */
+/**
+ * A paddle on its hook on the table's south side near `end`, gone while someone plays with it; and that end of the
+ * table, to press E at to pick the paddle up (a roomy invisible box over the end, since the paddle alone is a small
+ * target), while you aren't playing. A worker's paddle can be taken too: you step in for them (pongState.ts joinPong).
+ */
 function HookPaddle({ end }: { end: End }) {
   const taken = useSyncExternalStore(subscribePong, () => paddleTaken(end));
+  const playing = useView((s) => s.held?.kind === 'paddle');
+  const ref = useInteractable<THREE.Group>(playing ? null : { id: `pong:${end}`, label: 'Play ping-pong', action: { kind: 'paddle', end } });
+  const side = end === 'west' ? -1 : 1;
   return (
-    <group position={[T.x + (end === 'west' ? -1 : 1) * (T.len / 2 - 0.42), T.top - 0.16, T.z + T.wid / 2 + 0.025]} rotation={[0.08, Math.PI, 0]} visible={!taken}>
-      <PaddleLook />
+    <group ref={ref}>
+      <group position={[T.x + side * (T.len / 2 - 0.42), T.top - 0.16, T.z + T.wid / 2 + 0.025]} rotation={[0.08, Math.PI, 0]} visible={!taken}>
+        <PaddleLook />
+      </group>
+      <mesh position={[T.x + side * (T.len / 2 - 0.35), T.top + 0.1, T.z]}>
+        <boxGeometry args={[0.8, 0.3, T.wid + 0.2]} />
+        <meshBasicMaterial visible={false} />
+      </mesh>
     </group>
   );
 }

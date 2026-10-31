@@ -11,6 +11,7 @@ import { seededAppearance } from './appearance';
 import { look, Part } from './Batched';
 import { useCanvasTexture } from './canvasTexture';
 import { Character } from './Character';
+import { greetPick } from './Chatter';
 import { drawSign, drawTag, drawTerminal, tagIcon } from './draw';
 import { useInteractable } from './interact';
 import { shade } from './materials';
@@ -263,10 +264,12 @@ function DeskMug({ workerId, color }: { workerId: string; color: string }) {
  */
 export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0 }: { worker: Worker | null; accent: string; position: [number, number, number]; rotationY?: number }) {
   const shirt = useMemo(() => (worker ? seededAppearance({ seed: worker.seed, role: worker.role }).shirt : '#ffffff'), [worker?.seed, worker?.role]);
-  // E on the desk: their terminal (where a Box worker's sign-in runs too)
+  // E on the desk: their terminal (where a Box worker's sign-in runs too); E on them, when they've nothing to do: say hi
+  const hello = useMemo(() => (worker ? greetPick(worker.id, 'for their terminal') : undefined), [worker?.id]);
   const ref = useInteractable<THREE.Group>(
     worker ? { id: `worker-${worker.id}`, label: worker.needsSignIn ? `Sign ${worker.name}'s Claude Code in, in their terminal` : `View ${worker.name}'s terminal`, action: { kind: 'terminal', workerId: worker.id } } : null,
     3.6,
+    hello,
   );
   const chairRef = useRef<THREE.Group>(null);
   const mugRef = useRef<THREE.Group>(null);

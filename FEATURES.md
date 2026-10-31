@@ -153,13 +153,14 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 ## 9. Game: the player
 
 - [x] **First-person walking**: WASD, mouse look, collisions · M → `Player.tsx`
+- [x] **Your own character**: a body you see when you look down and in the overview, in a look you pick in an editor · M → `Me.tsx`, `myLook.ts`, `client/src/ui/LookPanel.tsx`
 - [x] **`E` to use**: a desk's terminal, the whiteboard, the elevator, the console · M → `interact.ts`
 - [x] **Say hi** to an idle worker · S
 - [x] **Overview camera**: the floor from above, click a worker · M → `camera/`
 - [ ] **Follow cam** on a worker · S
 - [ ] **Throw balls** (Rapier physics) · M → `toys/balls.tsx`
-- [ ] **Coffee mug and fridge snacks** for the player · M
-- [ ] **Ping-pong against a worker** · L
+- [x] **Coffee mug and fridge snacks** for the player · M
+- [x] **Ping-pong against a worker** · L
 - [ ] **Jukebox** with synthesized songs · L → `client/src/ui/music.ts`, `jukeboxSongs.ts`
 - [ ] **Foam blasters** · M
 - [ ] **Gamepad** · S

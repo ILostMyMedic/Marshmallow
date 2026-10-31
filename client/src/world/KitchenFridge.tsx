@@ -1,13 +1,16 @@
-// The kitchenette fridge: a worker on a snack break (fridgeErrand.ts) opens its door, which swings out on the handle
-// side, a light comes on inside and the stock shows on its shelves and in the door's bins; it shuts again once nobody
-// is at it. 0.8 m square, 2 m tall, standing at `position` (the middle of its foot), its front facing local -x.
-// Adapted from cubefarm client/src/world/KitchenFridge.tsx (MIT): the player's E on it, the tupperware and the hum are cut.
+// The kitchenette fridge: E (yours, or a worker's on a snack break, fridgeErrand.ts) opens its door, which swings out on
+// the handle side, a light comes on inside and the stock shows on its shelves and in the door's bins; E on a snack
+// grabs it (fridgeState.ts), E on the door shuts it, and it shuts by itself once everyone has walked away. 0.8 m
+// square, 2 m tall, standing at `position` (the middle of its foot), its front facing local -x.
+// Adapted from cubefarm client/src/world/KitchenFridge.tsx (MIT): the tupperware and the hum are cut.
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { onAction } from './actions';
 import { Slice } from './food';
-import { SNACK_IDS, swingTo, type SnackId } from './fridge';
-import { doorOpen, fridgeVersion, mountFridge, stockOf, subscribeFridge, tickFridge } from './fridgeState';
+import { SNACK_IDS, grabLabel, swingTo, type SnackId } from './fridge';
+import { doorOpen, fridgeAction, fridgeVersion, mountFridge, stockOf, subscribeFridge, tickFridge } from './fridgeState';
+import { useInteractable } from './interact';
 import { glow, toon } from './materials';
 import { DRINK_H, SnackLook } from './SnackLook';
 import { Ball, Box, Cyl } from './Toon';
@@ -20,6 +23,7 @@ const WHITE = '#f1f3f5';
 const LINER = '#dfe7ef';
 /** The hinge: the front's +z edge (the handle is on the -z side, where the old box had it). */
 const HINGE: V3 = [-W / 2, 0, W / 2];
+const RANGE = 3;
 const TICK_MS = 250;
 
 const linerDim = toon(LINER);
@@ -34,10 +38,12 @@ interface Slot {
   step: V3;
   /** Turned on the shelf (bars lie front to back). */
   turn?: number;
+  /** The aim box round the slot: its middle and size. */
+  hit: { at: V3; size: V3 };
 }
 
-const bar = (z: number, y: number, dz: number): Slot => ({ door: false, at: [-0.02, y, z], step: [0, 0, dz], turn: Math.PI / 2 });
-const can = (id: SnackId, z: number, base: number, dz: number): Slot => ({ door: true, at: [0.055, base + DRINK_H[id]! / 2, z], step: [0, 0, dz] });
+const bar = (z: number, y: number, dz: number, hitZ: number, hitD: number): Slot => ({ door: false, at: [-0.02, y, z], step: [0, 0, dz], turn: Math.PI / 2, hit: { at: [0, y + 0.05, hitZ], size: [0.4, 0.14, hitD] } });
+const can = (id: SnackId, z: number, base: number, dz: number): Slot => ({ door: true, at: [0.055, base + DRINK_H[id]! / 2, z], step: [0, 0, dz], hit: { at: [0.06, base + 0.1, z + dz * 1.5], size: [0.14, 0.22, Math.abs(dz) * 4 + 0.04] } });
 
 // Shelves at these heights (their tops), the door's bins at these.
 const SHELVES = [0.51, 0.96, 1.41];
@@ -48,19 +54,20 @@ const SLOTS: Record<SnackId, Slot> = {
   sparkling: can('sparkling', -0.45, BINS[1], -0.07),
   coldbrew: can('coldbrew', -0.09, BINS[0], -0.08),
   mate: can('mate', -0.45, BINS[0], -0.08),
-  chocolate: bar(-0.3, SHELVES[2] + 0.007, 0.065),
-  protein: bar(0.06, SHELVES[2] + 0.009, 0.06),
-  cheese: bar(-0.31, SHELVES[1] + 0.012, 0.035),
+  chocolate: bar(-0.3, SHELVES[2] + 0.007, 0.065, -0.2, 0.3),
+  protein: bar(0.06, SHELVES[2] + 0.009, 0.06, 0.15, 0.3),
+  cheese: bar(-0.31, SHELVES[1] + 0.012, 0.035, -0.25, 0.18),
   // slices round a plate (drawn apart, below)
-  pizza: { door: false, at: [0.03, SHELVES[1] + 0.02, 0.15], step: [0, 0, 0] },
+  pizza: { door: false, at: [0.03, SHELVES[1] + 0.02, 0.15], step: [0, 0, 0], hit: { at: [0.03, SHELVES[1] + 0.05, 0.15], size: [0.36, 0.12, 0.36] } },
 };
 
-/** One snack's items, as many as are in stock. */
-function SnackSlot({ snack, count }: { snack: SnackId; count: number }) {
+/** One snack's items, as many as are in stock, and its spot to aim at (only while the door is open). */
+function SnackSlot({ snack, count, open }: { snack: SnackId; count: number; open: boolean }) {
   const s = SLOTS[snack];
+  const ref = useInteractable<THREE.Group>(open ? { id: `fridge:${snack}`, label: grabLabel(snack, count), action: { kind: 'fridge', op: 'take', snack } } : null, RANGE);
   const items = Array.from({ length: count }, (_, i) => i);
   return (
-    <group>
+    <group ref={ref}>
       {snack === 'pizza' ? (
         <group position={s.at}>
           <Cyl r={0.17} h={0.012} position={[0, -0.012, 0]} color="#ffffff" shadow={false} />
@@ -77,6 +84,9 @@ function SnackSlot({ snack, count }: { snack: SnackId; count: number }) {
           </group>
         ))
       )}
+      <mesh visible={false} position={s.hit.at}>
+        <boxGeometry args={s.hit.size} />
+      </mesh>
     </group>
   );
 }
@@ -84,11 +94,15 @@ function SnackSlot({ snack, count }: { snack: SnackId; count: number }) {
 /** The fridge. `floor` keeps its stock. */
 export function Fridge({ position, floor }: { position: V3; floor: number }) {
   useSyncExternalStore(subscribeFridge, fridgeVersion);
+  const open = doorOpen();
   const root = useRef<THREE.Group>(null);
   const door = useRef<THREE.Group>(null);
   const liner = useRef<THREE.Mesh>(null);
   const bulb = useRef<THREE.Mesh>(null);
   const run = useMemo(() => ({ angle: 0, lit: false }), []);
+
+  const target = useInteractable<THREE.Group>({ id: 'fridge:door', label: open ? 'Close the fridge' : 'Open the fridge', action: { kind: 'fridge', op: 'door' } }, RANGE);
+  useEffect(() => onAction('fridge', (a) => fridgeAction(a.op, a.snack)), []);
 
   // On the floor: this floor's stock, the door shut, and its clock running (not in the frame loop: it may stop).
   useEffect(() => {
@@ -120,7 +134,7 @@ export function Fridge({ position, floor }: { position: V3; floor: number }) {
 
   return (
     <group ref={root} position={position}>
-      <group>
+      <group ref={target}>
         {/* the cabinet: back, sides, top and the kick plate, open at the front */}
         <Box size={[0.04, H, W]} position={[W / 2 - 0.02, H / 2, 0]} color={WHITE} outline />
         <Box size={[W, H, 0.04]} position={[0, H / 2, -W / 2 + 0.02]} color={WHITE} outline />
@@ -140,7 +154,7 @@ export function Fridge({ position, floor }: { position: V3; floor: number }) {
         <Box size={[0.6, 0.3, W - 0.1]} position={[0.05, 0.27, 0]} color="#caf0f8" shadow={false} />
         <Box size={[0.02, 0.05, 0.3]} position={[-0.26, 0.36, 0]} color="#90e0ef" shadow={false} />
         {SNACK_IDS.filter((id) => !SLOTS[id].door).map((id) => (
-          <SnackSlot key={id} snack={id} count={stockOf(id)} />
+          <SnackSlot key={id} snack={id} count={stockOf(id)} open={open} />
         ))}
 
         {/* the door, hinged on its +z edge: it swings out towards -x */}
@@ -167,7 +181,7 @@ export function Fridge({ position, floor }: { position: V3; floor: number }) {
             ))}
           </group>
           {SNACK_IDS.filter((id) => SLOTS[id].door).map((id) => (
-            <SnackSlot key={id} snack={id} count={stockOf(id)} />
+            <SnackSlot key={id} snack={id} count={stockOf(id)} open={open} />
           ))}
         </group>
       </group>

@@ -6,12 +6,13 @@ import { CUT_PLANES } from './cutaway';
 import { INK, Outlines } from './Outlines';
 import { ELEVATOR, HALF_D, HALF_W, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, sideSign, type FloorKind, type Side } from './layout';
 import { drawGlass } from './draw';
+import { Elevator } from './Elevator';
 import { shade, toon } from './materials';
 import { boxesGeometry, merged, type BoxSpec } from './shapes';
 import type { Cut } from './cutaway';
 
 // A floor's room: the planked floor, the ceiling and its lights, the outer walls with their windows, side doors and the
-// elevator's doorway, and the skirting and accent stripe in the floor's colour.
+// elevator's doorway and the elevator itself (Elevator.tsx), and the skirting and accent stripe in the floor's colour.
 
 const WALL = '#fbf3e4';
 /** The room's walls, ceiling and trim: cut away on the overview camera's side (cutaway.ts). */
@@ -209,13 +210,7 @@ export function Shell({ kind, accent, floorColor }: { kind: FloorKind; accent: s
       <mesh position={[0, (WALL_H + doorHeight) / 2, HALF_D + t / 2]} material={wall}>
         <boxGeometry args={[doorHalf * 2, WALL_H - doorHeight, t]} />
       </mesh>
-      {/* the elevator's doors, shut (it starts running with arrivals and leavers) */}
-      <mesh position={[0, doorHeight / 2, HALF_D + t / 2]} material={toon('#c9ced6', ROOM)}>
-        <boxGeometry args={[doorHalf * 2, doorHeight, 0.1]} />
-      </mesh>
-      <mesh position={[0, doorHeight / 2, HALF_D + t / 2 - 0.055]} material={toon('#7d8695', ROOM)}>
-        <boxGeometry args={[0.03, doorHeight, 0.01]} />
-      </mesh>
+      <Elevator zDoor={HALF_D + t / 2} />
 
       {/* skirting + accent stripe */}
       {[

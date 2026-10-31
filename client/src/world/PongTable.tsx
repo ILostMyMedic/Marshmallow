@@ -1,10 +1,14 @@
 // Adapted from cubefarm client/src/world/PongTable.tsx (MIT): the table, its net, a cup of balls and the paddles hanging
-// on its side. The scoreboard and the matches between idle workers come with idle life; the leaderboard is cut.
-import { memo } from 'react';
+// on its side, taken down while someone plays with them; the match itself is PongMatch.tsx's. The scoreboard and the
+// leaderboard are cut.
+import { memo, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { PONG_TABLE } from './layout';
 import { toon } from './materials';
 import { INK, Outlines } from './Outlines';
+import { PongMatch } from './PongMatch';
+import type { End } from './pongPhysics';
+import { paddleTaken, subscribePong } from './pongState';
 import { Box, Cyl } from './Toon';
 
 const T = PONG_TABLE;
@@ -64,6 +68,16 @@ function netMaterial() {
   return netMat;
 }
 
+/** A paddle on its hook on the table's south side near `end`, gone while someone plays with it. */
+function HookPaddle({ end }: { end: End }) {
+  const taken = useSyncExternalStore(subscribePong, () => paddleTaken(end));
+  return (
+    <group position={[T.x + (end === 'west' ? -1 : 1) * (T.len / 2 - 0.42), T.top - 0.16, T.z + T.wid / 2 + 0.025]} rotation={[0.08, Math.PI, 0]} visible={!taken}>
+      <PaddleLook />
+    </group>
+  );
+}
+
 /** The ping-pong table in the play area: a blue top with white lines on a grey frame and legs, and the net. */
 export const PongTable = memo(function PongTable() {
   const half = { x: T.len / 2, z: T.wid / 2 };
@@ -117,12 +131,9 @@ export const PongTable = memo(function PongTable() {
           ))}
         </group>
       </group>
-      {/* the paddles hanging on hooks on the table's south side, near each end */}
-      {(['west', 'east'] as const).map((end) => (
-        <group key={end} position={[T.x + (end === 'west' ? -1 : 1) * (T.len / 2 - 0.42), T.top - 0.16, T.z + T.wid / 2 + 0.025]} rotation={[0.08, Math.PI, 0]}>
-          <PaddleLook />
-        </group>
-      ))}
+      <HookPaddle end="west" />
+      <HookPaddle end="east" />
+      <PongMatch />
     </group>
   );
 });

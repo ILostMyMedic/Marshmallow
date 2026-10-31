@@ -1,11 +1,13 @@
-// Adapted from cubefarm client/src/world/Props.tsx, CoffeeMachine.tsx, KitchenFridge.tsx and toys/mugLook.tsx (MIT):
-// the floor's furniture as it stands still. The coffee machine, the mug stack and the fridge keep cubefarm's places on
-// the counter (the errands' spots are measured from them); their live parts (brewing, mugs taken, the door opening)
-// come with the coffee runs and snacks.
+// Adapted from cubefarm client/src/world/Props.tsx and toys/mugLook.tsx (MIT): the floor's furniture. The coffee
+// machine (CoffeeMachine.tsx), the mug stack and the fridge (KitchenFridge.tsx) keep cubefarm's places on the counter:
+// the errands' spots are measured from them.
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { glow, shade, toon } from './materials';
+import { CoffeeMachine } from './CoffeeMachine';
+import { Fridge } from './KitchenFridge';
+import { shade, toon } from './materials';
+import { MUG_SIZE, MugLook } from './mugLook';
 import { Ball, Box, Cyl } from './Toon';
 
 type P = [number, number, number];
@@ -59,48 +61,7 @@ export function CoffeeTable({ position, rotationY = 0 }: { position: P; rotation
 
 // ---------- the kitchenette ----------
 
-/** Where the coffee machine's mug slot is, and its spout's height (CoffeeMachine.tsx). */
-const SLOT = { x: -0.25, tray: 0.02 };
-const SPOUT_Y = 0.21;
-export const MUG_SIZE = { r: 0.055, rBase: 0.05, h: 0.12 };
 const MUG_COLORS = ['#ef476f', '#118ab2', '#ffd166'];
-
-/** The coffee machine on the counter, its front (and mug slot) facing local -x. */
-function CoffeeMachine({ position }: { position: P }) {
-  return (
-    <group position={position}>
-      <Box size={[0.45, 0.55, 0.4]} position={[0.05, 0.28, 0]} color="#343a40" outline />
-      {/* head over the drip tray, and its spout */}
-      <Box size={[0.22, 0.1, 0.28]} position={[SLOT.x + 0.01, SPOUT_Y + 0.07, 0]} color="#495057" outline />
-      <Cyl r={0.018} h={0.03} position={[SLOT.x, SPOUT_Y + 0.005, 0]} color="#adb5bd" />
-      {/* power light, and the brew button */}
-      <mesh position={[-0.2, 0.39, 0.13]} rotation={[0, -Math.PI / 2, 0]} material={glow('#ff6b6b')}>
-        <circleGeometry args={[0.02, 12]} />
-      </mesh>
-      <group position={[-0.18, 0.42, -0.06]}>
-        <Cyl r={0.045} h={0.02} rotation={[0, 0, Math.PI / 2]} color="#212529" />
-        <mesh position={[-0.012, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={toon('#495057')}>
-          <cylinderGeometry args={[0.032, 0.034, 0.018, 18]} />
-        </mesh>
-      </group>
-      {/* the drip tray */}
-      <Box size={[0.2, SLOT.tray, 0.26]} position={[SLOT.x, SLOT.tray / 2, 0]} color="#6c757d" outline />
-    </group>
-  );
-}
-
-/** An empty mug, upright, its handle towards +x. */
-function Mug({ color }: { color: string }) {
-  const { r, rBase, h } = MUG_SIZE;
-  return (
-    <group>
-      <Cyl r={rBase} rTop={r} h={h} color={color} outline />
-      <mesh position={[r - 0.003, 0.004, 0]} rotation={[0, 0, -Math.PI / 2]} material={toon(color)}>
-        <torusGeometry args={[0.032, 0.01, 6, 14, Math.PI]} />
-      </mesh>
-    </group>
-  );
-}
 
 /** Three mugs stacked rim-down on a little stand round a pole, beside the coffee machine. */
 function MugStack({ position }: { position: P }) {
@@ -111,7 +72,7 @@ function MugStack({ position }: { position: P }) {
       <Cyl r={0.012} h={0.42} position={[0, 0.24, 0]} color="#6c757d" />
       {MUG_COLORS.map((c, i) => (
         <group key={c} position={[0, 0.03 + h / 2 + i * (h + 0.002), 0]} rotation={[Math.PI, (i * 2.4) % (Math.PI * 2), 0]}>
-          <Mug color={c} />
+          <MugLook color={c} sips={0} />
         </group>
       ))}
       <Box size={[0.04, 0.05, 0.05]} position={[0, 0.47, 0]} color="#6c757d" shadow={false} />
@@ -119,31 +80,8 @@ function MugStack({ position }: { position: P }) {
   );
 }
 
-const FRIDGE = { w: 0.8, h: 2, white: '#f1f3f5' };
-
-/** The fridge at the counter's end, shut, its door (hinged on the +z edge) facing local -x. */
-function Fridge({ position }: { position: P }) {
-  const { w: W, h: H, white } = FRIDGE;
-  return (
-    <group position={position}>
-      <Box size={[W, H, W]} position={[0, H / 2, 0]} color={white} outline />
-      <Box size={[W, 0.12, W]} position={[0, 0.06, 0]} color="#ced4da" outline />
-      <group position={[-W / 2, 0, 0]}>
-        <Box size={[0.06, H - 0.04, W]} position={[-0.03, H / 2, 0]} color={white} outline />
-        {/* the handle, on the far edge from the hinge */}
-        <Box size={[0.04, 0.5, 0.05]} position={[-0.085, 1.3, -0.25]} color="#adb5bd" outline />
-        {/* magnets, and a sticky note held up by one */}
-        <Cyl r={0.03} h={0.014} position={[-0.067, 1.62, 0.12]} rotation={[0, 0, Math.PI / 2]} color="#ef476f" shadow={false} />
-        <Ball r={0.024} position={[-0.068, 1.15, 0.2]} scale={[0.5, 1, 1]} color="#06d6a0" shadow={false} />
-        <Box size={[0.004, 0.15, 0.15]} position={[-0.062, 1.42, 0.08]} rotation={[0.08, 0, 0]} color="#ffd166" shadow={false} />
-        <Cyl r={0.016} h={0.012} position={[-0.067, 1.485, 0.08]} rotation={[0, 0, Math.PI / 2]} color="#118ab2" shadow={false} />
-      </group>
-    </group>
-  );
-}
-
 /** The kitchenette counter along the east wall, its front facing local -x: the coffee machine, mugs, fruit, a kettle and the fridge. */
-export function Kitchenette({ position }: { position: P }) {
+export function Kitchenette({ position, floor }: { position: P; floor: number }) {
   return (
     <group position={position}>
       {/* counter runs along z */}
@@ -157,7 +95,7 @@ export function Kitchenette({ position }: { position: P }) {
       <Ball r={0.07} position={[-0.06, 1.1, 0.66]} color="#ffd166" />
       <Ball r={0.07} position={[0.07, 1.1, 0.7]} color="#80ed99" />
       <Cyl r={0.1} rTop={0.07} h={0.25} position={[0, 1.08, 1.4]} color="#ced4da" outline />
-      <Fridge position={[0, 0, 2.45]} />
+      <Fridge position={[0, 0, 2.45]} floor={floor} />
     </group>
   );
 }

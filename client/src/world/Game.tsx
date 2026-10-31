@@ -1,5 +1,5 @@
 // The game: the floor you're on in 3D, walked in first person or looked down on in the overview (rig.ts), its workers at
-// their desks and its furniture, and the city round the building. A picker along the bottom moves between floors and
+// their desks, out on errands and chatting, and the city round the building. A picker along the bottom moves between floors and
 // the lobby; panels (a terminal, the board) open over the view. Adapted from cubefarm client/src/world/Game.tsx and
 // camera/CameraRig.tsx (MIT): the canvas, lights and sky, and the overview's mouse.
 import { useEffect, useMemo } from 'react';
@@ -9,6 +9,7 @@ import { useStore } from '../store';
 import { HUD } from '../ui/HUD';
 import { Overlays } from '../ui/Overlays';
 import { OVERVIEW } from './cameraMath';
+import { Chatter } from './Chatter';
 import { City } from './City';
 import { floorElevation, lobbyColliders, officeColliders } from './layout';
 import { Lobby, OfficeFloor } from './OfficeFloor';
@@ -144,6 +145,7 @@ export function Game() {
         <CameraRig />
         <Player floor={shown} colliders={colliders} />
         <AdaptiveResolution />
+        <Chatter />
         {floor ? <OfficeFloor key={floor.id} floor={floor} top={top} /> : <Lobby top={top} />}
         <City elevation={floorElevation(shown)} />
       </Canvas>

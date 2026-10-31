@@ -211,3 +211,16 @@ Each game item in FEATURES.md sections 7 to 11 names its cubefarm source. The wo
 - **The whiteboard:** `client/src/kanban.ts` (kanbanFor and qaCardNote, with tests), `draw.ts` `drawKanban` with fixed tones, and `KanbanBoard.tsx` without stickies, strings or stats. Wall-hung things carry the room's cut.
 - **Panels:** `ui/Panel.tsx`, `ui/Overlays.tsx` (a worker's terminal and the board, read-only), `ui/HUD.tsx`; `LiveTerminal` moved to `ui/` and keeps Esc for the CLI.
 
+### Phase 11: idle life
+
+**Done.** Things that differ from cubefarm:
+- **Copied or adapted with their tests:** `nav.ts`, `body.ts`, `walkways.ts`, `people.ts` (no faces, hand-sent errands or full probe), `errands.ts`, `stage.ts`, `socials.ts`, `gathering.ts`, `fidgets.ts`, `coffee.ts`, `coffeeBreak.ts`, `fridge.ts`, `snackBreak.ts`, `meals.ts` (lunch only), `ritualSchedule.ts` (the stand-up and lunch), `dayTime.ts` (no sky), `reactions.ts`, `activitySign.ts`, `chatterLines.ts`, `chatterRules.ts`, `gongRules.ts`, `gongRun.ts` and the pong rules (`pong.ts`, `pongPhysics.ts`, `pongRules.ts`, `pongAi.ts`, `pongErrands.ts`).
+- **From moments, not diffs:** reactions at the desk, the gong run, the confetti, chatter's news (`chatterEvents.ts` `momentNews`) and the stand-up read the server's moments, taking the new ones by identity (`reactions.ts` `momentsSince`). A floor's merge party starts at the gong's strike (`gongState.ts` `isCelebrating`), as in cubefarm.
+- **Ping-pong without a physics engine:** `pongSim.ts` is a plain ball standing in for cubefarm's Rapier world; `pongState.ts`, `pongRunner.ts` and `PongMatch.tsx` seat workers only. With the toys cut, `PONG_SHARE` takes their slice of the restless roll too and a rolled game outweighs a stretch, or a game would hardly ever start.
+- **`Character.tsx`** has its standing and walking half; toys hitting people, themes, the screen's glow, the phone call and handshake gestures and the voices are cut.
+- **`ErrandDirector.tsx`:** new workers walk straight from the elevator to their desk (the welcome tour is cut), and poking the roomba, hand-sent errands and the ding are cut. `Elevator.tsx` only opens its doors for people on foot: riding it waits.
+- **Workers only:** the coffee machine and the fridge (`CoffeeMachine.tsx`, `KitchenFridge.tsx`, `coffeeErrand.ts`, `fridgeErrand.ts`, `fridgeState.ts`) leave out the player's mug and snacks, and the sounds.
+- **Chatter** is speech bubbles at the lively pace: the babble voices come with the sounds, saying hi with Phase 12, and the CEO's floor walk is cut.
+- **Rituals** (`ritualRunner.ts`, `Rituals.tsx`): the CEO rides up for a stand-up and points at the Backlog column for each new issue (no sticky notes; no stand-up without a CEO), and lunch runs on the real clock until the sky comes. The evening, Friday pizza, the CEO's walks and the desk lamps are cut.
+- **Probes** for browser checks: `__mmPeople`, `__mmCoffee`, `__mmFridge`, `__mmGong`, `__mmConfetti`, `__mmChatter`, `__mmRituals`, and `?ritual=standup` or `?ritual=lunch`.
+

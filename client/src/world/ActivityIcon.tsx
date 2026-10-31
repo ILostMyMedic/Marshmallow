@@ -1,23 +1,25 @@
-// Adapted from cubefarm client/src/world/ActivityIcon.tsx (MIT): the sign over a seated worker's head; it follows people
-// about once they walk.
+// Adapted from cubefarm client/src/world/ActivityIcon.tsx (MIT): the sign over a worker's head, following them about
+// once they get up.
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ACTIVITY_ICONS } from '../../../shared/activity';
 import { isBusy, type Activity, type Worker } from '../../../shared/types';
+import { signHeight, SIGN_SIZE } from './activitySign';
 import { roundRect, SANS } from './draw';
 import { INK } from './Outlines';
+import { bodyState, saying } from './people';
 
 // The little sign over a busy worker's head: an icon for what they're doing (📖 reading, ✏️ editing, 🧪 testing…) and a
 // short detail ("store.ts", "npm test"), straight from the server's redacted activity (shared/activity.ts). It looks
 // for a change at most twice a second and fades between signs. Each sign's texture is drawn once and shared.
 
-const SIGN = { w: 1.1, h: 0.206, px: 640, py: 120 };
+const SIGN = { ...SIGN_SIZE, px: 640, py: 120 };
 const CHECK_MS = 500;
 const FADE_S = 0.16;
 const KEEP = 64; // sign textures kept; the least recently shown go first
-/** Over a seated worker's head, in their desk's frame (the chair is at z 0.8). */
-const SEATED_AT = { y: 1.78, z: 0.8 };
+/** Over a seated worker's head, in their desk's frame (the chair is at z 0.8), until their body is tracked. */
+const SEATED_AT = { z: 0.8 };
 
 const geometry = new THREE.PlaneGeometry(SIGN.w, SIGN.h);
 const textures = new Map<string, THREE.CanvasTexture>();
@@ -83,7 +85,7 @@ export const ActivityIcon = memo(function ActivityIcon({ worker }: { worker: Wor
   // What the server says now; the frame loop picks it up at its next check.
   const wanted = useRef<Activity | null>(null);
   wanted.current = isBusy(worker.status) ? worker.activity : null;
-  const st = useMemo(() => ({ shown: '', next: null as Activity | null, nextKey: '', checked: -1e9, fade: 0 }), []);
+  const st = useMemo(() => ({ shown: '', next: null as Activity | null, nextKey: '', checked: -1e9, fade: 0, y: 0, at: new THREE.Vector3() }), []);
   const parentTurn = useMemo(() => new THREE.Quaternion(), []);
 
   useFrame((_, delta) => {
@@ -110,7 +112,13 @@ export const ActivityIcon = memo(function ActivityIcon({ worker }: { worker: Wor
     } else if (st.shown) st.fade = Math.min(1, st.fade + dt / FADE_S);
     grp.visible = st.fade > 0;
     if (!grp.visible) return;
-    grp.position.set(0, SEATED_AT.y + Math.sin(now / 600) * 0.012, SEATED_AT.z);
+    // over their head, seated or up and about (in the desk's frame), and above a speech bubble
+    const body = bodyState(worker.id);
+    const target = signHeight(body?.sit ?? 1, !!saying(worker.id));
+    st.y = st.y === 0 ? target : st.y + (target - st.y) * Math.min(1, dt * 10);
+    if (body && grp.parent) grp.parent.worldToLocal(st.at.set(body.x, 0, body.z));
+    else st.at.set(0, 0, SEATED_AT.z);
+    grp.position.set(st.at.x, st.y + Math.sin(now / 600) * 0.012, st.at.z);
     // face the camera, whichever way the desk is turned
     grp.parent?.getWorldQuaternion(parentTurn);
     grp.quaternion.copy(parentTurn.invert().multiply(camera.quaternion));

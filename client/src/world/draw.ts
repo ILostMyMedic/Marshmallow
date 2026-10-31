@@ -305,6 +305,8 @@ const COLS: { key: keyof KanbanColumns; title: string; chip: string; note: strin
   { key: 'ready', title: '✅ Ready to merge', chip: '#80ed99', note: '#d8f9df' },
   { key: 'merged', title: '🎉 Merged', chip: '#c77dff', note: '#eadcff' },
 ];
+/** The board's columns, left to right. */
+export const KANBAN_KEYS: (keyof KanbanColumns)[] = COLS.map((c) => c.key);
 /** A toned card's sticky colour on the board. */
 const TONE: Record<CardTone, string> = { warn: '#ffd8a8', bad: '#ffc9c9', good: '#d8f9df' };
 

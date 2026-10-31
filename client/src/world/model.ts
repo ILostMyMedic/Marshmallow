@@ -1,6 +1,6 @@
 // The world model: each worker's game state, from their status and the office's moments (shared/types.ts Moment).
-// The scene reads it every frame and never talks to the server itself. Pure: phase 9 has working, idle and
-// celebrating; arriving, leaving and errands join it as their phases come.
+// The scene reads it every frame and never talks to the server itself. Pure: working, idle or celebrating their own
+// PR. Where their body is (errands, arriving, leaving) is people.ts's, and a floor's merge party is gongState.ts's.
 
 import type { Moment, Worker } from '../../../shared/types';
 
@@ -41,3 +41,4 @@ export function lifeOf(w: Pick<Worker, 'id' | 'status'>, moments: readonly Momen
     justMerged: now - wins.merged < PROUD_MS,
   };
 }
+

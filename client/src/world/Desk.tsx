@@ -1,6 +1,6 @@
 // Adapted from cubefarm client/src/world/Desk.tsx (MIT): the desk, its monitor showing the worker's live terminal, the
-// keyboard, the chair, the worker and their name tag. Hiring at a vacant desk, the mug's coffee and approvals are cut.
-import { memo, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+// keyboard, the mug, the chair, the worker and their name tag. Hiring at a vacant desk and approvals are cut.
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,6 +14,8 @@ import { Character } from './Character';
 import { drawSign, drawTag, drawTerminal, tagIcon } from './draw';
 import { useInteractable } from './interact';
 import { shade } from './materials';
+import { MUG_SIZE, MugLook, mugColor } from './mugLook';
+import { deskMug, subscribeMugs } from './people';
 import { Ball, Box, Cyl } from './Toon';
 
 const SCREEN = { w: 1.0, h: 0.6, px: 640, py: 384 };
@@ -236,6 +238,25 @@ function Keyboard() {
   );
 }
 
+/** The mug on the desk; for a while after a coffee run, the coffee they brought back, full and steaming. */
+function DeskMug({ workerId, color }: { workerId: string; color: string }) {
+  const coffee = useSyncExternalStore(subscribeMugs, () => deskMug(workerId));
+  const [, expire] = useState(0);
+  useEffect(() => {
+    if (!coffee) return;
+    const t = setTimeout(() => expire((n) => n + 1), Math.max(0, coffee.until - Date.now()) + 50);
+    return () => clearTimeout(t);
+  }, [coffee]);
+  const fresh = coffee && coffee.until > Date.now() ? coffee : null;
+  if (!fresh) return <Cyl r={0.045} h={0.1} color={color} outline />;
+  return (
+    // the parent group sits at the plain mug's centre, 0.82 (desk top 0.77 plus half its height)
+    <group position={[0, MUG_SIZE.h / 2 - 0.05, 0]} rotation={[0, Math.PI / 2, 0]}>
+      <MugLook color={mugColor(fresh.id)} sips={fresh.sips} />
+    </group>
+  );
+}
+
 /**
  * One desk, with its worker or empty. Memoised: the floor re-renders on every worker event, and without this every
  * desk, person and monitor on it would re-render with it. Give it stable props (a position that isn't a new array).
@@ -247,6 +268,8 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
     worker ? { id: `worker-${worker.id}`, label: worker.needsSignIn ? `Sign ${worker.name}'s Claude Code in, in their terminal` : `View ${worker.name}'s terminal`, action: { kind: 'terminal', workerId: worker.id } } : null,
     3.6,
   );
+  const chairRef = useRef<THREE.Group>(null);
+  const mugRef = useRef<THREE.Group>(null);
   return (
     <group ref={ref} position={position} rotation={[0, rotationY, 0]}>
       {/* desk */}
@@ -267,8 +290,9 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
           {worker.host === 'box' && <CloudPuff />}
           {worker.needsSignIn && <SignInNote />}
           <Keyboard />
-          <group position={[0.76, 0.82, 0.02]}>
-            <Cyl r={0.045} h={0.1} color={shade(shirt, 0.1)} outline />
+          {/* the mug: its owner picks it up for a sip now and then */}
+          <group ref={mugRef} position={[0.76, 0.82, 0.02]}>
+            <DeskMug workerId={worker.id} color={shade(shirt, 0.1)} />
           </group>
         </>
       ) : (
@@ -281,8 +305,8 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
         </>
       )}
 
-      {/* chair */}
-      <group position={[0, 0, worker ? 0.8 : 0.6]}>
+      {/* chair: it rolls back while they're up */}
+      <group ref={chairRef} position={[0, 0, worker ? 0.8 : 0.6]}>
         <Box size={[0.52, 0.08, 0.5]} position={[0, 0.44, 0]} color={accent} outline />
         <Box size={[0.48, 0.42, 0.07]} position={[0, 0.72, 0.28]} color={accent} outline />
         <Cyl r={0.035} h={0.36} position={[0, 0.22, 0]} color="#444a5c" />
@@ -291,7 +315,7 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
       {worker && (
         <>
           <group position={[0, 0, 0.8]}>
-            <Character key={worker.id} worker={worker}>
+            <Character key={worker.id} worker={worker} chair={chairRef} mug={mugRef}>
               <NameTag worker={worker} color={shirt} />
             </Character>
           </group>

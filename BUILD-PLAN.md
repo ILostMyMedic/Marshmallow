@@ -194,7 +194,7 @@ The 3D scene, faces, speech bubbles and idle activities all read that model, so 
 
 Workers get up: walking (walk grid, paths, named spots), the errand system, coffee runs, fridge snacks, stretches, chats and desk visits, fidgets, naps after a long idle, stand-ups at the whiteboard when new issues land, lunch, ping-pong between idle workers, speech bubbles about real work, the merge celebration, and arrivals by elevator and leavers carrying a box.
 
-**Done when:** in the demo, idle workers wander off for coffee, chat, nap and play ping-pong, come back to their desks for the next task, and cheer a merge.
+**Done when:** in the demo, idle workers wander off for coffee, chat, nap and play ping-pong, come back to their desks for the next task, and cheer a merge. (Done: seen in a browser on the demo, from hires arriving by elevator through a stand-up, builds, QA and merges to gong runs, coffee, snacks, chats, a ping-pong game and a leaver with a box; the rules are tested in `client/src/world/*.test.ts`.)
 
 ## Phase 12: the day and the senses
 

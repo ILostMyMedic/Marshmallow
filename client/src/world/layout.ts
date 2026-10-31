@@ -192,6 +192,11 @@ export const KITCHEN = { x: HALF_W - 0.45, z: 7 };
 export const COOLER = { x: HALF_W - 0.5, z: -9.5 };
 /** The wall clock on the north wall, y its middle. */
 export const CLOCK = { x: -10, y: 2.75, z: -HALF_D + 0.05 };
+/** The merge gong in the north-west corner (Gong.tsx): its frame w wide, d deep and h tall, the disc's radius r and middle y. */
+export const GONG = { x: -8.85, z: -11.3, w: 2.3, d: 0.9, h: 2.35, r: 0.72, y: 1.3 };
+export const gongRect = (): Rect => ({ minX: GONG.x - GONG.w / 2, maxX: GONG.x + GONG.w / 2, minZ: -HALF_D, maxZ: GONG.z + GONG.d / 2 });
+/** Where someone stands in front of the gong. */
+export const GONG_SPOT = { x: GONG.x, z: GONG.z + GONG.d / 2 + 0.9 };
 /** A floor's plants: x, z and how big. */
 export const OFFICE_PLANTS: [number, number, number][] = [
   [-7.1, -HALF_D + 0.7, 1],
@@ -222,6 +227,7 @@ export function officeColliders(): Rect[] {
   out.push(pongTableRect());
   out.push(rect(KITCHEN.x, KITCHEN.z + 0.4, 0.9, 5)); // kitchenette counter + fridge
   out.push(rect(COOLER.x, COOLER.z, 0.7, 0.7));
+  out.push(gongRect());
   out.push(...OFFICE_PLANTS.map(plantRect));
   return out;
 }

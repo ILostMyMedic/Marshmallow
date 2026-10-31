@@ -1,0 +1,45 @@
+// The coffee break errand: coffeeBreak.ts's actor wired to the kitchenette's machine (CoffeeMachine.tsx) and the
+// people's hands and desks (people.ts). Imported by ErrandDirector.tsx, which registers it.
+// Adapted from cubefarm client/src/world/coffeeErrand.ts (MIT): the player's mug and the sounds are cut.
+import { useStore } from '../store';
+import { seededAppearance } from './appearance';
+import { BREAK, CoffeeBreak, fanciesCoffee, SPOTS, type BreakWorld } from './coffeeBreak';
+import { line, machine } from './CoffeeMachine';
+import { isFree, registerErrand } from './errands';
+import { shade } from './materials';
+import { tintMug } from './mugLook';
+import { setDeskMug, setHandMug } from './people';
+
+const seats = new Map<string, string>();
+let seq = 1;
+
+const world: BreakWorld = {
+  slot: machine.slot,
+  playerFirst: () => false,
+  line,
+  seats,
+  place: machine.place,
+  press: machine.press,
+  take: machine.take,
+  abandon: machine.abandon,
+  newMug(who) {
+    const id = `mug-${who}-${seq++}`;
+    const w = useStore.getState().workers[who];
+    if (w) tintMug(id, shade(seededAppearance({ seed: w.seed, role: w.role }).shirt, 0.1)); // the colour of the mug on their desk
+    return { id, sips: 0 };
+  },
+  putBack: () => {},
+  hold: (who, mug) => setHandMug(who, mug),
+  sip: () => {},
+  toDesk: (who, mug) => setDeskMug(who, mug, BREAK.desk / 1000),
+};
+
+registerErrand({
+  name: 'coffee',
+  max: BREAK.max,
+  // Now and then, a little before they'd get up to stretch.
+  when: (worker, s) => s.floor === 'office' && isFree(worker.status) && s.seatedFor >= s.restless * BREAK.early && fanciesCoffee(s.restless),
+  spot: [SPOTS.mugs],
+  steps: [],
+  act: (id) => new CoffeeBreak(id, world),
+});

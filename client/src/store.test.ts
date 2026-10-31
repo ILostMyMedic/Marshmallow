@@ -21,6 +21,7 @@ const worker = (over: Partial<Worker> = {}): Worker => ({
   costUsd: 0,
   turns: 0,
   lastError: null,
+  sessionId: null,
   ...over,
 });
 
@@ -53,6 +54,8 @@ const snapshot: Snapshot = {
   workers: [worker()],
   qa: [],
   logs: { w1: [{ id: 0, t: 0, kind: 'system', text: 'hello' }] },
+  messages: [],
+  usage: { state: 'normal', until: null, warning: null },
 };
 
 const fold = (events: ServerEvent[], from: Office = EMPTY_OFFICE) => events.reduce(reduce, from);

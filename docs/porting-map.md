@@ -41,9 +41,22 @@ Every ported file gets the header `Adapted from cubefarm <path> (MIT).`; the fir
 | Marshmallow | cubefarm | Verdict | Notes |
 | --- | --- | --- | --- |
 | `server/backend/backend.ts` | `server/backend.ts` | Adapt | **Keep:** the GitHub calls, `ensureClone`, `mainDir`, `machines`, `installDeps`, `startSession`, `terminals`, `cloud`. **Drop:** `voice`, `weather`, `notify`, `previews`, `office`, `seedOps`, `demoTeam`, `demoDoctor`; the pre-machine desk calls (`deskDir`, `prepareDesk`, `removeDesk`, `sweepDesks`, `trimDesk`, `releaseDesk`); the folder calls unless "connect a local folder" is checked. |
-| `server/backend/demo.ts` | `server/demo.ts` (1,645 lines) | Rewrite | Much smaller: an in-memory GitHub, fake sessions that write into the terminal and open a PR, random QA verdicts, a fake `BoxApi`. |
+| `server/backend/demo.ts`, `demoGithub.ts`, `demoSessions.ts` | `server/demo.ts` (1,645 lines) | Rewrite | Done. A fake GitHub saved to `<home>/demo-github.json`, so the demo survives restarts; fake machines; scripted issue, QA and fix sessions; random checks and QA verdicts. Timing and randomness are injectable for tests. Still to come with their phases: writing into the terminal (5), the fake `BoxApi` (7), the CEO's session (6), usage warnings (3). |
+| `server/sessions/session.ts`, `server/machines/machines.ts` | `agentRunner.ts` (the types), `machines.ts` | Adapt | Done early: the backend needs them. `subject` on `SessionOptions` tells the demo what the task is about, so the demo doesn't parse prompts. The `terminal`, `box` and `office` fields come in phases 5 to 7. |
+| `server/floors.ts` | `swarm.ts`: `connectRepo`, `syncRepo` | Rewrite | Done early, so the demo has floors to run on. Includes the `issuesFiled` moment and one sync per floor at a time. |
+| `server/pipeline/sessions.ts` | `swarm.ts`: `launchSession` and its callbacks, `activityOf` | Rewrite | Done early: log lines, current tool and the activity sign go to the store; `onEnd` gets the result, the session id and the screenshots. Phase 3's build, QA and fix start sessions through it. |
+| `shared/activity.ts` | `shared/activity.ts` | Copy | Done. `agentActivity` became `workerActivity`; the Codex and triage tool cases were cut; the office tools are named `worker_detail` and `configure_worker` (phase 6 must match). |
 
 ## Phase 3: scheduler and pipeline
+
+**Done.** Things that differ from cubefarm:
+- **Rules:** live in `server/pipeline/rules/`, with their tests. `catchUp`, "resume full speed" and the `autoMerge` checks were cut, since auto-merge is always on.
+- **Branch checks:** match `mm/issue-`, because QA's local branches (`mm/qa-`) also start with `mm/`.
+- **Wiring:** split into `build.ts`, `qa.ts`, `fix.ts`, `merge.ts`, `scheduler.ts`, `desk.ts` and `usage.ts`, sharing one `Ctx` (`context.ts`), and assembled in `pipeline.ts`.
+- **QA records:** the server-only fields live on `QaState` in `store.ts`, saved but not sent to tabs.
+- **Office messages:** `store.say` replaces cubefarm's phone messages. A PR that needs you posts one message as it gets there; there's no triage.
+- **Syncs:** `Floors.sync` runs once more when it's asked for while a sync is running. Otherwise a merge could wait for the next 45-second timer.
+- **Not wired yet:** `sendBack.ts` (the manager's "send back", once the console exists), closed issues and PRs stopping work and held issues (`closeCleanup`, phase 8), and restart reconciliation (phase 8).
 
 | Marshmallow | cubefarm | Verdict | Notes |
 | --- | --- | --- | --- |
@@ -51,7 +64,7 @@ Every ported file gets the header `Adapted from cubefarm <path> (MIT).`; the fir
 | `server/pipeline/rules/` | `handOut.ts`, `qaOutcome.ts`, `qaRetry.ts`, `fixOutcome.ts`, `mergeGate.ts`, `prOwnership.ts`, `sendBack.ts`, `issueClaims.ts` | Copy | Pure, each with a test. Port in dependency order: `mergeGate` → `qaOutcome` → `fixOutcome` → `prOwnership`. `sendBack` needs `httpError`. |
 | `server/pipeline/pacing.ts` | `server/pacing.ts`, `shared/usage.ts` | Copy | A usage warning means pacing; the limit means a pause. |
 | `server/pipeline/scheduler.ts` | `swarm.ts` scheduling section (~l.3775): `isFree`, `available`, `readyIssues`, `startPipelineWork`, `startIssueWork`, `schedule`, `issueFailed`, `mayStart`, `pauseForLimit`, `paceForWarning` | Rewrite | Keep: finishing beats starting, floors take turns, the session limit. |
-| `server/pipeline/build.ts` | `swarm.ts` (~l.2645–3165): `assign`, `beginTask`, `prepare`, `runTask`, `startAgentSession`, `launchSession`, `onFinished`, `onIssueFinished`, `noPullRequest`, `releaseIssue` | Rewrite | |
+| `server/pipeline/build.ts` | `swarm.ts` (~l.2645–3165): `assign`, `beginTask`, `prepare`, `runTask`, `startAgentSession`, `onFinished`, `onIssueFinished`, `noPullRequest`, `releaseIssue` | Rewrite | Sessions start through `pipeline/sessions.ts`. Replaces the demo's "run" route in `server/demoRoutes.ts`. |
 | `server/pipeline/qa.ts` | `swarm.ts`: `QA_SCHEMA` and `parseReport` (~l.404), `queueQa`, `runQa`, `onQaFinished`, `renderQaComment` (~l.3166–3505). `server/qaPrompt.ts`: Adapt. | Rewrite | Drop the mission-control and ledger calls unless checked. |
 | `server/pipeline/fix.ts` | `swarm.ts`: `runFix`, `onFixFinished`, `unpushed`, `prHead` (~l.3507–3680) | Rewrite | |
 | `server/pipeline/merge.ts` | `swarm.ts` auto-merge section (~l.1552): `advanceMerges`, `advanceMerge`, `closeResolvedIssues`, `sendBack` | Rewrite | Only `mm/` branches merge themselves, and only at `passedSha`. |

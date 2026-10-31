@@ -57,6 +57,7 @@ const worker = (over: Partial<Worker> = {}): Worker => ({
   costUsd: 0,
   turns: 0,
   lastError: null,
+  sessionId: null,
   ...over,
 });
 

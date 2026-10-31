@@ -46,6 +46,13 @@ button {
   font-size: 1.5rem;
 }
 
+.connect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
 .pill {
   border: 1px solid currentColor;
   border-radius: 999px;
@@ -59,6 +66,10 @@ button {
 
 .pill-bad {
   color: var(--bad);
+}
+
+.pill-warn {
+  color: #c98a00;
 }
 
 .floor {

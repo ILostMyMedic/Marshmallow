@@ -6,20 +6,56 @@ import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { WebSocketServer } from 'ws';
-import { DEMO, HOST, PORT, STATE_FILE, VERSION } from './config.ts';
+import { createDemoBackend } from './backend/demo.ts';
+import { DEMO, HOME_DIR, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
 import { demoRoutes } from './demoRoutes.ts';
+import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
+import { createPipeline } from './pipeline/pipeline.ts';
 import { route } from './route.ts';
 import { Store } from './store.ts';
 
 const store = new Store(STATE_FILE, { version: VERSION, demo: DEMO });
 await store.load();
+// Only the demo has a backend so far: the real one (gh, git, Claude Code) comes in BUILD-PLAN phases 4 and 5.
+const demo = DEMO ? createDemoBackend({ home: HOME_DIR }) : null;
+const floors = demo ? new Floors(store, demo) : null;
+const pipeline = demo && floors ? createPipeline(store, demo, floors) : null;
+const need = <T>(part: T | null): T => {
+  if (!part) throw new HttpError(501, 'Only the demo can do this so far (real GitHub comes in BUILD-PLAN phase 4): start with --demo');
+  return part;
+};
+if (floors && pipeline) {
+  void floors.syncAll();
+  setInterval(() => void floors.syncAll(), SYNC_INTERVAL_MS).unref();
+  pipeline.scheduler.start(SCHEDULER_INTERVAL_MS);
+}
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
 app.get('/api/state', route(() => store.snapshot()));
-if (DEMO) app.use('/api/demo', demoRoutes(store));
+app.get('/api/github/repos', route(() => need(demo).github.listMyRepos()));
+app.post('/api/floors', route((req) => need(floors).connect(str(req.body?.fullName), { autoAssign: req.body?.autoAssign === true })));
+app.post('/api/floors/:floor/sync', route((req) => need(floors).sync(String(req.params.floor))));
+app.patch(
+  '/api/floors/:floor',
+  route((req) => {
+    const patch: { autoAssign?: boolean; browserTesting?: boolean } = {};
+    for (const key of ['autoAssign', 'browserTesting'] as const) {
+      if (req.body?.[key] === undefined) continue;
+      if (typeof req.body[key] !== 'boolean') throw new HttpError(400, `${key} must be true or false`);
+      patch[key] = req.body[key];
+    }
+    const floor = store.patchFloor(String(req.params.floor), patch);
+    pipeline?.ctx.soon(200);
+    return floor;
+  }),
+);
+app.post('/api/workers/:id/stop', route((req) => need(pipeline).stopWorker(String(req.params.id))));
+app.post('/api/workers/:id/reset', route((req) => need(pipeline).resetWorker(String(req.params.id))));
+if (demo && floors && pipeline) app.use('/api/demo', demoRoutes(store, demo, pipeline));
 app.use(
   '/api',
   route((req) => {
@@ -66,8 +102,7 @@ const shutdown = (signal: string) => {
   setTimeout(() => process.exit(0), 5_000).unref();
   for (const ws of wss.clients) ws.terminate();
   server.close();
-  void store
-    .flush()
+  void Promise.all([store.flush(), demo?.github.flush()])
     .catch((err) => console.error('  could not save the state:', err))
     .finally(() => process.exit(0));
 };

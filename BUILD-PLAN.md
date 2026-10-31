@@ -4,6 +4,11 @@ The goal before any game work: a service that turns a GitHub issue into a merged
 
 Every phase ends in something you can run. Scope follows [FEATURES.md](FEATURES.md); the cubefarm files named here are in `D:\Projects\cubefarm-main`.
 
+**Repos:**
+- **The code:** Marshmallow's own code lives in [Mallowy-tv/TheMarshmallow](https://github.com/Mallowy-tv/TheMarshmallow) (private).
+- **Testing:** phases 4 and 5 test real work on a throwaway sandbox repo (for example `Mallowy-tv/marshmallow-sandbox`).
+- **Later:** TheMarshmallow becomes a floor (Marshmallow building itself) only once the pipeline has proven itself there.
+
 ## Approach: a fresh repo, ported module by module
 
 Don't fork cubefarm. Its `server/swarm.ts` is one 5,500-line class that mixes the pipeline with coins, the journal, voice, previews and the office's self-update. Pulling the pipeline out while porting is easier than deleting around it. Most of the decision logic is already in small pure files you can copy almost as they are.
@@ -94,8 +99,13 @@ marshmallow/
    - a worktree on `mm/issue-<n>-<name>`
    - a temp folder and a dev-server port
 3. Sweeps: delete finished branches; save unpushed work as patches.
+4. Questions to you, on GitHub and in the demo's fake GitHub:
+   - Asking: the office posts the 🤖 question as a comment on the issue, adds `mm:needs-answer`, and frees the issue. The scheduler skips labelled issues.
+   - Answering: a later comment without the office's marker is the answer. The office's comments carry a hidden `<!-- marshmallow -->` marker, since they're posted as you too.
+   - Back to work: the sync removes the label, and the next build's prompt includes the question and your answer.
+   - The office's own record of open questions, sent to the debug page (the phone later).
 
-**Done when:** connecting a throwaway test repo clones it, and a worker's desk gets set up on its branch.
+**Done when:** connecting the sandbox repo clones it, a worker's desk gets set up on its branch, and a question asked on one of its issues comes back answered.
 
 ## Phase 5: Claude sessions
 
@@ -113,17 +123,17 @@ marshmallow/
 
    Ollama reports no usage limits and no cost, so pacing leaves these workers alone. Local machines only: a Box can't reach your computer.
 4. `terminal.ts`: a headless xterm mirror per worker with saved scrollback, viewed over `/ws/term`; an xterm.js panel on the debug page.
-5. `prompts/`: the build, QA and fix prompts; QA answers through a JSON schema.
+5. `prompts/`: the build, QA and fix prompts; QA answers through a JSON schema. The build prompt adds one rule: an issue too unclear to build ends with a line starting `QUESTION FOR THE MANAGER:`, which the office turns into a question on the issue (phase 4) instead of a failed build.
 6. The Playwright MCP for browser testing.
 
-**Done when:** one real issue on a throwaway repo goes build → QA → merge on a local Ollama model, then once more on your subscription.
+**Done when:** one real issue on the sandbox repo goes build → QA → merge on a local Ollama model, then once more on your subscription.
 
 ## Phase 6: workers and autospawning
 
 1. Hire and fire workers, with a names pool and a seed per worker (the game draws their look from it).
 2. Autoscale:
    - The rules version first: free and testable.
-   - Then the CEO: a Claude session with office tools over MCP (`company_status`, `scale_team`, `file_issue`, `set_floor_profile`) and its job queue (onboard, plan, chat). See cubefarm's `server/ceo.ts`.
+   - Then the CEO: a Claude session with office tools over MCP (`company_status`, `scale_team`, `file_issue`, `set_floor_profile`, and `ask_manager` for when the brief or the backlog leaves it unsure what to build) and its job queue (onboard, plan, chat). See cubefarm's `server/ceo.ts`.
 3. Scaling mode: automatic, or approved by you.
 
 **Done when:** a backlog of 8 issues grows a floor from 1 worker to 3, and it shrinks back once they sit idle.

@@ -1,19 +1,6 @@
 // Words for the debug page: a worker's task and activity, and the feed's moments.
+import { ACTIVITY_ICONS } from '../../../shared/activity';
 import type { ActivityKind, Moment, Task } from '../../../shared/types';
-
-const ACTIVITY_ICONS: Record<ActivityKind, string> = {
-  read: '📖',
-  edit: '✏️',
-  test: '🧪',
-  build: '🔨',
-  browse: '🌐',
-  git: '🌿',
-  ci: '⏳',
-  qa: '🔍',
-  fix: '🩹',
-  talk: '💬',
-  run: '▶️',
-};
 
 export const activityIcon = (kind: ActivityKind) => ACTIVITY_ICONS[kind];
 

@@ -8,7 +8,9 @@ A cartoon 3D office game on top of a Node service that runs Claude Code workers 
 
 Teams grow and shrink on their own (autospawning). Workers run on this computer or in an Upstash Box, and idle workers wander off for coffee, chats and lunch. A worker's model is Claude's, or a local one through Ollama (`ollama/<name>`). Ollama is the testing ground, and more model servers may come later.
 
-**Status: Phases 0 and 1 are done (skeleton, contract, state file, live debug page); Phase 2 is next.** The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
+The code lives in [Mallowy-tv/TheMarshmallow](https://github.com/Mallowy-tv/TheMarshmallow) (private). Marshmallow acts on GitHub as the manager through their `gh` login.
+
+**Status: Phases 0 to 3 are done (skeleton, contract and state, the Backend seam with a full demo, the scheduler and the build → QA → fix → merge pipeline); Phase 4 (real GitHub and local machines) is next.** The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
 
 ## The reference implementation: cubefarm
 
@@ -62,7 +64,7 @@ Rules for using it:
 
 ## Safety
 
-- Workers run Claude Code unsandboxed and approve their own tool calls. Test against throwaway repositories only.
+- Workers run Claude Code unsandboxed and approve their own tool calls. Test against throwaway repositories only (a sandbox repo, never TheMarshmallow itself, until the pipeline has proven itself there).
 - Develop in demo mode with an isolated home: `MARSHMALLOW_HOME=./.mm-home` and port 4600 (keep `.mm-home` out of git).
 - Strip `ANTHROPIC_*` and `CLAUDE_*` (except `CLAUDE_CONFIG_DIR`) from every worker's environment. A worker on Ollama then gets the Ollama server's `ANTHROPIC_BASE_URL` and a dummy token from the office; nothing is inherited.
 - Try real sessions on a local Ollama model before spending Claude usage.
@@ -71,6 +73,6 @@ Rules for using it:
 
 ## Scripts
 
-- `npm run dev -- --demo`: the server from source (tsx watch) on 4600, plus Vite on 5600 (`MARSHMALLOW_CLIENT_PORT`) proxying `/api` and `/ws` to it. Open http://localhost:5600 for the debug page; in demo mode its buttons drive pretend changes through `/api/demo/*` (`server/demoRoutes.ts`). Ctrl+C stops both. Set the isolated home first: `$env:MARSHMALLOW_HOME='./.mm-home'` in PowerShell, or a `MARSHMALLOW_HOME=./.mm-home` prefix in bash.
+- `npm run dev -- --demo`: the server from source (tsx watch) on 4600, plus Vite on 5600 (`MARSHMALLOW_CLIENT_PORT`) proxying `/api` and `/ws` to it. Open http://localhost:5600 for the debug page: connect a fake repo with auto-assign on, hire workers (demo only, `server/demoRoutes.ts`), and the scheduler builds, tests, fixes and merges its issues. The fake GitHub lives in `<home>/demo-github.json`, and the debug page's Reset seeds it again. Ctrl+C stops both. Set the isolated home first: `$env:MARSHMALLOW_HOME='./.mm-home'` in PowerShell, or a `MARSHMALLOW_HOME=./.mm-home` prefix in bash.
 - `npm test` (Vitest), `npm run typecheck`, `npm run build` (typecheck, then the client into `dist/`).
 - `npm start`: the server alone, serving `dist/` on 4600.

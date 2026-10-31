@@ -34,6 +34,12 @@ export interface LogLine {
   tool?: string; // the tool's name, for kind 'tool'
 }
 
+/** A log line before the office numbers and timestamps it. */
+export type LogEntry = Omit<LogLine, 'id' | 't'>;
+
+/** A worker's current tool while the office installs their desk's dependencies (status 'preparing'). */
+export const INSTALL_STEP = 'Installing dependencies';
+
 export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 /** Where a worker's machine is: a folder on this computer, or an Upstash Box. */
@@ -68,9 +74,10 @@ export interface Worker {
   idleSince: number | null; // when they last stopped being busy; null while busy. The game's errands and naps go by it.
   startedAt: number | null; // their current or last task's start
   endedAt: number | null;
-  costUsd: number;
+  costUsd: number; // their current or last task's
   turns: number;
   lastError: string | null;
+  sessionId: string | null; // their latest session, resumed for a follow-up (a nudge, a fix of their own PR)
 }
 
 export interface IssueInfo {
@@ -101,6 +108,14 @@ export interface PullInfo {
   mergeState: string; // GitHub's mergeStateStatus: CLEAN | BEHIND | BLOCKED | DIRTY | UNSTABLE | DRAFT | UNKNOWN …
   failedChecks: { name: string; url: string | null }[];
   pendingChecks: string[];
+}
+
+/** A repository the manager could connect, as GitHub lists it. */
+export interface GhRepoSummary {
+  nameWithOwner: string;
+  description: string;
+  visibility: string;
+  updatedAt: string;
 }
 
 /** One connected repository, one floor of the building. */
@@ -177,6 +192,29 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultEffort: 'medium',
 };
 
+/** The last usage warning Claude gave: which limit ("weekly limit"), how full it was (0-100), when it resets, and when it came. */
+export interface UsageWarningView {
+  limit: string | null;
+  pct: number | null;
+  resetsAt: number | null;
+  at: number;
+}
+
+/** Claude's subscription usage: normal, pacing new work after a usage warning, or paused at the limit until `until`. */
+export interface UsageView {
+  state: 'normal' | 'pacing' | 'paused';
+  until: number | null;
+  warning: UsageWarningView | null; // the latest since the server started, for the usage meter
+}
+
+/** A note from the office to the manager, for the phone: a PR that needs them, merges GitHub refuses, pacing. */
+export interface OfficeMessage {
+  id: number;
+  at: number;
+  text: string;
+  floorId: string | null;
+}
+
 /** What a tab needs to draw everything, sent when it connects. */
 export interface Snapshot {
   version: string;
@@ -186,6 +224,8 @@ export interface Snapshot {
   workers: Worker[];
   qa: QaRecord[];
   logs: Record<string, LogLine[]>; // each worker's latest lines, by worker id
+  messages: OfficeMessage[]; // the latest, oldest first
+  usage: UsageView;
 }
 
 /** Changes to the state: the snapshot with these folded in is what the server has. */
@@ -198,7 +238,9 @@ export type StateEvent =
   | { type: 'workerRemoved'; workerId: string }
   | { type: 'log'; workerId: string; lines: LogLine[] }
   | { type: 'qa'; qa: QaRecord }
-  | { type: 'qaRemoved'; floorId: string; prNumber: number };
+  | { type: 'qaRemoved'; floorId: string; prNumber: number }
+  | { type: 'message'; message: OfficeMessage }
+  | { type: 'usage'; usage: UsageView };
 
 /**
  * Things that happened, for the game's moments (arrivals, celebrations) and the debug page's feed. They change no

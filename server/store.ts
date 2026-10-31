@@ -2,38 +2,78 @@
 // tab. It knows nothing about the pipeline: the modules that do change it through these methods.
 // Adapted from cubefarm server/swarm.ts (MIT): its persisted shape, persistence and clients sections.
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import type { WebSocket } from 'ws';
-import { DEFAULT_SETTINGS, isBusy, type Floor, type LogKind, type LogLine, type Moment, type QaRecord, type ServerEvent, type Settings, type Snapshot, type Worker } from '../shared/types.ts';
+import {
+  DEFAULT_SETTINGS,
+  isBusy,
+  type Floor,
+  type LogEntry,
+  type LogLine,
+  type Moment,
+  type OfficeMessage,
+  type PullInfo,
+  type QaRecord,
+  type ServerEvent,
+  type Settings,
+  type Snapshot,
+  type UsageView,
+  type Worker,
+} from '../shared/types.ts';
 import { LOG_BUFFER } from './config.ts';
+import { replaceFile, writeJsonAtomic } from './files.ts';
 import { HttpError } from './httpError.ts';
 
 /** GitHub's side of a floor: refreshed by every sync, so never saved. */
 const LIVE_FLOOR_FIELDS: readonly string[] = ['cloneStatus', 'cloneError', 'issues', 'pulls', 'lastSync', 'syncError'] satisfies (keyof Floor)[];
 type SavedFloor = Omit<Floor, 'cloneStatus' | 'cloneError' | 'issues' | 'pulls' | 'lastSync' | 'syncError'>;
 
+/** A PR's trip through QA as the server keeps it: the tabs' QaRecord plus what the pipeline's rules need. */
+export interface QaState extends QaRecord {
+  issueNumber: number | null;
+  devSessionId: string | null; // the developer's session, resumed to fix what QA found
+  fixInstructions: string | null;
+  sessionFailures: number; // QA or fix sessions in a row that failed
+  testedSha: string | null; // the head commit QA is testing, or last tested
+  passedSha: string | null; // the head commit QA signed off on: auto-merge merges exactly that
+  fixReason: 'qa' | 'checks' | 'conflict' | null; // why it last went back to a developer
+  retests: number; // QA rounds the office added (after merge fixes, new commits), not counted against QA's budget
+  mergeFixes: number; // times it went back for failing checks or conflicts
+  preQa: { sha: string; fixReason: QaState['fixReason'] } | null; // a conflict found before QA tested the head
+  noChangeSha: string | null; // the head a developer last said needed no change (one free re-test per commit)
+  qaChecks: PullInfo['checks'] | null; // GitHub's checks when QA last failed it: a re-run since can be the fix
+  stuckWhy: string | null; // why it last needed the manager
+  pendingSince: number | null; // when auto-merge started waiting on its checks
+  mergeRetryAt: number | null; // GitHub refused the merge: try again after this
+  alerted: boolean; // the manager has been told its checks or merge are stuck
+  rerunSha: string | null; // the head commit whose failed checks the office re-ran (once per commit)
+  rerunAt: number | null;
+}
+
 /** What state.json holds. */
 export interface SavedState {
   settings: Settings;
   floors: SavedFloor[];
   workers: Worker[];
-  qa: QaRecord[];
+  qa: QaState[];
   logs: Record<string, LogLine[]>;
+  messages: OfficeMessage[];
 }
 
 /** Log lines per worker in state.json, and in a tab's snapshot (memory keeps LOG_BUFFER). */
 const LOG_SAVED = 200;
 const LOG_SNAPSHOT = 50;
+/** Office messages kept, and sent in a snapshot. */
+const MESSAGES_KEPT = 100;
 // Changes come in bursts (a session's tool calls): one write covers each burst.
 const SAVE_DELAY_MS = 1500;
 
-export interface LogEntry {
-  kind: LogKind;
-  text: string;
-  tool?: string;
-}
-
 export const qaKey = (floorId: string, prNumber: number) => `${floorId}#${prNumber}`;
+
+/** The part of a QA record the tabs see. */
+export function qaView(q: QaState): QaRecord {
+  const { floorId, prNumber, status, round, devWorkerId, qaWorkerId, summary, checks, commentUrl, mergeNote, updatedAt } = q;
+  return { floorId, prNumber, status, round, devWorkerId, qaWorkerId, summary, checks, commentUrl, mergeNote, updatedAt };
+}
 
 /** A worker's idleSince after a change: cleared while they're busy, set when they stop being busy. */
 export function nextIdleSince(prev: Worker, next: Worker, now: number): number | null {
@@ -41,25 +81,14 @@ export function nextIdleSince(prev: Worker, next: Worker, now: number): number |
   return isBusy(prev.status) || prev.idleSince === null ? now : prev.idleSince;
 }
 
-/** Windows briefly locks a file another program (an antivirus, the indexer) has just opened, so a rename gets retries. */
-async function replaceFile(from: string, to: string, tries = 5): Promise<void> {
-  for (let i = 1; ; i++) {
-    try {
-      return await fs.rename(from, to);
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (i >= tries || !['EPERM', 'EBUSY', 'EACCES'].includes(code ?? '')) throw err;
-      await new Promise((r) => setTimeout(r, 50 * i));
-    }
-  }
-}
-
 export class Store {
   private settings: Settings = { ...DEFAULT_SETTINGS };
   private floors = new Map<string, Floor>();
   private workers = new Map<string, Worker>();
-  private qa = new Map<string, QaRecord>();
+  private qa = new Map<string, QaState>();
   private logs = new Map<string, LogLine[]>();
+  private messages: OfficeMessage[] = [];
+  private usage: UsageView = { state: 'normal', until: null, warning: null };
   private clients = new Set<WebSocket>();
   private logSeq = 0;
   private saveTimer: NodeJS.Timeout | null = null;
@@ -90,19 +119,29 @@ export class Store {
     }
     this.settings = { ...DEFAULT_SETTINGS, ...saved.settings };
     for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
-    for (const w of saved.workers ?? []) this.workers.set(w.id, { ...w, activity: null });
+    for (const w of saved.workers ?? []) this.workers.set(w.id, { ...w, activity: null, sessionId: w.sessionId ?? null });
     for (const q of saved.qa ?? []) this.qa.set(qaKey(q.floorId, q.prNumber), q);
     for (const [id, lines] of Object.entries(saved.logs ?? {})) {
       if (!this.workers.has(id)) continue;
       this.logs.set(id, lines);
       for (const l of lines) this.logSeq = Math.max(this.logSeq, l.id + 1);
     }
+    this.messages = saved.messages ?? [];
   }
 
   snapshot(): Snapshot {
     const logs: Record<string, LogLine[]> = {};
     for (const [id, lines] of this.logs) logs[id] = lines.slice(-LOG_SNAPSHOT);
-    return { ...this.about, settings: this.settings, floors: this.floorList(), workers: this.workerList(), qa: this.qaList(), logs };
+    return {
+      ...this.about,
+      settings: this.settings,
+      floors: this.floorList(),
+      workers: this.workerList(),
+      qa: this.qaList().map(qaView),
+      logs,
+      messages: this.messages,
+      usage: this.usage,
+    };
   }
 
   /** A tab connected: it gets the snapshot now and every change from here on. */
@@ -126,8 +165,14 @@ export class Store {
     return [...this.workers.values()];
   }
 
-  qaList(): QaRecord[] {
-    return [...this.qa.values()];
+  /** QA records, all or one floor's. */
+  qaList(floorId?: string): QaState[] {
+    const all = [...this.qa.values()];
+    return floorId === undefined ? all : all.filter((q) => q.floorId === floorId);
+  }
+
+  hasFloor(id: string): boolean {
+    return this.floors.has(id);
   }
 
   floor(id: string): Floor {
@@ -136,14 +181,22 @@ export class Store {
     return f;
   }
 
+  hasWorker(id: string): boolean {
+    return this.workers.has(id);
+  }
+
   worker(id: string): Worker {
     const w = this.workers.get(id);
     if (!w) throw new HttpError(404, `No worker ${id}`);
     return w;
   }
 
-  qaRecord(floorId: string, prNumber: number): QaRecord {
-    const q = this.qa.get(qaKey(floorId, prNumber));
+  findQa(floorId: string, prNumber: number): QaState | null {
+    return this.qa.get(qaKey(floorId, prNumber)) ?? null;
+  }
+
+  qaRecord(floorId: string, prNumber: number): QaState {
+    const q = this.findQa(floorId, prNumber);
     if (!q) throw new HttpError(404, `PR #${prNumber} on ${floorId} isn't in QA`);
     return q;
   }
@@ -201,9 +254,19 @@ export class Store {
     return lines;
   }
 
-  putQa(rec: QaRecord) {
+  putQa(rec: QaState) {
     this.qa.set(qaKey(rec.floorId, rec.prNumber), rec);
-    this.emit({ type: 'qa', qa: rec });
+    this.emit({ type: 'qa', qa: qaView(rec) });
+  }
+
+  /**
+   * Changes a QA record. `touch` (the default) stamps updatedAt: a real change, which the merge gate waits out a sync
+   * for. Bookkeeping (merge notes, the gate's own fields) leaves it alone.
+   */
+  patchQa(floorId: string, prNumber: number, patch: Partial<QaState>, touch = true): QaState {
+    const next = { ...this.qaRecord(floorId, prNumber), ...patch, floorId, prNumber, ...(touch ? { updatedAt: Date.now() } : {}) };
+    this.putQa(next);
+    return next;
   }
 
   removeQa(floorId: string, prNumber: number) {
@@ -215,9 +278,25 @@ export class Store {
     this.broadcast(m);
   }
 
+  /** A message from the office to the manager's phone. */
+  say(text: string, floorId: string | null = null): OfficeMessage {
+    const message: OfficeMessage = { id: (this.messages.at(-1)?.id ?? 0) + 1, at: Date.now(), text, floorId };
+    this.messages = [...this.messages, message].slice(-MESSAGES_KEPT);
+    this.emit({ type: 'message', message });
+    return message;
+  }
+
+  /** Claude's usage as the pacing sees it; tabs hear only of changes. It lives in memory. */
+  setUsage(usage: UsageView) {
+    if (JSON.stringify(usage) === JSON.stringify(this.usage)) return;
+    this.usage = usage;
+    this.broadcast({ type: 'usage', usage });
+  }
+
   /** Empties the office but keeps its settings, and sends every tab the new snapshot (the demo's reset). */
   reset() {
     for (const map of [this.floors, this.workers, this.qa, this.logs]) map.clear();
+    this.messages = [];
     this.emit({ type: 'snapshot', data: this.snapshot() });
   }
 
@@ -255,10 +334,7 @@ export class Store {
     const logs: Record<string, LogLine[]> = {};
     for (const [id, lines] of this.logs) logs[id] = lines.slice(-LOG_SAVED);
     const floors = this.floorList().map(({ cloneStatus: _s, cloneError: _e, issues: _i, pulls: _p, lastSync: _l, syncError: _y, ...saved }) => saved);
-    const state: SavedState = { settings: this.settings, floors, workers: this.workerList(), qa: this.qaList(), logs };
-    await fs.mkdir(path.dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(state, null, 2));
-    await replaceFile(tmp, this.file);
+    const state: SavedState = { settings: this.settings, floors, workers: this.workerList(), qa: this.qaList(), logs, messages: this.messages };
+    await writeJsonAtomic(this.file, state);
   }
 }

@@ -26,12 +26,14 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 ## 2. Projects and the work queue
 
 - [x] **GitHub issues as the backlog, PRs as the output**, through the `gh` CLI · M → `server/github.ts`
+- [x] **Your GitHub account** through the `gh` login (GitHub's own OAuth sign-in, no app to register). Issues, PRs, comments and commits are yours; the office's own comments open with a 🤖 line naming the worker who wrote them · S
 - [x] **One floor per repository** · S
 - [x] **Connect an existing GitHub repo** · S
 - [ ] **Connect a local project folder** · S → `server/workspace.ts`
 - [ ] **Create a new repo / publish a local folder** to GitHub · S
 - [x] **Issue ordering**: `Depends on #N` waits; the longest blocking chain goes first, then the oldest · S → `shared/issues.ts`
 - [x] **Skip labels**: `skip`, `wontfix`, `question` · S
+- [x] **Questions to you**: a worker or the CEO that finds an issue unclear (or a backlog with nothing ready) asks on GitHub, as a 🤖 comment on the issue with the `mm:needs-answer` label. The issue is skipped until you reply there; the next sync takes the label off and the issue goes back to the queue with your answer in its prompt. Open questions also show in the office · M (new: not in cubefarm)
 - [x] **Closing an issue or PR stops whoever works on it** · M → `server/closeCleanup.ts`
 - [ ] **Linked repos**: a floor's workers can read other floors' code · S
 - [ ] **Keep your own project folder up to date** after merges (fast-forward only) · S

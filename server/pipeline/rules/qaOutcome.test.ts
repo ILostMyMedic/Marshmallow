@@ -1,0 +1,94 @@
+// Adapted from cubefarm server/qaOutcome.test.ts (MIT).
+import { describe, expect, it } from 'vitest';
+import { MAX_MERGE_FIXES, mergeStep } from './mergeGate.ts';
+import { conflictFixInstructions, lastQaRound, MAX_QA_ROUNDS, qaGate, qaOutcome, type QaPull, type QaRoundRecord } from './qaOutcome.ts';
+
+const CONFLICTING: QaPull = { mergeable: 'CONFLICTING', mergeState: 'DIRTY' };
+const MERGEABLE: QaPull = { mergeable: 'MERGEABLE', mergeState: 'CLEAN' };
+const record = (r: Partial<QaRoundRecord> = {}): QaRoundRecord => ({ round: 1, retests: 0, mergeFixes: 0, ...r });
+const last = (r: Partial<QaRoundRecord> = {}) => record({ round: MAX_QA_ROUNDS, ...r });
+
+describe('qaOutcome', () => {
+  it('sends a fail on the last QA round while the PR conflicts back as a conflict fix', () => {
+    expect(qaOutcome(false, last(), CONFLICTING)).toBe('conflict');
+    expect(qaOutcome(false, last(), { mergeable: 'UNKNOWN', mergeState: 'DIRTY' })).toBe('conflict');
+    expect(qaOutcome(false, last({ mergeFixes: MAX_MERGE_FIXES - 1 }), CONFLICTING)).toBe('conflict');
+  });
+
+  it('sends a fail on the last QA round while the PR is mergeable to the manager, as before', () => {
+    expect(qaOutcome(false, last(), MERGEABLE)).toBe('needs-human');
+    expect(qaOutcome(false, last(), { mergeable: 'UNKNOWN', mergeState: 'UNKNOWN' })).toBe('needs-human');
+    expect(qaOutcome(false, last(), null)).toBe('needs-human'); // GitHub couldn't be asked
+  });
+
+  it('sends a fail while conflicting to the manager once the merge-fix budget is used up', () => {
+    expect(qaOutcome(false, last({ mergeFixes: MAX_MERGE_FIXES }), CONFLICTING)).toBe('needs-human');
+  });
+
+  it('sends an earlier fail back to the developer, conflicting or not', () => {
+    expect(qaOutcome(false, record(), CONFLICTING)).toBe('failed');
+    expect(qaOutcome(false, record({ round: MAX_QA_ROUNDS + 1, retests: 2 }), MERGEABLE)).toBe('failed');
+  });
+
+  it("counts only QA's own rounds, not the office's re-tests", () => {
+    expect(lastQaRound(record({ round: MAX_QA_ROUNDS, retests: 1 }))).toBe(false);
+    expect(lastQaRound(record({ round: MAX_QA_ROUNDS + 1, retests: 1 }))).toBe(true);
+    expect(lastQaRound(record({ round: MAX_QA_ROUNDS + 2, retests: 0 }))).toBe(true); // the extra round after a conflict send-back
+  });
+
+  it("passes a PR while it conflicts, leaving the conflict to the merge gate's existing path", () => {
+    expect(qaOutcome(true, last(), CONFLICTING)).toBe('passed');
+    expect(qaOutcome(true, last({ mergeFixes: MAX_MERGE_FIXES }), CONFLICTING)).toBe('passed');
+    const rec = { passedSha: 'a'.repeat(40), mergeFixes: 0, pendingSince: null, mergeRetryAt: null, alerted: false, rerunSha: null, rerunAt: null };
+    const pr = { ...CONFLICTING, isDraft: false, headSha: rec.passedSha, checks: 'passing' as const, failedChecks: [], pendingChecks: [] };
+    expect(mergeStep(pr, rec, 0, { base: 'main' })).toMatchObject({ do: 'send-back', reason: 'conflict', needsHuman: false });
+  });
+});
+
+describe('the budgets', () => {
+  it('gives QA six rounds and the merge gate five fixes', () => {
+    expect(MAX_QA_ROUNDS).toBe(6);
+    expect(MAX_MERGE_FIXES).toBe(5);
+    expect(qaOutcome(false, record({ round: 5 }), MERGEABLE)).toBe('failed'); // a round-4 or round-5 gap goes back to its developer
+    expect(qaOutcome(false, record({ round: 6 }), MERGEABLE)).toBe('needs-human');
+  });
+});
+
+describe('qaGate: conflicts before QA', () => {
+  const pull = (p: Partial<QaPull> = {}, headRefName = 'mm/issue-7-ada') => ({ ...MERGEABLE, headRefName, ...p });
+
+  it('sends a conflicting PR to its developer before a tester spends a session on it', () => {
+    expect(qaGate(pull(CONFLICTING), record())).toEqual({ do: 'send-back', needsHuman: false });
+    expect(qaGate(pull({ mergeable: 'UNKNOWN', mergeState: 'DIRTY' }), record())).toEqual({ do: 'send-back', needsHuman: false });
+    expect(qaGate(pull({ mergeable: 'CONFLICTING', mergeState: 'UNKNOWN' }), record({ mergeFixes: MAX_MERGE_FIXES - 1 }))).toEqual({ do: 'send-back', needsHuman: false });
+  });
+
+  it('sends it to the manager once the merge-fix budget is used up', () => {
+    expect(qaGate(pull(CONFLICTING), record({ mergeFixes: MAX_MERGE_FIXES }))).toEqual({ do: 'send-back', needsHuman: true });
+  });
+
+  it('updates a branch that is only behind, as the merge gate does', () => {
+    expect(qaGate(pull({ mergeState: 'BEHIND' }), record())).toEqual({ do: 'update-branch' });
+  });
+
+  it('tests a mergeable PR, or one GitHub is still working out', () => {
+    expect(qaGate(pull(), record())).toEqual({ do: 'test' });
+    expect(qaGate(pull({ mergeable: 'UNKNOWN', mergeState: 'UNKNOWN' }), record())).toEqual({ do: 'test' });
+    expect(qaGate(pull({ mergeState: 'BLOCKED' }), record())).toEqual({ do: 'test' });
+  });
+
+  it("leaves people's own PRs alone, and so do QA's local branches", () => {
+    expect(qaGate(pull(CONFLICTING, 'feature/login'), record())).toEqual({ do: 'test' });
+    expect(qaGate(pull({ mergeState: 'BEHIND' }, 'feature/login'), record())).toEqual({ do: 'test' });
+    expect(qaGate(pull(CONFLICTING, 'mm/qa-12-ada'), record())).toEqual({ do: 'test' });
+  });
+});
+
+describe('conflictFixInstructions', () => {
+  it("keeps QA's findings and adds the merge", () => {
+    expect(conflictFixInstructions('Make the toolbar wrap.\n', 'main')).toBe(
+      'Make the toolbar wrap.\n\nIt also conflicts with main: bring it up to date (git fetch origin && git merge origin/main) and resolve the conflicts so both this change and the newly merged work keep working.',
+    );
+    expect(conflictFixInstructions('', 'trunk')).toMatch(/^It also conflicts with trunk: .*git merge origin\/trunk/);
+  });
+});

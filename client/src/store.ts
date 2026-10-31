@@ -1,7 +1,7 @@
 // The office as this tab knows it: the server's snapshot with its events folded in, plus the connection's state.
 // Adapted from cubefarm client/src/store.ts (MIT).
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS, isMoment, type Floor, type LogLine, type Moment, type QaRecord, type ServerEvent, type Settings, type Worker } from '../../shared/types';
+import { DEFAULT_SETTINGS, isMoment, type Floor, type LogLine, type Moment, type OfficeMessage, type QaRecord, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
 const LOG_KEEP = 200;
@@ -18,9 +18,26 @@ export interface Office {
   qa: Record<string, QaRecord>; // by qaKey
   logs: Record<string, LogLine[]>;
   moments: Moment[];
+  messages: OfficeMessage[]; // oldest first
+  usage: UsageView;
 }
 
-export const EMPTY_OFFICE: Office = { loaded: false, version: '', demo: false, settings: DEFAULT_SETTINGS, floors: [], workers: {}, qa: {}, logs: {}, moments: [] };
+export const EMPTY_OFFICE: Office = {
+  loaded: false,
+  version: '',
+  demo: false,
+  settings: DEFAULT_SETTINGS,
+  floors: [],
+  workers: {},
+  qa: {},
+  logs: {},
+  moments: [],
+  messages: [],
+  usage: { state: 'normal', until: null, warning: null },
+};
+
+/** Office messages a tab keeps. */
+const MESSAGE_KEEP = 100;
 
 export const qaKey = (floorId: string, prNumber: number) => `${floorId}#${prNumber}`;
 
@@ -42,6 +59,8 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         workers: Object.fromEntries(d.workers.map((w) => [w.id, w])),
         qa: Object.fromEntries(d.qa.map((q) => [qaKey(q.floorId, q.prNumber), q])),
         logs: d.logs,
+        messages: d.messages,
+        usage: d.usage,
       };
     }
     case 'settings':
@@ -67,6 +86,10 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
       const { [qaKey(ev.floorId, ev.prNumber)]: _gone, ...qa } = o.qa;
       return { ...o, qa };
     }
+    case 'message':
+      return { ...o, messages: [...o.messages, ev.message].slice(-MESSAGE_KEEP) };
+    case 'usage':
+      return { ...o, usage: ev.usage };
   }
 }
 

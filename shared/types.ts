@@ -207,6 +207,22 @@ export interface UsageView {
   warning: UsageWarningView | null; // the latest since the server started, for the usage meter
 }
 
+/**
+ * A question a worker (or the CEO) asked the manager about an issue, on GitHub: a comment there and the issue's
+ * mm:needs-answer label. Answered once the manager replies; kept while the issue is open, for its next prompt.
+ */
+export interface Question {
+  id: number;
+  floorId: string;
+  issueNumber: number;
+  from: string; // who asked: a worker's name, or "the CEO"
+  text: string;
+  askedAt: number;
+  url: string | null; // the question's comment on GitHub
+  answer: string | null;
+  answeredAt: number | null;
+}
+
 /** A note from the office to the manager, for the phone: a PR that needs them, merges GitHub refuses, pacing. */
 export interface OfficeMessage {
   id: number;
@@ -225,6 +241,7 @@ export interface Snapshot {
   qa: QaRecord[];
   logs: Record<string, LogLine[]>; // each worker's latest lines, by worker id
   messages: OfficeMessage[]; // the latest, oldest first
+  questions: Question[];
   usage: UsageView;
 }
 
@@ -240,6 +257,8 @@ export type StateEvent =
   | { type: 'qa'; qa: QaRecord }
   | { type: 'qaRemoved'; floorId: string; prNumber: number }
   | { type: 'message'; message: OfficeMessage }
+  | { type: 'question'; question: Question }
+  | { type: 'questionRemoved'; id: number }
   | { type: 'usage'; usage: UsageView };
 
 /**

@@ -1,7 +1,7 @@
 // The office as this tab knows it: the server's snapshot with its events folded in, plus the connection's state.
 // Adapted from cubefarm client/src/store.ts (MIT).
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS, isMoment, type Floor, type LogLine, type Moment, type OfficeMessage, type QaRecord, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
+import { DEFAULT_SETTINGS, isMoment, type Floor, type LogLine, type Moment, type OfficeMessage, type QaRecord, type Question, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
 const LOG_KEEP = 200;
@@ -19,6 +19,7 @@ export interface Office {
   logs: Record<string, LogLine[]>;
   moments: Moment[];
   messages: OfficeMessage[]; // oldest first
+  questions: Question[]; // oldest first
   usage: UsageView;
 }
 
@@ -33,6 +34,7 @@ export const EMPTY_OFFICE: Office = {
   logs: {},
   moments: [],
   messages: [],
+  questions: [],
   usage: { state: 'normal', until: null, warning: null },
 };
 
@@ -60,6 +62,7 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         qa: Object.fromEntries(d.qa.map((q) => [qaKey(q.floorId, q.prNumber), q])),
         logs: d.logs,
         messages: d.messages,
+        questions: d.questions,
         usage: d.usage,
       };
     }
@@ -88,6 +91,10 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
     }
     case 'message':
       return { ...o, messages: [...o.messages, ev.message].slice(-MESSAGE_KEEP) };
+    case 'question':
+      return { ...o, questions: [...o.questions.filter((q) => q.id !== ev.question.id), ev.question].sort((a, b) => a.id - b.id) };
+    case 'questionRemoved':
+      return { ...o, questions: o.questions.filter((q) => q.id !== ev.id) };
     case 'usage':
       return { ...o, usage: ev.usage };
   }

@@ -7,6 +7,7 @@ import { devBranch, devSystemPrompt } from '../prompts/prompts.ts';
 import type { SessionOptions } from '../sessions/session.ts';
 import { afterSession, beginTask, clearTask, failTask, minutesSince, oneLine, promptFloor, releaseDesk, sessionOptions, slugify, stillPreparing, type Ctx } from './context.ts';
 import { prepareDesk } from './desk.ts';
+import { managerQuestion } from './questions.ts';
 import type { SessionEnd } from './sessions.ts';
 
 /** Failed builds of one issue before it waits for the manager (until a restart). */
@@ -57,7 +58,15 @@ export class Build {
     }
     if (!desk) return;
     const w = store.worker(workerId);
-    const prompt = [`Please resolve GitHub issue #${issue.number}: ${issue.title}`, `URL: ${issue.url}`, ...(issue.labels.length ? [`Labels: ${issue.labels.join(', ')}`] : []), '', issue.body.trim() || '(The issue has no description.)'].join('\n');
+    const answers = this.ctx.questions.promptFor(floorId, issue.number);
+    const prompt = [
+      `Please resolve GitHub issue #${issue.number}: ${issue.title}`,
+      `URL: ${issue.url}`,
+      ...(issue.labels.length ? [`Labels: ${issue.labels.join(', ')}`] : []),
+      '',
+      issue.body.trim() || '(The issue has no description.)',
+      ...(answers ? ['', answers] : []),
+    ].join('\n');
     const systemAppend = devSystemPrompt({ worker: w, repo: promptFloor(floor), port: devPort(workerId), cwd: desk.cwd, branch, depsLine: depsPromptLine(desk.deps) });
     this.start(
       workerId,
@@ -104,6 +113,9 @@ export class Build {
       return;
     }
     this.failures.delete(`${floorId}#${n}`);
+    // Too unclear to build: the worker asked the manager instead of guessing.
+    const question = pr ? null : managerQuestion(end.result.text);
+    if (question && (await this.asked(workerId, floor, n, question))) return;
     store.patchWorker(workerId, { status: 'done' });
     store.appendLog(workerId, [{ kind: 'done', text: `✔ Finished in ${minutesSince(w.startedAt)}m · ${w.turns} turns · ${pr ? `PR #${pr.number}` : 'no PR found'}` }]);
     if (!pr) return this.noPullRequest(workerId, floor, n);
@@ -112,6 +124,21 @@ export class Build {
     // QA can fail a PR the worker opened mid-session before the session ends: its fix waited for them.
     if (rec?.status === 'failed') store.patchQa(floorId, pr.number, { devWorkerId: workerId, devSessionId: w.sessionId ?? rec.devSessionId });
     else this.ctx.qa.queue(floorId, pr.number, workerId, n);
+  }
+
+  /** The worker's question goes to the manager and the issue waits for the answer; false when it couldn't be asked. */
+  private async asked(workerId: string, floor: Floor, n: number, question: string): Promise<boolean> {
+    const { store } = this.ctx;
+    try {
+      await this.ctx.questions.ask(floor.id, n, question, store.worker(workerId).name);
+    } catch (err) {
+      store.appendLog(workerId, [{ kind: 'error', text: `✗ Couldn't ask the manager about #${n}: ${oneLine(err)}` }]);
+      return false;
+    }
+    if (!store.hasWorker(workerId)) return true;
+    store.appendLog(workerId, [{ kind: 'done', text: `❓ Asked the manager about #${n}; it waits for the answer.` }]);
+    clearTask(this.ctx, workerId);
+    return true;
   }
 
   /** A build that ended without a PR: asked once to finish it, else the issue goes back on the board. */

@@ -10,9 +10,11 @@ import { clearTask, type Ctx } from './context.ts';
 import { Fix } from './fix.ts';
 import { Merge } from './merge.ts';
 import { Qa } from './qa.ts';
+import { Questions } from './questions.ts';
 import { branchIssue } from './rules/issueClaims.ts';
 import { Scheduler } from './scheduler.ts';
 import { Sessions } from './sessions.ts';
+import { sweepMachines } from './sweeps.ts';
 import { Usage } from './usage.ts';
 
 export interface Pipeline {
@@ -24,6 +26,8 @@ export interface Pipeline {
   resetWorker(workerId: string): void;
   /** Stops every session (the demo's reset, shutdown). */
   stopAll(): void;
+  /** Tidies workers' machines: finished branches, and the machines of workers who left. */
+  sweep(): Promise<void>;
 }
 
 export function createPipeline(store: Store, backend: Backend, floors: Floors): Pipeline {
@@ -34,11 +38,13 @@ export function createPipeline(store: Store, backend: Backend, floors: Floors): 
   ctx.qa = new Qa(ctx);
   ctx.fix = new Fix(ctx);
   ctx.merge = new Merge(ctx);
+  ctx.questions = new Questions(ctx);
   const scheduler = new Scheduler(ctx);
 
   floors.onSynced = (floorId) => {
     reconcile(ctx, floorId);
     void ctx.merge.advance(floorId);
+    void ctx.questions.check(floorId);
     ctx.soon(200);
   };
 
@@ -63,6 +69,7 @@ export function createPipeline(store: Store, backend: Backend, floors: Floors): 
       ctx.soon(200);
     },
     stopAll: () => sessions.stopAll(),
+    sweep: () => sweepMachines(ctx),
   };
 }
 

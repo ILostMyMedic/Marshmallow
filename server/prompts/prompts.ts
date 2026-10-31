@@ -41,6 +41,10 @@ export interface QaPromptInput extends PromptBase {
 /** In every prompt (the CEO's too): a session ends with its turn, so nothing wakes them later. */
 export const ONE_TURN = "Your session ends when your turn ends: background tasks and notifications won't wake you. Never end a turn to wait. Wait in the foreground with a timeout, then finish.";
 
+/** In a build's prompt: an issue too unclear to build is a question for the manager (pipeline/questions.ts), not a guess. */
+export const QUESTION_RULE =
+  "If the issue is too unclear to build without guessing what the manager wants, don't guess: end your final message with one line starting QUESTION FOR THE MANAGER: and your question, and open no pull request. The issue comes back to the team with the answer.";
+
 export const devBranch = (issue: number | string, slug: string) => `mm/issue-${issue}-${slug}`;
 export const qaBranch = (pr: number | string, slug: string) => `mm/qa-${pr}-${slug}`;
 
@@ -69,6 +73,7 @@ export function devSystemPrompt({ worker: w, repo, port, cwd, branch, fixing, de
       ? '6. Reply with a short summary of what you fixed.'
       : `6. Open a pull request with the GitHub CLI: gh pr create --base ${repo.defaultBranch} --head ${branch} --title "<concise title>" --body "<what changed, how you verified it, assumptions>". The body must contain "Closes #<issue number>".`,
     fixing ? '' : '7. End your final message with the pull request URL on its own line.',
+    fixing ? '' : QUESTION_RULE,
     'Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.',
     ONE_TURN,
   ]

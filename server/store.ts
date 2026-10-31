@@ -13,6 +13,7 @@ import {
   type OfficeMessage,
   type PullInfo,
   type QaRecord,
+  type Question,
   type ServerEvent,
   type Settings,
   type Snapshot,
@@ -57,6 +58,7 @@ export interface SavedState {
   qa: QaState[];
   logs: Record<string, LogLine[]>;
   messages: OfficeMessage[];
+  questions: Question[];
 }
 
 /** Log lines per worker in state.json, and in a tab's snapshot (memory keeps LOG_BUFFER). */
@@ -88,6 +90,7 @@ export class Store {
   private qa = new Map<string, QaState>();
   private logs = new Map<string, LogLine[]>();
   private messages: OfficeMessage[] = [];
+  private questions = new Map<number, Question>();
   private usage: UsageView = { state: 'normal', until: null, warning: null };
   private clients = new Set<WebSocket>();
   private logSeq = 0;
@@ -127,6 +130,7 @@ export class Store {
       for (const l of lines) this.logSeq = Math.max(this.logSeq, l.id + 1);
     }
     this.messages = saved.messages ?? [];
+    for (const q of saved.questions ?? []) this.questions.set(q.id, q);
   }
 
   snapshot(): Snapshot {
@@ -140,6 +144,7 @@ export class Store {
       qa: this.qaList().map(qaView),
       logs,
       messages: this.messages,
+      questions: this.questionList(),
       usage: this.usage,
     };
   }
@@ -189,6 +194,17 @@ export class Store {
     const w = this.workers.get(id);
     if (!w) throw new HttpError(404, `No worker ${id}`);
     return w;
+  }
+
+  /** Questions to the manager, all or one floor's, oldest first. */
+  questionList(floorId?: string): Question[] {
+    return [...this.questions.values()].filter((q) => floorId === undefined || q.floorId === floorId).sort((a, b) => a.id - b.id);
+  }
+
+  question(id: number): Question {
+    const q = this.questions.get(id);
+    if (!q) throw new HttpError(404, `No question ${id}`);
+    return q;
   }
 
   findQa(floorId: string, prNumber: number): QaState | null {
@@ -286,6 +302,18 @@ export class Store {
     return message;
   }
 
+  /** A new question (id 0 takes the next id), or a change to one. */
+  putQuestion(q: Question): Question {
+    const question = q.id ? q : { ...q, id: Math.max(0, ...this.questions.keys()) + 1 };
+    this.questions.set(question.id, question);
+    this.emit({ type: 'question', question });
+    return question;
+  }
+
+  removeQuestion(id: number) {
+    if (this.questions.delete(id)) this.emit({ type: 'questionRemoved', id });
+  }
+
   /** Claude's usage as the pacing sees it; tabs hear only of changes. It lives in memory. */
   setUsage(usage: UsageView) {
     if (JSON.stringify(usage) === JSON.stringify(this.usage)) return;
@@ -295,7 +323,7 @@ export class Store {
 
   /** Empties the office but keeps its settings, and sends every tab the new snapshot (the demo's reset). */
   reset() {
-    for (const map of [this.floors, this.workers, this.qa, this.logs]) map.clear();
+    for (const map of [this.floors, this.workers, this.qa, this.logs, this.questions]) map.clear();
     this.messages = [];
     this.emit({ type: 'snapshot', data: this.snapshot() });
   }
@@ -334,7 +362,7 @@ export class Store {
     const logs: Record<string, LogLine[]> = {};
     for (const [id, lines] of this.logs) logs[id] = lines.slice(-LOG_SAVED);
     const floors = this.floorList().map(({ cloneStatus: _s, cloneError: _e, issues: _i, pulls: _p, lastSync: _l, syncError: _y, ...saved }) => saved);
-    const state: SavedState = { settings: this.settings, floors, workers: this.workerList(), qa: this.qaList(), logs, messages: this.messages };
+    const state: SavedState = { settings: this.settings, floors, workers: this.workerList(), qa: this.qaList(), logs, messages: this.messages, questions: this.questionList() };
     await writeJsonAtomic(this.file, state);
   }
 }

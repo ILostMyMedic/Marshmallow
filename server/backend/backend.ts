@@ -31,6 +31,13 @@ export interface PrDetails {
   pendingChecks: string[];
 }
 
+export interface IssueComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  url: string;
+}
+
 /** GitHub: issues are the backlog, pull requests the output. */
 export interface GitHubApi {
   /** Who the office acts as (the gh login). */
@@ -47,6 +54,10 @@ export interface GitHubApi {
   editIssue(fullName: string, number: number, edit: { body?: string; addLabels?: string[]; removeLabels?: string[] }): Promise<void>;
   /** Close an issue with a comment, as completed unless `reason` says not planned. */
   closeIssue(fullName: string, number: number, comment: string, reason?: 'completed' | 'not planned'): Promise<void>;
+  /** An issue's comments, oldest first. */
+  issueComments(fullName: string, number: number): Promise<IssueComment[]>;
+  /** Comment on an issue; returns the comment's URL. */
+  commentIssue(fullName: string, number: number, body: string): Promise<string>;
   /** Merge, refusing when the head has moved on from `headSha`. */
   mergePull(fullName: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Promise<void>;
   /** Bring a PR's branch up to date with its base. */

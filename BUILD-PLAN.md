@@ -123,7 +123,7 @@ marshmallow/
 
    Ollama reports no usage limits and no cost, so pacing leaves these workers alone. Local machines only: a Box can't reach your computer.
 4. `terminal.ts`: a headless xterm mirror per worker with saved scrollback, viewed over `/ws/term`; an xterm.js panel on the debug page.
-5. `prompts/`: the build, QA and fix prompts; QA answers through a JSON schema. The build prompt adds one rule: an issue too unclear to build ends with a line starting `QUESTION FOR THE MANAGER:`, which the office turns into a question on the issue (phase 4) instead of a failed build.
+5. `prompts/`: the build, QA and fix prompts (ported in phase 3), with QA answering through a JSON schema. Since phase 4, the build prompt says that an issue too unclear to build ends with a line starting `QUESTION FOR THE MANAGER:`. Phase 5 makes sure real sessions do it.
 6. The Playwright MCP for browser testing.
 
 **Done when:** one real issue on the sandbox repo goes build → QA → merge on a local Ollama model, then once more on your subscription.

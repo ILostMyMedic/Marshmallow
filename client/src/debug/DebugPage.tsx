@@ -62,9 +62,65 @@ export function DebugPage() {
       ) : (
         floors.map((f) => <FloorSection key={f.id} floor={f} run={run} />)
       )}
+      <Questions run={run} />
       <Messages />
       <Moments />
     </main>
+  );
+}
+
+/** Workers' questions to you: open ones first, each with a box whose answer goes on the issue, as you. */
+function Questions({ run }: { run: Run }) {
+  const questions = useStore((s) => s.questions);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  if (!questions.length) return null;
+  const open = questions.filter((q) => !q.answer);
+  const answered = questions.filter((q) => q.answer);
+  return (
+    <section>
+      <h2>Questions for you</h2>
+      {open.length === 0 && <p className="muted">None waiting.</p>}
+      {open.map((q) => (
+        <div key={q.id} className="question">
+          <p>
+            <strong>{q.from}</strong> on {q.floorId} #{q.issueNumber} <span className="muted">· {time(q.askedAt)}</span>
+            {q.url && (
+              <>
+                {' · '}
+                <a href={q.url} target="_blank" rel="noreferrer">
+                  on GitHub
+                </a>
+              </>
+            )}
+          </p>
+          <blockquote>{q.text}</blockquote>
+          <form
+            className="connect"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run('POST', `/api/questions/${q.id}/answer`, { text: drafts[q.id] ?? '' });
+            }}
+          >
+            <input value={drafts[q.id] ?? ''} onChange={(e) => setDrafts({ ...drafts, [q.id]: e.target.value })} placeholder="Your answer (posted on the issue, as you)" size={50} />
+            <button type="submit" disabled={!drafts[q.id]?.trim()}>
+              Answer
+            </button>
+          </form>
+        </div>
+      ))}
+      {answered.length > 0 && (
+        <ul className="moments">
+          {answered.map((q) => (
+            <li key={q.id}>
+              <span className="muted">
+                {q.floorId} #{q.issueNumber}:
+              </span>{' '}
+              {q.from} asked “{q.text}” · you answered “{q.answer}”
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -105,29 +161,22 @@ function ConnectRepo({ run }: { run: Run }) {
     query<GhRepoSummary[]>('/api/github/repos').then(setRepos, (err: Error) => setProblem(err.message));
   }, [connected]);
 
-  if (problem) {
-    return (
-      <span className="muted" title={problem}>
-        Can't list repositories
-      </span>
-    );
-  }
+  // Your own repositories are suggested; any owner/name can be typed (an organisation's, say).
   const free = repos.filter((r) => !floors.some((f) => f.id === r.nameWithOwner));
-  if (!free.length) return null;
-  const chosen = free.some((r) => r.nameWithOwner === pick) ? pick : free[0].nameWithOwner;
   return (
     <span className="connect">
-      <select value={chosen} onChange={(e) => setPick(e.target.value)} aria-label="Repository to connect">
+      <input list="repos-to-connect" value={pick} onChange={(e) => setPick(e.target.value)} placeholder="owner/repo" aria-label="Repository to connect" title={problem || undefined} />
+      <datalist id="repos-to-connect">
         {free.map((r) => (
-          <option key={r.nameWithOwner} value={r.nameWithOwner}>
-            {r.nameWithOwner}
-          </option>
+          <option key={r.nameWithOwner} value={r.nameWithOwner} />
         ))}
-      </select>
+      </datalist>
       <label>
         <input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} /> auto-assign
       </label>
-      <button onClick={() => run('POST', '/api/floors', { fullName: chosen, autoAssign })}>Connect</button>
+      <button disabled={!pick.trim()} onClick={() => run('POST', '/api/floors', { fullName: pick.trim(), autoAssign })}>
+        Connect
+      </button>
     </span>
   );
 }
@@ -139,7 +188,6 @@ function checksText(p: PullInfo): string {
 }
 
 function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
-  const demo = useStore((s) => s.demo);
   const workers = useStore((s) => s.workers);
   const logs = useStore((s) => s.logs);
   const qa = useStore((s) => s.qa);
@@ -156,7 +204,7 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
           Floor {floor.floor} · {floor.fullName}
         </h2>
         <button onClick={() => run('POST', `/api/floors/${fp}/sync`)}>Sync</button>
-        {demo && <button onClick={() => run('POST', `/api/demo/floors/${fp}/workers`)}>Hire</button>}
+        <button onClick={() => run('POST', `/api/floors/${fp}/workers`)}>Hire</button>
         <label className="connect">
           <input type="checkbox" checked={floor.autoAssign} onChange={(e) => run('PATCH', `/api/floors/${fp}`, { autoAssign: e.target.checked })} /> auto-assign
         </label>
@@ -203,7 +251,7 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                     <button disabled={w.status === 'idle' && !w.task} onClick={() => run('POST', `/api/workers/${w.id}/reset`)}>
                       Reset
                     </button>
-                    {demo && <button onClick={() => run('DELETE', `/api/demo/workers/${w.id}`)}>Let go</button>}
+                    <button onClick={() => run('DELETE', `/api/workers/${w.id}`)}>Let go</button>
                   </td>
                 </tr>
               ))}

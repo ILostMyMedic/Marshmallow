@@ -72,6 +72,14 @@ Every ported file gets the header `Adapted from cubefarm <path> (MIT).`; the fir
 
 ## Phase 4: real GitHub and local machines
 
+**Done.** Things that differ from cubefarm:
+- **GitHub:** `server/github/github.ts` dropped mission control's check timing, added `issueComments` and `commentIssue` for questions, and only lists open PRs for `prForBranch`. The evidence branch is `mm-qa-evidence`, and only `mm/issue-` remote branches are deleted after a merge.
+- **Workspace:** `server/machines/workspace.ts` keeps the floor's clone, the machine functions, worktree reuse with stale-lock recovery, leftover processes and leftover patches. Project folders, `syncMain`, pre-machine desks, `sweepDesks` and trimming are out.
+- **Dependencies:** `deps.ts` was copied; `deskSetup.ts` waits for phase 5, since it closes an idle terminal.
+- **Backend:** `server/backend/real.ts` wires it all up. Its sessions end at once, saying phase 5 is next.
+- **Hiring:** a manual hire and let-go moved to `server/team/workers.ts`, for both modes. Phase 6 adds autospawning.
+- **Questions to the manager** (new, not in cubefarm): `server/pipeline/questions.ts`, with the fake GitHub's comments and a vague seeded issue in the demo.
+
 | Marshmallow | cubefarm | Verdict | Notes |
 | --- | --- | --- | --- |
 | `server/github/github.ts` | `server/github.ts` | Copy | All through `gh`, including `uploadEvidence` (the orphan branch). |

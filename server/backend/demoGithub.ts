@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import type { GhRepoSummary, IssueInfo, PullInfo } from '../../shared/types.ts';
 import { writeJsonAtomic } from '../files.ts';
-import type { GitHubApi, PrDetails, RepoMeta } from './backend.ts';
+import type { GitHubApi, IssueComment, PrDetails, RepoMeta } from './backend.ts';
 
 interface FakeRepo {
   fullName: string;
@@ -16,6 +16,7 @@ interface FakeRepo {
   pulls: PullInfo[]; // newest first
   nextNumber: number; // issues and PRs share one sequence, as on GitHub
   closed: number[]; // closed issues
+  comments?: Record<number, IssueComment[]>; // by issue number (absent in files saved before comments)
 }
 
 export interface FakeGitHubOptions {
@@ -39,6 +40,7 @@ const SEED: { fullName: string; description: string; issues: [string, string][] 
       ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
       ['Keyboard shortcuts', 'N for new todo, / to search, ? for help.'],
       ['Fix: completed count off by one', 'The footer shows one more completed item than there is.'],
+      ['Make it pop', 'The app feels a bit flat. Make it more fun.'], // too vague to build: its worker asks first
     ],
   },
   {
@@ -149,6 +151,21 @@ export class FakeGitHub implements GitHubApi {
     if (!r.issues.some((i) => i.number === number)) throw new Error(`Issue #${number} is not open`);
     this.closeIssues(r, [number]);
     this.save();
+  }
+
+  async issueComments(fullName: string, number: number) {
+    return copy(this.repo(fullName).comments?.[number] ?? []);
+  }
+
+  async commentIssue(fullName: string, number: number, body: string) {
+    const r = this.repo(fullName);
+    if (!r.issues.some((i) => i.number === number) && !r.closed.includes(number)) throw new Error(`Could not resolve to an issue with the number of ${number}.`);
+    const list = ((r.comments ??= {})[number] ??= []);
+    const id = `IC_demo${number}_${list.length + 1}`;
+    const url = `https://github.com/${fullName}/issues/${number}#issuecomment-${Date.now()}${list.length}`;
+    list.push({ id, body, createdAt: new Date().toISOString(), url });
+    this.save();
+    return url;
   }
 
   async mergePull(fullName: string, number: number, _method: 'squash' | 'merge' | 'rebase', headSha?: string) {

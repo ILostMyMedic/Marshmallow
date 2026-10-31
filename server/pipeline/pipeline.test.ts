@@ -84,7 +84,7 @@ afterEach(async () => {
 describe('the pipeline on the demo', () => {
   it('turns 5 issues into 5 merged PRs, each failing QA once and fixed', async () => {
     office(0.3); // every first QA round fails, every fix pushes, round two passes; checks pass, no conflicts
-    await backend.github.closeIssue(REPO, 6, 'Not now'); // five issues left
+    for (const n of [6, 7]) await backend.github.closeIssue(REPO, n, 'Not now'); // five clear issues left
     await floors.connect(REPO, { autoAssign: true });
     hire('Ada', 0);
     hire('Grace', 1);

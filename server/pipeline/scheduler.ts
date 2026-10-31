@@ -11,8 +11,8 @@ import { issueTaken } from './rules/issueClaims.ts';
 /** A worker whose task failed sits out this long before the next one. */
 export const ERROR_COOLDOWN_MS = 2 * 60_000;
 
-/** Issues with one of these labels are never picked up. */
-const SKIP_LABELS = /^(skip|mm:skip|wontfix|question)$/i;
+/** Issues with one of these labels are never picked up; mm:needs-answer waits for the manager's reply (questions.ts). */
+const SKIP_LABELS = /^(skip|mm:skip|wontfix|question|mm:needs-answer)$/i;
 
 /** Free for a task: idle or done, or errored a while ago. Stopped workers wait for the manager. */
 export function isFree(w: Worker, now: number): boolean {

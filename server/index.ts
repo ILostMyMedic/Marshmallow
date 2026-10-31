@@ -7,38 +7,58 @@ import type { AddressInfo } from 'node:net';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { WebSocketServer } from 'ws';
 import { createDemoBackend } from './backend/demo.ts';
-import { DEMO, HOME_DIR, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
+import { realBackend } from './backend/real.ts';
+import { DEMO, DESK_SWEEP_INTERVAL_MS, HOME_DIR, homeProblem, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION } from './config.ts';
 import { demoRoutes } from './demoRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
 import { createPipeline } from './pipeline/pipeline.ts';
 import { route } from './route.ts';
 import { Store } from './store.ts';
+import { hireWorker, letGo } from './team/workers.ts';
+
+const problem = homeProblem(HOME_DIR, process.cwd(), DEMO);
+if (problem) {
+  console.error(`\n  Marshmallow won't start: ${problem}\n`);
+  process.exit(1);
+}
 
 const store = new Store(STATE_FILE, { version: VERSION, demo: DEMO });
 await store.load();
-// Only the demo has a backend so far: the real one (gh, git, Claude Code) comes in BUILD-PLAN phases 4 and 5.
 const demo = DEMO ? createDemoBackend({ home: HOME_DIR }) : null;
-const floors = demo ? new Floors(store, demo) : null;
-const pipeline = demo && floors ? createPipeline(store, demo, floors) : null;
-const need = <T>(part: T | null): T => {
-  if (!part) throw new HttpError(501, 'Only the demo can do this so far (real GitHub comes in BUILD-PLAN phase 4): start with --demo');
-  return part;
-};
-if (floors && pipeline) {
-  void floors.syncAll();
-  setInterval(() => void floors.syncAll(), SYNC_INTERVAL_MS).unref();
-  pipeline.scheduler.start(SCHEDULER_INTERVAL_MS);
-}
+const backend = demo ?? realBackend;
+const floors = new Floors(store, backend);
+const pipeline = createPipeline(store, backend, floors);
+void floors.syncAll();
+setInterval(() => void floors.syncAll(), SYNC_INTERVAL_MS).unref();
+pipeline.scheduler.start(SCHEDULER_INTERVAL_MS);
+setTimeout(() => void pipeline.sweep(), 60_000).unref();
+setInterval(() => void pipeline.sweep(), DESK_SWEEP_INTERVAL_MS).unref();
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
+const num = (v: unknown) => {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n <= 0) throw new HttpError(400, `Not a number: ${v}`);
+  return n;
+};
 
 app.get('/api/state', route(() => store.snapshot()));
-app.get('/api/github/repos', route(() => need(demo).github.listMyRepos()));
-app.post('/api/floors', route((req) => need(floors).connect(str(req.body?.fullName), { autoAssign: req.body?.autoAssign === true })));
-app.post('/api/floors/:floor/sync', route((req) => need(floors).sync(String(req.params.floor))));
+// The repositories you could connect: yours, or an organisation's (?owner=)
+app.get('/api/github/repos', route((req) => backend.github.listMyRepos(str(req.query.owner) || undefined)));
+app.post('/api/floors', route((req) => floors.connect(str(req.body?.fullName), { autoAssign: req.body?.autoAssign === true })));
+app.post('/api/floors/:floor/sync', route((req) => floors.sync(String(req.params.floor))));
+// Questions to the manager: asked on an issue (the CEO's ask_manager later; a test meanwhile), and answered here or on GitHub
+app.post(
+  '/api/floors/:floor/issues/:n/questions',
+  route((req) => {
+    const text = str(req.body?.text).trim();
+    if (!text) throw new HttpError(400, 'The question is empty');
+    return pipeline.ctx.questions.ask(String(req.params.floor), num(req.params.n), text, str(req.body?.from).trim() || 'The office');
+  }),
+);
+app.post('/api/questions/:id/answer', route((req) => pipeline.ctx.questions.answer(num(req.params.id), str(req.body?.text))));
 app.patch(
   '/api/floors/:floor',
   route((req) => {
@@ -49,13 +69,15 @@ app.patch(
       patch[key] = req.body[key];
     }
     const floor = store.patchFloor(String(req.params.floor), patch);
-    pipeline?.ctx.soon(200);
+    pipeline.ctx.soon(200);
     return floor;
   }),
 );
-app.post('/api/workers/:id/stop', route((req) => need(pipeline).stopWorker(String(req.params.id))));
-app.post('/api/workers/:id/reset', route((req) => need(pipeline).resetWorker(String(req.params.id))));
-if (demo && floors && pipeline) app.use('/api/demo', demoRoutes(store, demo, pipeline));
+app.post('/api/floors/:floor/workers', route((req) => hireWorker(store, pipeline, String(req.params.floor))));
+app.delete('/api/workers/:id', route((req) => letGo(store, pipeline, String(req.params.id))));
+app.post('/api/workers/:id/stop', route((req) => pipeline.stopWorker(String(req.params.id))));
+app.post('/api/workers/:id/reset', route((req) => pipeline.resetWorker(String(req.params.id))));
+if (demo) app.use('/api/demo', demoRoutes(store, demo, pipeline));
 app.use(
   '/api',
   route((req) => {
@@ -92,6 +114,12 @@ server.listen(PORT, HOST, () => {
   const port = (server.address() as AddressInfo).port;
   console.log(`\n  Marshmallow ${VERSION} on http://localhost:${port}${DEMO ? '  (DEMO MODE: fake GitHub + fake workers)' : ''}`);
   console.log(`     state: ${STATE_FILE}\n`);
+  if (!DEMO) {
+    backend.github.user().then(
+      (login) => console.log(`     GitHub: acting as ${login} (your gh login)\n`),
+      () => console.log("     GitHub: gh isn't signed in. Run gh auth login, then restart.\n"),
+    );
+  }
 });
 
 let closing = false;

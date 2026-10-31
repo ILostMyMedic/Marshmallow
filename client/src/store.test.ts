@@ -55,6 +55,7 @@ const snapshot: Snapshot = {
   qa: [],
   logs: { w1: [{ id: 0, t: 0, kind: 'system', text: 'hello' }] },
   messages: [],
+  questions: [],
   usage: { state: 'normal', until: null, warning: null },
 };
 

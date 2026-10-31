@@ -10,7 +10,7 @@ Teams grow and shrink on their own (autospawning). Workers run on this computer 
 
 The code lives in [Mallowy-tv/TheMarshmallow](https://github.com/Mallowy-tv/TheMarshmallow) (private). Marshmallow acts on GitHub as the manager through their `gh` login.
 
-**Status: Phases 0 to 3 are done (skeleton, contract and state, the Backend seam with a full demo, the scheduler and the build → QA → fix → merge pipeline); Phase 4 (real GitHub and local machines) is next.** The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
+**Status: Phases 0 to 4 are done (skeleton, contract and state, the Backend seam with a full demo, the build → QA → fix → merge pipeline, real GitHub, workers' machines and questions to the manager); Phase 5 (Claude Code sessions) is next.** Real-mode testing happens on [Mallowy-tv/marshmallow-sandbox](https://github.com/Mallowy-tv/marshmallow-sandbox). The scope is [FEATURES.md](FEATURES.md) (checked = in); the order of work is [BUILD-PLAN.md](BUILD-PLAN.md).
 
 ## The reference implementation: cubefarm
 
@@ -74,5 +74,6 @@ Rules for using it:
 ## Scripts
 
 - `npm run dev -- --demo`: the server from source (tsx watch) on 4600, plus Vite on 5600 (`MARSHMALLOW_CLIENT_PORT`) proxying `/api` and `/ws` to it. Open http://localhost:5600 for the debug page: connect a fake repo with auto-assign on, hire workers (demo only, `server/demoRoutes.ts`), and the scheduler builds, tests, fixes and merges its issues. The fake GitHub lives in `<home>/demo-github.json`, and the debug page's Reset seeds it again. Ctrl+C stops both. Set the isolated home first: `$env:MARSHMALLOW_HOME='./.mm-home'` in PowerShell, or a `MARSHMALLOW_HOME=./.mm-home` prefix in bash.
+- `npm run dev` (no `--demo`): real mode, acting on GitHub through your `gh` login. It needs a home outside this project: leave `MARSHMALLOW_HOME` unset (`~/.marshmallow`), and the server refuses to start otherwise. Until phase 5 a worker's desk gets set up, but no session runs.
 - `npm test` (Vitest), `npm run typecheck`, `npm run build` (typecheck, then the client into `dist/`).
 - `npm start`: the server alone, serving `dist/` on 4600.

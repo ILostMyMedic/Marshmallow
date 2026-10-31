@@ -3,8 +3,12 @@
 // Adapted from cubefarm server/demo.ts (MIT).
 import crypto from 'node:crypto';
 import type { LogEntry } from '../../shared/types.ts';
+import { ANSWER_LEAD } from '../pipeline/questions.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
 import type { FakeGitHub } from './demoGithub.ts';
+
+/** The seeded issue (demoGithub.ts) that's too vague to build without asking. */
+export const VAGUE_ISSUE = 'Make it pop';
 
 export interface FakeSessionContext {
   github: FakeGitHub;
@@ -94,18 +98,28 @@ export function fakeSession(opts: SessionOptions, cb: SessionCallbacks, ctx: Fak
     { kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort` },
     { kind: 'system', text: `  cwd ${opts.cwd}` },
   ];
+  // The seeded vague issue: without the manager's answer in the prompt, its worker asks instead of guessing.
+  const vague = kind === 'issue' && subject.title === VAGUE_ISSUE && !opts.prompt.includes(ANSWER_LEAD);
   const body =
     kind === 'qa'
       ? qaScript(cb, subject.prNumber ?? 0, subject.title, round)
       : kind === 'fix'
         ? fixScript(subject.prNumber ?? 0, pushes)
-        : issueScript(cb, subject.issueNumber ?? 0, subject.title, ctx.desk?.branch ?? 'HEAD');
+        : vague
+          ? [say(`Reading "${subject.title}".`), tool('Read', 'Read src/App.tsx', 'Read 184 lines'), [{ kind: 'thinking', text: '✻ Thinking…' }] as LogEntry[]]
+          : issueScript(cb, subject.issueNumber ?? 0, subject.title, ctx.desk?.branch ?? 'HEAD');
   const script = [header, ...body];
 
   const finish = () => {
     const costUsd = 0.3 + ctx.rand();
     const turns = 15 + Math.floor(ctx.rand() * 20);
     cb.tool(null);
+    if (vague) {
+      const text = `"More fun" could mean several things here, and each is a different change.\nQUESTION FOR THE MANAGER: What should "pop" mean for this app: playful animations, a brighter colour scheme, or sound effects?`;
+      cb.log(say(text));
+      cb.finished({ ok: true, text, costUsd, turns, errors: [] });
+      return;
+    }
     if (kind === 'qa') {
       // Most first rounds pass, and later ones nearly always; the failures show the fix loop.
       const pass = ctx.rand() > (round > 1 ? 0.1 : 0.35);

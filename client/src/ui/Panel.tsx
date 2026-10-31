@@ -4,8 +4,12 @@ import { useEffect, type ReactNode } from 'react';
 
 export function Panel({ title, onClose, wide = false, children }: { title: ReactNode; onClose: () => void; wide?: boolean; children: ReactNode }) {
   useEffect(() => {
+    // Marked handled, so the Esc that closes a panel isn't also taken as "leave the overview" (Player.tsx skips it),
+    // whichever listener runs first; what keeps Esc for itself inside (the terminal, a form) stops it on the way up
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

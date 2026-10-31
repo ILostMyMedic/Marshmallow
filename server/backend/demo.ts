@@ -5,7 +5,7 @@
 import path from 'node:path';
 import type { LogEntry } from '../../shared/types.ts';
 import type { MachineProvider } from '../machines/machines.ts';
-import type { SessionCallbacks, SessionOptions } from '../sessions/session.ts';
+import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
 import type { Backend } from './backend.ts';
 import { demoCloud } from './demoCloud.ts';
 import { FakeGitHub } from './demoGithub.ts';
@@ -60,6 +60,19 @@ function inTerminal(o: SessionOptions, cb: SessionCallbacks): SessionCallbacks {
       term.note(r.ok ? '── session ended ──' : `── session ended: ${r.errors.join('; ')} ──`);
       cb.finished(r);
     },
+  };
+}
+
+/** A message sent into a fake session shows in the terminal as typed at the prompt, as a real CLI shows it. */
+function typedInto(o: SessionOptions, h: SessionHandle): SessionHandle {
+  const term = o.terminal;
+  if (!term) return h;
+  return {
+    send: (text) => {
+      term.write(`${ANSI.manager(`> ${text.replace(/\r?\n/g, '\r\n  ')}`)}\r\n`);
+      h.send(text);
+    },
+    stop: () => h.stop(),
   };
 }
 
@@ -123,7 +136,7 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
     mainDir: (fullName) => `/demo/${fullName}/main`,
     machines,
     // A Box worker's desk is known by their Box: every Box keeps a repo's worktree at the same path.
-    startSession: (o, cb) => fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.box ? `box:${o.box.boxId}` : o.cwd) ?? null, rand, stepMs: timing.stepMs }),
+    startSession: (o, cb) => typedInto(o, fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.box ? `box:${o.box.boxId}` : o.cwd) ?? null, rand, stepMs: timing.stepMs })),
     cloud: demoCloud((boxId, desk) => desks.set(`box:${boxId}`, desk), timing.boxMs),
     reset: () => {
       github.reset();

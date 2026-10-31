@@ -14,7 +14,7 @@ import { listenerAt, listenerFacing, noiseBuffer, output, recordSfx } from './sf
 import { panOf } from './sfxMix';
 
 /** Indoors the events are heard through the glass: at least this loud and this clear. */
-const THROUGH_GLASS = { level: 0.28, clarity: 0.32 };
+const THROUGH_GLASS = { level: 0.55, clarity: 0.5 };
 const TICK_MS = 100;
 
 interface Bus {
@@ -100,7 +100,7 @@ export interface Loop {
 }
 
 /** Each loop at full level, before the bus. */
-const LOOP_GAIN: Record<LoopKind, number> = { jet: 0.09, rotor: 0.08, hum: 0.035, flap: 0.05, engine: 0.05 };
+const LOOP_GAIN: Record<LoopKind, number> = { jet: 0.16, rotor: 0.14, hum: 0.05, flap: 0.09, engine: 0.09 };
 
 class LoopImpl implements Loop {
   private last = { gain: -1, pan: 2, pitch: -1 };
@@ -244,7 +244,7 @@ export function loop(k: LoopKind): Loop {
 export type OneShot = 'zip' | 'beam' | 'squeak' | 'chime' | 'whale' | 'chirps' | 'burner';
 
 /** Each one-shot at full level, before the bus. */
-const SHOT_GAIN: Record<OneShot, number> = { zip: 0.06, beam: 0.05, squeak: 0.07, chime: 0.05, whale: 0.08, chirps: 0.03, burner: 0.09 };
+const SHOT_GAIN: Record<OneShot, number> = { zip: 0.08, beam: 0.07, squeak: 0.1, chime: 0.07, whale: 0.12, chirps: 0.05, burner: 0.15 };
 
 /** A one-off sound `delay` seconds from now, at `gain` (0-1 of its full level, distance included) from `pan`. */
 export function play(k: OneShot, { gain = 1, pan = 0, delay = 0, pitch = 1 }: { gain?: number; pan?: number; delay?: number; pitch?: number } = {}) {

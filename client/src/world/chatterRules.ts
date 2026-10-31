@@ -1,5 +1,5 @@
-// Adapted from cubefarm client/src/ui/babbleRules.ts and ui/sfxMix.ts (MIT): who speaks and how often, without the
-// babble voices (no sound yet).
+// Adapted from cubefarm client/src/ui/babbleRules.ts and ui/sfxMix.ts (MIT): who speaks and how often; the voices
+// themselves are ui/babbleRules.ts's.
 
 // The speech bubbles' pacing, pure: how long a bubble stays up, how many may speak at once (the nearest win) and how
 // often (the chatter level's pace). Chatter.tsx runs the talking by these.

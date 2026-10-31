@@ -1,7 +1,7 @@
 // Adapted from cubefarm client/src/ui/cheerRules.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
 import { CHEER_GAP_MS, CHEER_LATE_MS, CHEER_VOICES, cheerVoice, crowdLevel, hashSeed, mayCheer, planCheer, STAGGER_MAX, stagger } from './cheerRules';
-import { MAX_DISTANCE } from './sfxMix';
+import { REACH } from './sfxMix';
 
 describe('cheerVoice', () => {
   it('is the same voice every time for the same worker', () => {
@@ -55,7 +55,7 @@ describe('planCheer', () => {
   });
 
   it("leaves out anyone too far away to hear", () => {
-    const plan = planCheer([{ d: MAX_DISTANCE + 1 }, { d: 2 }, { d: MAX_DISTANCE }]);
+    const plan = planCheer([{ d: REACH.far.max + 1 }, { d: 2 }, { d: REACH.far.max }]);
     expect(plan.voiced).toEqual([1, 2]);
     expect(plan.crowd).toEqual([]);
   });

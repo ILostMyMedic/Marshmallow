@@ -151,6 +151,28 @@ describe('the pipeline on the demo', () => {
     pipeline.resetWorker('ada-0000-4000');
     expect(store.worker('ada-0000-4000')).toMatchObject({ status: 'idle', task: null });
   });
+
+  it("drops the manager's message into a running session, and refuses one with nowhere to go", async () => {
+    backend = createDemoBackend({ home: null, timing: { ...INSTANT, stepMs: () => 100 }, rand: () => 0.9 });
+    floors = new Floors(store, backend);
+    pipeline = createPipeline(store, backend, floors);
+    await floors.connect(REPO, { autoAssign: false });
+    hire('Ada', 0);
+    const id = 'ada-0000-4000';
+    expect(() => pipeline.messageWorker('nobody', 'hi')).toThrow(expect.objectContaining({ status: 404 }));
+    expect(() => pipeline.messageWorker(id, '   ')).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => pipeline.messageWorker(id, 'hi')).toThrow(expect.objectContaining({ status: 409 }));
+
+    store.patchFloor(REPO, { autoAssign: true });
+    pipeline.scheduler.start(20);
+    await until(() => store.worker(id).status === 'working');
+    pipeline.messageWorker(id, '  Keep the hook as it is  ');
+    const log = () => store.snapshot().logs[id]?.map((l) => l.text) ?? [];
+    expect(log()).toContain('▶ Manager: Keep the hook as it is');
+    expect(store.worker(id).activity).toMatchObject({ kind: 'talk' });
+    // The demo's session answers it, in their terminal.
+    await until(() => log().some((t) => t.includes('Got it: "Keep the hook as it is"')));
+  });
 });
 
 describe('autoscaling by the rules', () => {
@@ -198,7 +220,8 @@ describe('autoscaling by the rules', () => {
 describe('the CEO on the demo', () => {
   it('onboards a floor, plans a brief into issues, and acts on a message', async () => {
     office(0.9);
-    const ceo = pipeline.ctx.ceo.hire();
+    const ceo = pipeline.ctx.ceo.hire('ollama/gpt-oss:20b');
+    expect(store.worker(ceo.id).model).toBe('ollama/gpt-oss:20b');
     await floors.connect(REPO, { autoAssign: false });
     pipeline.ctx.ceo.joined(REPO);
     pipeline.scheduler.start(20);

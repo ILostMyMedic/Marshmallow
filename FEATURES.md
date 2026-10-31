@@ -34,6 +34,7 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [x] **Issue ordering**: `Depends on #N` waits; the longest blocking chain goes first, then the oldest · S → `shared/issues.ts`
 - [x] **Skip labels**: `skip`, `wontfix`, `question` · S
 - [x] **Questions to you**: a worker or the CEO that finds an issue unclear (or a backlog with nothing ready) asks on GitHub, as a 🤖 comment on the issue with the `mm:needs-answer` label. The issue is skipped until you reply there; the next sync takes the label off and the issue goes back to the queue with your answer in its prompt. Open questions also show in the office · M (new: not in cubefarm)
+- [x] **File a task from the board**: a title and details, from the whiteboard or the console's Issues tab, become a plain issue on the floor's repository, which auto-assign takes like any other · S → `client/src/ui/KanbanView.tsx`, `server/floors.ts`
 - [x] **Closing an issue or PR stops whoever works on it** · M → `server/closeCleanup.ts`
 - [ ] **Linked repos**: a floor's workers can read other floors' code · S
 - [ ] **Keep your own project folder up to date** after merges (fast-forward only) · S
@@ -119,7 +120,7 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [x] **Speech bubbles about real work** (a phrasebook, no Claude calls) · M → `client/src/ui/chatterLines.ts`, `Chatter.tsx`
 - [x] **Synthesized sound effects** (no audio files) · M → `client/src/ui/sfx.ts`
 - [x] **Day/night clock** (lunch and going home need it) · M → `sky/`
-- [ ] **Babble voices**, Animal Crossing style · M → `client/src/ui/babble.ts`
+- [x] **Babble voices**, Animal Crossing style · M → `client/src/ui/babble.ts`
 - [ ] **Look editor** for workers · M → `LookPreview.tsx`, `client/src/ui/AgentSettings.tsx`
 - [ ] **Carry a whiteboard sticky to a desk** to assign it · M → `StickyNotes.tsx`
 - [ ] **Mission control screens** in the lobby · M → `MissionControl.tsx`

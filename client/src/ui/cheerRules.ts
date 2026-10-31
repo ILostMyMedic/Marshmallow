@@ -1,10 +1,10 @@
-// Adapted from cubefarm client/src/ui/cheerRules.ts (MIT).
+// Adapted from cubefarm client/src/ui/cheerRules.ts (MIT): a cheer carries to the 'far' reach.
 
 // The merge cheer's decisions, kept free of WebAudio so they can be tested: each worker's own cartoon voice (stable
 // from their id and look), who gets a full voice (the nearest few) and who blends into the soft crowd layer, the
 // scatter of start times that makes it a crowd and not a chord, and how often a cheer may play. cheerSfx.ts sings it.
 
-import { MAX_DISTANCE } from './sfxMix';
+import { REACH } from './sfxMix';
 
 /** Only this many cheerers, the nearest, get a voice of their own; the rest are one soft crowd layer. */
 export const CHEER_VOICES = 6;
@@ -76,11 +76,11 @@ export interface CheerPlan {
 
 /**
  * Splits cheerers (with their distance `d` from the listener, metres) into the nearest CHEER_VOICES who get a voice
- * each and the rest, who blend into one crowd layer. Anyone beyond MAX_DISTANCE isn't heard at all.
+ * each and the rest, who blend into one crowd layer. Anyone beyond a cheer's reach ('far') isn't heard at all.
  */
 export function planCheer(people: readonly { d: number }[], voices = CHEER_VOICES): CheerPlan {
   const heard: number[] = [];
-  for (let i = 0; i < people.length; i++) if (people[i].d <= MAX_DISTANCE) heard.push(i);
+  for (let i = 0; i < people.length; i++) if (people[i].d <= REACH.far.max) heard.push(i);
   heard.sort((a, b) => people[a].d - people[b].d || a - b);
   return { voiced: heard.slice(0, voices), crowd: heard.slice(voices) };
 }

@@ -1,5 +1,6 @@
 // The front desk (E on it in the lobby): Mia says hello, shows today in numbers (world/tour.ts todayStatus), offers
-// the tour (world/TourGuide.tsx), and lists every floor with what it's building and who's on it, each a ride away.
+// the tour (world/TourGuide.tsx), lists every floor with what it's building and who's on it, each a ride away, and
+// points the way to the manager's console.
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { rideTo } from '../world/elevatorRide';
@@ -7,6 +8,7 @@ import { CEO_FLOOR, ROOF } from '../world/floors';
 import { clip, names, todayStatus, tourStops } from '../world/tour';
 import { useTour } from '../world/tourState';
 import { useView } from '../world/view';
+import { showTab } from './console/nav';
 import { Panel } from './Panel';
 
 export function FrontDeskPanel() {
@@ -51,8 +53,23 @@ export function FrontDeskPanel() {
         <button className="frontdesk-tour" onClick={tour}>
           🧭 Take the tour: every floor, the CEO's office and the roof
         </button>
+        <button className="frontdesk-console" onClick={() => showTab('floors')}>
+          🗂 The manager's console <kbd>O</kbd>: connect a repository, hire workers, change settings
+        </button>
         <h3>The floors</h3>
         <ul className="frontdesk-floors">
+          {floors.length === 0 && (
+            <li style={{ borderColor: '#ff8a5b' }}>
+              <span className="elevator-number" style={{ background: '#ff8a5b' }}>
+                +
+              </span>
+              <div>
+                <strong>No floors yet</strong>
+                <p>Every GitHub repository you connect gets a floor of its own, with a team to build its issues.</p>
+              </div>
+              <button onClick={() => showTab('floors')}>Connect one</button>
+            </li>
+          )}
           {[...floors]
             .sort((a, b) => b.floor - a.floor)
             .map((f) => {
@@ -81,7 +98,19 @@ export function FrontDeskPanel() {
             </span>
             <div>
               <strong>The CEO's office</strong>
-              <p>{ceo ? `${ceo.name} plans the floors' work from up here.` : "Waiting for a CEO: hire one from the debug page."}</p>
+              <p>
+                {ceo ? (
+                  `${ceo.name} plans the floors' work from up here.`
+                ) : (
+                  <>
+                    Waiting for a CEO:{' '}
+                    <button className="link" onClick={() => showTab('team')}>
+                      hire one in the manager's console
+                    </button>
+                    .
+                  </>
+                )}
+              </p>
             </div>
             <button onClick={() => go(CEO_FLOOR)}>Take me there</button>
           </li>

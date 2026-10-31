@@ -5,6 +5,7 @@
 // Adapted from cubefarm server/swarm.ts (MIT): reconcilePulls, stopAgent, resetAgent.
 import type { Backend } from '../backend/backend.ts';
 import type { Floors } from '../floors.ts';
+import { HttpError } from '../httpError.ts';
 import type { ReconnectedCli } from '../sessions/cliRunner.ts';
 import type { RestartCounts } from '../recovery/reconcile.ts';
 import type { Terminals } from '../sessions/terminals.ts';
@@ -36,6 +37,11 @@ export interface Pipeline {
   stopWorker(workerId: string): void;
   /** The manager resets a worker: stopped if busy, then idle and holding nothing. */
   resetWorker(workerId: string): void;
+  /**
+   * The manager's note to a worker, dropped into their running session (and shown in their terminal). Refused when
+   * they have none: a follow-up comes with their next task. The CEO's goes to the CEO as a message.
+   */
+  messageWorker(workerId: string, text: string): void;
   /** Stops every session (the demo's reset, shutdown). */
   stopAll(): void;
   /** Tidies workers' machines: finished branches, and the machines of workers who left. */
@@ -94,6 +100,13 @@ export function createPipeline(store: Store, backend: Backend, floors: Floors, t
       // once it has, so it can't run on into their next task.
       handBack(ctx, workerId);
       giveUp(ctx, workerId, 'reset by the manager', { kind: 'manager', text: '↺ Reset by the manager.' });
+    },
+    messageWorker: (workerId, text) => {
+      const w = store.worker(workerId);
+      const body = text.trim();
+      if (!body) throw new HttpError(400, 'The message is empty');
+      if (w.role === 'ceo') return ctx.ceo.message(body);
+      if (!sessions.send(workerId, body)) throw new HttpError(409, `${w.name} has no session running. Messages reach a worker while they work.`);
     },
     stopAll: () => sessions.stopAll(),
     sweep: () => sweepMachines(ctx),

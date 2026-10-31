@@ -178,7 +178,7 @@ export class CloudOffice {
     if (!store.hasWorker(workerId) || store.worker(workerId).needsSignIn) return;
     const w = store.patchWorker(workerId, { needsSignIn: true });
     store.appendLog(workerId, [{ kind: 'error', text: '🔑 Claude Code in my cloud machine needs signing in: press Sign in, then finish it in my terminal.' }]);
-    store.say(`🔑 ${w.name}'s cloud machine needs you to sign Claude Code in (Sign in, on the debug page).`, w.floorId);
+    store.say(`🔑 ${w.name}'s cloud machine needs you to sign Claude Code in (🔑 Sign in, at their desk).`, w.floorId);
   }
 
   /** The manager starts the sign-in: Claude Code's own login runs in the worker's terminal. */

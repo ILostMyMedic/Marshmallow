@@ -35,10 +35,13 @@ import { createPanner, listenerAt, listenerFacing, noise, noiseBuffer, output, r
 import { panOf } from './sfxMix';
 
 const TICK_MS = 100;
-/** Each layer's gain at full level, before the master volume: a bed well under footsteps (peaks ~0.03). */
-const GAIN = { wind: 0.026, city: 0.032, car: 0.05, bird: 0.014, cricket: 0.005 };
-/** Their loudest moments after filtering, for __mmSfx (measured offline at full level: the air's average is ~0.004). */
-const PEAK = { air: 0.028, car: 0.015, bird: 0.014, cricket: 0.005 };
+/**
+ * Each layer's gain at full level, before the master volume. The noise layers are narrow (a few hundred Hz of white
+ * noise), so they need big gains: the air averages about 0.025 (-32 dBFS) out on a balcony, a third of that indoors.
+ */
+const GAIN = { wind: 0.17, city: 0.2, wash: 0.07, car: 0.25, bird: 0.05, cricket: 0.02 };
+/** Their loudest moments after filtering, for __mmSfx. */
+const PEAK = { air: 0.17, car: 0.075, bird: 0.05, cricket: 0.02 };
 const BIRDS = 3;
 const CRICKETS = 2;
 /** Seconds of silence before the graph is cut off from the mixer. */
@@ -47,7 +50,7 @@ const UNHOOK_AFTER = 1.5;
 const LEAD = 0.05;
 /** The fire pit on the roof: where its sound comes from, and its roar's level. */
 const FIRE_AT = { x: FIRE.x, y: 0.5, z: FIRE.z };
-const FIRE_BED = 0.022;
+const FIRE_BED = 0.18;
 
 interface Voice {
   osc: OscillatorNode;
@@ -72,6 +75,7 @@ interface Graph {
   windDepth: GainNode[];
   city: GainNode;
   cityFilter: BiquadFilterNode;
+  wash: GainNode;
   car: { gain: GainNode; filter: BiquadFilterNode; pan: StereoPannerNode | null; free: number };
   birds: Voice[];
   crickets: Voice[];
@@ -91,7 +95,7 @@ let hearing: OutsideHearing = { level: 0, clarity: 0, from: null };
 let layers: OutsideLayers = outsideLayers(0.5);
 /** Whether __mmSfx has the outside's air as heard (true), silent (false) or not at all yet (null). */
 let heard: boolean | null = null;
-const sent = { level: -1, cutoff: -1, pan: 2, wind: -1, city: -1, cityHz: -1, fire: -1 };
+const sent = { level: -1, cutoff: -1, pan: 2, wind: -1, city: -1, wash: -1, cityHz: -1, fire: -1 };
 const open: Record<Side, number> = { west: 0, east: 0 };
 /** The fire's crackles: frequent enough to crowd everything else out of __mmSfx, so they're kept here (window.__mmOutsideSfx). */
 const fireLog: SfxRecord[] = [];
@@ -218,6 +222,8 @@ function mix(g: Graph, level: number) {
   }
   const city = GAIN.city * layers.city;
   if (Math.abs(city - sent.city) > 0.001) glide(g.city.gain, (sent.city = city), 2);
+  const wash = GAIN.wash * layers.city;
+  if (Math.abs(wash - sent.wash) > 0.0005) glide(g.wash.gain, (sent.wash = wash), 2);
   if (Math.abs(layers.cityHz - sent.cityHz) > 2) glide(g.cityFilter.frequency, (sent.cityHz = layers.cityHz), 2);
 }
 
@@ -322,12 +328,12 @@ function fireCrackles(now: number) {
 /** One crackle off the logs, `at` seconds from now: a short bright snap of sap, now and then a louder pop. */
 function crackle(at: number) {
   const r = Math.random();
-  const peak = 0.01 + r * 0.025;
-  const into = recordSfx('fire:crackle', { group: 'outside', pos: FIRE_AT, peak }, fireLog);
+  const peak = 0.025 + r * 0.06;
+  const into = recordSfx('fire:crackle', { group: 'outside', pos: FIRE_AT, peak, reach: 'far' }, fireLog);
   crackles++;
-  const o = { group: 'outside', pos: FIRE_AT, into } as const;
+  const o = { group: 'outside', pos: FIRE_AT, into, reach: 'far' } as const;
   noise({ ...o, at, dur: 0.02 + Math.random() * 0.06, peak, filter: 'highpass', freq: 1800 + Math.random() * 3000, attack: 0.002 });
-  if (r > 0.82) noise({ ...o, at, dur: 0.035, peak: 0.045, filter: 'bandpass', freq: 900 + Math.random() * 1200, q: 2, attack: 0.001 });
+  if (r > 0.82) noise({ ...o, at, dur: 0.035, peak: 0.1, filter: 'bandpass', freq: 900 + Math.random() * 1200, q: 2, attack: 0.001 });
 }
 
 // ---------- the graph ----------
@@ -405,6 +411,9 @@ function buildOutside(c: BaseAudioContext, out: AudioNode): Graph {
   const cityFilter = filter('lowpass', 240, 0.7);
   const city = gain(0);
   chain(air, cityFilter, city, muffle);
+  // ...and the far-off traffic's wash above it, in the band small speakers can play.
+  const wash = gain(0);
+  chain(road, filter('bandpass', 700, 0.6), wash, muffle);
 
   // A car: road noise through a bandpass that sweeps as it passes.
   const carFilter = filter('bandpass', 400, 0.9);
@@ -426,13 +435,13 @@ function buildOutside(c: BaseAudioContext, out: AudioNode): Graph {
     return v;
   });
 
-  // The fire's roar: low noise flickering on a slow wave, from a panner at the pit (it fades with distance like the
-  // room's sounds, not with the outside's level).
+  // The fire's roar: low noise flickering on a slow wave, from a panner at the pit (it fades with distance, heard from
+  // across that end of the roof, not with the outside's level).
   const flicker = gain(1);
   const flickerDepth = gain(0.35);
   osc('sine', 0.7).connect(flickerDepth).connect(flicker.gain);
   const fireLevel = gain(0);
-  const firePanner = n(createPanner(c, FIRE_AT));
+  const firePanner = n(createPanner(c, FIRE_AT, 'far'));
   chain(source(0.6), filter('lowpass', 420, 0.6), flicker, fireLevel, firePanner);
 
   return {
@@ -447,6 +456,7 @@ function buildOutside(c: BaseAudioContext, out: AudioNode): Graph {
     windDepth,
     city,
     cityFilter,
+    wash,
     car: { gain: carGain, filter: carFilter, pan: carPan, free: 0 },
     birds,
     crickets,

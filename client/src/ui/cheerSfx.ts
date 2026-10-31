@@ -3,7 +3,8 @@
 // cheerRules.ts decides who: the nearest CHEER_VOICES get a voice each on a fixed set of panners, the rest blend into
 // one soft crowd layer on one more, so a big floor never clips. Every voice is one entry in window.__mmSfx; the crowd
 // is one entry at the middle of its people.
-// Adapted from cubefarm client/src/ui/cheerSfx.ts (MIT): the walls' muffling and the panners' reported positions are cut.
+// Adapted from cubefarm client/src/ui/cheerSfx.ts (MIT): the walls' muffling and the panners' reported positions are cut,
+// and the cheers carry further ('far' reach).
 
 import { CELEBRATE_MS } from '../world/gongRules';
 import { gongState } from '../world/gongState';
@@ -40,7 +41,7 @@ function channels(): Channels | null {
   try {
     const { ctx } = a;
     const panner = () => {
-      const p = createPanner(ctx, ORIGIN);
+      const p = createPanner(ctx, ORIGIN, 'far'); // a cheer carries across the floor
       p.connect(out);
       return p;
     };
@@ -237,7 +238,7 @@ function play() {
     const pos = { x: who.x, y: who.y, z: who.z };
     const p = c?.voices[k];
     if (p) setPannerPosition(p, pos.x, pos.y, pos.z);
-    recordSfx(`cheer:${who.voice!.word}`, { group: 'people', pos, peak: VOICE_PEAK, played: !!p });
+    recordSfx(`cheer:${who.voice!.word}`, { group: 'people', pos, peak: VOICE_PEAK, played: !!p, reach: 'far' });
     if (c && p) cheer(c, p, t0 + stagger(Math.random()), who.voice!);
   });
   if (!plan.crowd.length) return;
@@ -249,6 +250,6 @@ function play() {
   }
   const peak = CROWD_PEAK * crowdLevel(plan.crowd.length);
   if (c) setPannerPosition(c.crowd, mid.x, mid.y, mid.z);
-  recordSfx('cheer:crowd', { group: 'people', pos: mid, peak, played: !!c });
+  recordSfx('cheer:crowd', { group: 'people', pos: mid, peak, played: !!c, reach: 'far' });
   if (c) crowd(c, c.crowd, t0 + 0.05, peak);
 }

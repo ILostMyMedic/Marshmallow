@@ -2,8 +2,8 @@
 // from where you stand (out on a balcony or up on the roof, inside by an open side door or a window, or deep in the
 // office), which layers the time of day brings (birds by day, the city at dusk, crickets at night, more wind on the
 // roof), how often its bursts may come, and the shape of each bird call and cricket phrase. outsideSfx.ts plays them.
-// Adapted from cubefarm client/src/ui/outsideMix.ts (MIT): the windows letting a little through, the CEO's floor and the
-// fire's crackle are new; the clock is dayTime.ts's.
+// Adapted from cubefarm client/src/ui/outsideMix.ts (MIT): much louder indoors (a muffled bed rather than near silence),
+// the windows, the lobby's street, the CEO's floor and the fire's crackle are new; the clock is dayTime.ts's.
 
 import { nightFactor } from '../world/dayTime';
 import type { FloorKindOf } from '../world/floors';
@@ -18,19 +18,22 @@ const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 // ---------- where you stand ----------
 
-/** What's left of the outside deep inside the office, through the walls: almost nothing. */
-export const LEAK = 0.03;
+/** The outside deep inside the office, through the walls and the glass: a muffled but clearly present bed. */
+export const LEAK = 0.45;
+export const LEAK_CLARITY = 0.45;
+/** The lobby is on the street: a little more of it comes in. */
+export const LOBBY_LEAK = 0.55;
 /** The most the outside gets indoors, right by a wide-open side door. */
-export const DOOR_LEVEL = 0.3;
+export const DOOR_LEVEL = 0.85;
 /** How clear (0 muffled, 1 open air) the outside sounds through a wide-open door, from right beside it. */
-export const DOOR_CLARITY = 0.4;
+export const DOOR_CLARITY = 0.7;
 /** Beyond this distance (metres) from an open door, it adds nothing. */
 export const DOOR_REACH = 8;
-/** Right at a window: enough for the birds and the cars to come through the glass, dulled. */
-export const WINDOW_LEVEL = 0.12;
-export const WINDOW_CLARITY = 0.2;
+/** Right at a window: louder and clearer than deep inside, the birds coming through the glass. */
+export const WINDOW_LEVEL = 0.8;
+export const WINDOW_CLARITY = 0.6;
 /** Beyond this distance (metres) from a window's glass, it adds nothing. */
-export const WINDOW_REACH = 3.5;
+export const WINDOW_REACH = 4.5;
 /** The lowpass cutoff (Hz) with the outside fully muffled (clarity 0) and in the open (clarity 1). */
 export const MUFFLED_HZ = 320;
 export const OPEN_HZ = 14000;
@@ -38,6 +41,8 @@ export const OPEN_HZ = 14000;
 export const BURST_LEVEL = 0.08;
 /** How much windier it is up on the roof than on a balcony. */
 export const ROOF_WIND = 1.6;
+/** On the lobby's street: how much more of the city, and of its traffic. */
+export const STREET = { city: 1.25, cars: 1.6 };
 
 const BALCONY_IN = HALF_W + WALL_T;
 
@@ -56,13 +61,13 @@ export interface OutsideHearing {
 /**
  * How the outside sounds for a listener at (x, z) on a floor of `kind`, with each side door `open` 0-1. Out on a
  * balcony (or the lobby's patio) it's full and clear, rising as you step through the doorway; inside it comes through
- * an open door, quiet and muffled, fading with distance from it, or a little through the glass by a window; deep
- * inside it's almost silent. The roof is all outside, but for the elevator cabin.
+ * an open door, fuller the nearer you are, or louder through the glass by a window; deep inside it's a muffled bed
+ * (a little more in the lobby, on the street). The roof is all outside, but for the elevator cabin.
  */
 export function outsideHearing(kind: FloorKindOf, x: number, z: number, open: Readonly<Record<Side, number>>): OutsideHearing {
   if (kind === 'roof') return z > HALF_D ? { level: DOOR_LEVEL, clarity: DOOR_CLARITY, from: { x: 0, z: HALF_D } } : { level: 1, clarity: 1, from: null };
-  let level = LEAK;
-  let clarity = 0;
+  let level = kind === 'lobby' ? LOBBY_LEAK : LEAK;
+  let clarity = LEAK_CLARITY;
   let from: OutsideHearing['from'] = null;
   let best = 0;
   for (const side of SIDES) {
@@ -83,7 +88,7 @@ export function outsideHearing(kind: FloorKindOf, x: number, z: number, open: Re
       from = out < 1 ? { x: wallX, z: openings.door } : null;
     }
     for (const wz of openings.windows) {
-      const glass = clamp01(1 - Math.hypot(inward, Math.max(0, Math.abs(z - wz) - WINDOW.w / 2)) / WINDOW_REACH) ** 2;
+      const glass = clamp01(1 - Math.hypot(inward, Math.max(0, Math.abs(z - wz) - WINDOW.w / 2)) / WINDOW_REACH);
       level = Math.max(level, WINDOW_LEVEL * glass);
       clarity = Math.max(clarity, WINDOW_CLARITY * glass);
       heard = WINDOW_LEVEL * glass;
@@ -102,7 +107,7 @@ export const cutoffHz = (clarity: number) => MUFFLED_HZ * (OPEN_HZ / MUFFLED_HZ)
 // ---------- what time of day it is ----------
 
 export interface OutsideLayers {
-  /** 0-1 levels of each layer (the wind goes over 1 on the roof). */
+  /** 0-1 levels of each layer (the wind goes over 1 on the roof, the city in the lobby). */
   wind: number;
   city: number;
   birds: number;
@@ -115,20 +120,21 @@ export interface OutsideLayers {
 
 /**
  * The layers at day phase t (0 midnight, 0.5 noon): birds by day with a dawn chorus, the city loudest at dusk, crickets
- * and a quieter, deeper city at night; on the roof, more wind.
+ * and a quieter, deeper city at night; on the roof, more wind; in the lobby, more street.
  */
 export function outsideLayers(t: number, kind: FloorKindOf = 'office'): OutsideLayers {
   const night = nightFactor(t);
   const x = t - Math.floor(t);
   const dusk = 1 - smoothstep(0.015, 0.06, Math.abs(x - 0.765));
   const dawn = 1 - smoothstep(0.01, 0.05, Math.abs(x - 0.27));
+  const street = kind === 'lobby';
   return {
     wind: lerp(1, 0.8, night) * (kind === 'roof' ? ROOF_WIND : 1),
-    city: clamp01(lerp(0.75, 0.45, night) + 0.25 * dusk),
+    city: clamp01(lerp(0.75, 0.45, night) + 0.25 * dusk) * (street ? STREET.city : 1),
     birds: clamp01((1 - night) * (1 - 0.6 * dusk) + 0.3 * dawn),
     crickets: smoothstep(0.35, 1, night),
     cityHz: lerp(240, 120, night),
-    carsPerMin: lerp(2.5, 0.6, night) + 1.5 * dusk,
+    carsPerMin: (lerp(2.5, 0.6, night) + 1.5 * dusk) * (street ? STREET.cars : 1),
   };
 }
 

@@ -12,6 +12,8 @@ import {
   cutoffHz,
   DOOR_LEVEL,
   LEAK,
+  LEAK_CLARITY,
+  LOBBY_LEAK,
   MIN_GAP,
   MUFFLED_HZ,
   nextBirdIn,
@@ -24,6 +26,7 @@ import {
   outsideLayers,
   RECHECK,
   ROOF_WIND,
+  STREET,
   WINDOW_LEVEL,
 } from './outsideMix';
 
@@ -52,11 +55,13 @@ describe('outsideHearing', () => {
     expect(outsideHearing('lobby', -(HALF_W + 2), 8, SHUT).level).toBe(1);
   });
 
-  it('is almost silent and fully muffled deep inside the office', () => {
+  it('is a muffled but present bed deep inside the office', () => {
     for (const open of [SHUT, WEST_OPEN, { west: 1, east: 1 }]) {
       const h = outsideHearing('office', 0, -2, open);
       expect(h.level).toBe(LEAK);
-      expect(h.clarity).toBe(0);
+      expect(h.level).toBeGreaterThan(BURST_LEVEL);
+      expect(h.clarity).toBe(LEAK_CLARITY);
+      expect(cutoffHz(h.clarity)).toBeLessThan(2000);
     }
   });
 
@@ -65,8 +70,9 @@ describe('outsideHearing', () => {
     const open = outsideHearing('office', x, westDoor, WEST_OPEN);
     expect(open.level).toBeGreaterThan(BURST_LEVEL);
     expect(open.level).toBeLessThanOrEqual(DOOR_LEVEL);
-    expect(open.clarity).toBeGreaterThan(0);
-    expect(cutoffHz(open.clarity)).toBeLessThan(2000);
+    expect(open.level).toBeGreaterThan(LEAK);
+    expect(open.clarity).toBeGreaterThan(LEAK_CLARITY);
+    expect(cutoffHz(open.clarity)).toBeLessThan(OPEN_HZ / 2);
     expect(open.from).toEqual({ x: -(HALF_W + 0.15), z: westDoor });
 
     const half = outsideHearing('office', x, westDoor, { west: 0.5, east: 0 });
@@ -99,10 +105,11 @@ describe('outsideHearing', () => {
   it('lets a little through a window, muffled, enough for the birds and cars right at the glass', () => {
     const wz = SIDE_OPENINGS.office.west.windows[1];
     const at = outsideHearing('office', -(HALF_W - 0.4), wz, SHUT);
-    expect(at.level).toBeGreaterThan(BURST_LEVEL);
+    expect(at.level).toBeGreaterThan(LEAK);
     expect(at.level).toBeLessThanOrEqual(WINDOW_LEVEL);
     expect(at.level).toBeLessThan(DOOR_LEVEL);
-    expect(cutoffHz(at.clarity)).toBeLessThan(1500);
+    expect(at.clarity).toBeGreaterThan(LEAK_CLARITY);
+    expect(cutoffHz(at.clarity)).toBeLessThan(OPEN_HZ / 2);
     expect(at.from).toEqual({ x: -(HALF_W + WALL_T / 2), z: wz });
     // a few steps back into the room, it's the faint bed again
     expect(outsideHearing('office', -(HALF_W - 5), wz, SHUT).level).toBe(LEAK);
@@ -112,7 +119,17 @@ describe('outsideHearing', () => {
     expect(outsideHearing('ceo', -(HALF_W + 1.8), 0, SHUT).level).toBe(1);
     expect(outsideHearing('ceo', 0, -2, SHUT).level).toBe(LEAK);
     const lobbyWindow = SIDE_OPENINGS.lobby.east.windows[0];
-    expect(outsideHearing('lobby', HALF_W - 0.4, lobbyWindow, SHUT).level).toBeGreaterThan(BURST_LEVEL);
+    expect(outsideHearing('lobby', HALF_W - 0.4, lobbyWindow, SHUT).level).toBeGreaterThan(LOBBY_LEAK);
+  });
+
+  it('lets more of the street into the lobby', () => {
+    expect(outsideHearing('lobby', 0, -2, SHUT).level).toBe(LOBBY_LEAK);
+    expect(LOBBY_LEAK).toBeGreaterThan(LEAK);
+    const lobby = outsideLayers(0.5, 'lobby');
+    const office = outsideLayers(0.5, 'office');
+    expect(lobby.city).toBeCloseTo(office.city * STREET.city);
+    expect(lobby.carsPerMin).toBeCloseTo(office.carsPerMin * STREET.cars);
+    expect(lobby.birds).toBe(office.birds);
   });
 });
 

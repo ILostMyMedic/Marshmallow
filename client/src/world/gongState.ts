@@ -3,6 +3,7 @@
 // Adapted from cubefarm client/src/world/gongState.ts (MIT): the time-lapse's quieter boom is cut.
 import { gong as boom } from '../ui/sfx';
 import { celebrating, createGong, strike, type Strike } from './gongRules';
+import { GONG } from './layout';
 
 export const gongState = createGong();
 
@@ -25,7 +26,7 @@ export function onGongParty(fn: (floorId: string) => void) {
  */
 export function hitGong(opts: { floorId?: string | null; celebrate?: boolean } = {}): Strike {
   const result = strike(gongState, performance.now(), opts);
-  if (result === 'boom') boom();
+  if (result === 'boom') boom({ x: GONG.x, y: GONG.y, z: GONG.z });
   if (result !== 'absent' && opts.celebrate && gongState.celebrateFloor) for (const fn of partyListeners) fn(gongState.celebrateFloor);
   return result;
 }

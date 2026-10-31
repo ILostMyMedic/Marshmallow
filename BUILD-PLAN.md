@@ -229,7 +229,21 @@ Workers get up: walking (walk grid, paths, named spots), the errand system, coff
 
 ## Phase 15: the manager UI
 
-The setup wizard, the manager console, the worker panel (live terminal, message box, setup), the 2D Kanban, the phone overlay, toasts and the help screen.
+Everything the debug page does, over the game, in the game's style. O, P and H open the console, the phone and help (`ui/OfficeKeys.tsx`), and so do the HUD's buttons.
+
+1. The setup wizard (`ui/SetupWizard.tsx`): what the office calls you, your company's name, and whether to hire a CEO (and on which model). It opens by itself until it's finished or skipped (`settings.setupDone`).
+2. The manager's console (`ui/ManagerConsole.tsx`):
+   - Floors: connect a repo (one of yours on GitHub, or by name), a floor's settings, sync, the CEO's planning of a brief, held issues.
+   - Team: hire, let go, stop, reset, move, model and effort, the CEO, a cloud worker's sign-in.
+   - Issues: a floor's board, and the workers' questions to answer.
+   - Settings: your name and company, the session limit and pacing, team size and autoscale, the default model and effort, cloud workers (key, token, machine, Box size and limit, test, orphans).
+3. The worker panel (`ui/WorkerPanel.tsx`): the live terminal, a message box that drops a note into their running session (a new `POST /api/workers/:id/message`, with the demo's fake), and their setup (model, effort, stop, reset, let go, sign in).
+4. The 2D Kanban view (`ui/KanbanView.tsx`): the whiteboard's panel and the console's Issues tab.
+5. The phone (`ui/Phone.tsx`): the CEO's chat, and the office's messages: workers' questions to answer (counted on the HUD's button) and the office's notices.
+6. Toasts: what happens in the office as notes that stack and fade: a merge, a PR opened, a question, a worker in trouble, a hire or a leaver.
+7. The help screen (`ui/HelpPanel.tsx`): every control.
+
+**Done when:** in the demo a fresh office opens on the setup; from the console, without the debug page, you connect a fake repo, hire workers and change a setting; a message typed in a worker's panel shows in their terminal; the phone carries a chat with the CEO and a question answered; a toast tells you of a merge; H shows the controls. (Done: seen in a browser on the demo: the setup opened on a fresh office, saved the names and hired the CEO; the console connected a fake repo, hired a worker and saved a setting; a message typed in a working worker's panel showed in their terminal and was answered; the phone answered a question (the issue went back to work) and carried a chat with the CEO; toasts for a hire, a PR opened, QA passed and the CEO's reports; H showed the controls. The merge toast is covered by `officeToasts.test.ts` rather than seen. The new rules are tested in `ui/console/forms.test.ts` and `ui/officeToasts.test.ts`, and the message route in `pipeline.test.ts` and `demo.test.ts`.)
 
 ## Watch out for
 

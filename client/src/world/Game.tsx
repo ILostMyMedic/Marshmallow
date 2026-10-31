@@ -9,8 +9,10 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStore } from '../store';
 import { HUD } from '../ui/HUD';
+import { OfficeKeys } from '../ui/OfficeKeys';
 import { Overlays } from '../ui/Overlays';
 import { SoundToggle } from '../ui/SoundToggle';
+import { Toasts } from '../ui/Toasts';
 import { act } from './actions';
 import { OVERVIEW } from './cameraMath';
 import { Chatter } from './Chatter';
@@ -218,6 +220,8 @@ export function Game() {
         {floor?.summary && <span>{floor.summary}</span>}
       </header>
       <HUD />
+      <OfficeKeys />
+      <Toasts />
       <FloorPicker shown={shown} />
       <a className="game-debug" href="/debug">
         Debug page

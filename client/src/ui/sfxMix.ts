@@ -1,4 +1,4 @@
-// Adapted from cubefarm client/src/ui/sfxMix.ts (MIT).
+// Adapted from cubefarm client/src/ui/sfxMix.ts (MIT): the wider reaches ('far', 'floor') are new.
 
 // The mixer's pure decisions (no WebAudio, so they can be unit tested): how loud a sound placed in the world is from
 // where you stand, where it sits left/right, when it's too far away to bother with, and which sound gives way when
@@ -24,13 +24,26 @@ export function distance(a: Vec3, b: Vec3) {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-/** WebAudio's 'inverse' distance model: 1 within REF_DISTANCE, then falling off as 1/distance. */
-export function distanceGain(d: number) {
-  return REF_DISTANCE / (REF_DISTANCE + ROLLOFF * (Math.max(d, REF_DISTANCE) - REF_DISTANCE));
+/**
+ * How far a sound carries: 'room' for the things around you (the default), 'far' for what's meant to be heard across a
+ * part of the floor (voices, cheers, a distant phone), 'floor' for the gong, which fills the whole floor. Each is
+ * WebAudio's 'inverse' model: full volume up to `ref` metres, then falling off by `rolloff`; nothing past `max`.
+ */
+export type Reach = 'room' | 'far' | 'floor';
+export const REACH: Record<Reach, { ref: number; rolloff: number; max: number }> = {
+  room: { ref: REF_DISTANCE, rolloff: ROLLOFF, max: MAX_DISTANCE },
+  far: { ref: 2.5, rolloff: 1, max: 30 },
+  floor: { ref: 6, rolloff: 0.5, max: 60 },
+};
+
+/** WebAudio's 'inverse' distance model: 1 within the reach's `ref`, then falling off as 1/distance. */
+export function distanceGain(d: number, reach: Reach = 'room') {
+  const { ref, rolloff } = REACH[reach];
+  return ref / (ref + rolloff * (Math.max(d, ref) - ref));
 }
 
 /** False when a sound is too far away to play (cheap culling before any nodes are made). */
-export const audible = (d: number) => d <= MAX_DISTANCE;
+export const audible = (d: number, reach: Reach = 'room') => d <= REACH[reach].max;
 
 /**
  * Where a sound sits from -1 (left) to 1 (right) for a listener at `pos` facing `fwd` with `up` overhead (for QA;

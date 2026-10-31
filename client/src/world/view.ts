@@ -6,10 +6,25 @@ import { create } from 'zustand';
 import type { SnackId } from './fridge';
 import type { End } from './pongPhysics';
 
-/** A panel over the view: a worker's terminal, a floor's board, the elevator's buttons, your look, or the front desk. */
-export type Overlay = { kind: 'terminal'; workerId: string } | { kind: 'kanban'; floorId: string } | { kind: 'elevator' } | { kind: 'look' } | { kind: 'frontdesk' };
+/** The manager's console's tabs (ui/ManagerConsole.tsx). */
+export type ConsoleTab = 'floors' | 'team' | 'issues' | 'settings';
 
-const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk'] satisfies Overlay['kind'][];
+/**
+ * A panel over the view: a worker's panel (their terminal), a floor's board, the elevator's buttons, your look, the
+ * front desk, the manager's console, the phone, the help screen, or the first-run setup.
+ */
+export type Overlay =
+  | { kind: 'terminal'; workerId: string }
+  | { kind: 'kanban'; floorId: string }
+  | { kind: 'elevator' }
+  | { kind: 'look' }
+  | { kind: 'frontdesk' }
+  | { kind: 'console'; tab?: ConsoleTab; floorId?: string }
+  | { kind: 'phone' }
+  | { kind: 'help' }
+  | { kind: 'setup' };
+
+const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk', 'console', 'phone', 'help', 'setup'] satisfies Overlay['kind'][];
 
 /**
  * What E does with what's under the crosshair: open a panel, or do something in the room (actions.ts hands those to

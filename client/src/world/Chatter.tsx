@@ -1,12 +1,12 @@
 // Lives inside the Canvas: the people on the floor you're on talk. Lines come from what happens in the office (the
 // server's moments, the store's changes and everyone's new log lines, read by chatterEvents.ts), from a chat at the
 // cooler or the couch (ErrandDirector.tsx asks chatSay), from you saying hi (E on someone with nothing to do) and from
-// their work. Each line is a timed speech bubble
-// (people.ts `say`). At most MAX_SPEAKERS speak at once, the nearest the camera winning; PACE paces the rest. It runs in
+// their work. Each line is a timed speech bubble (people.ts `say`), babbled out loud in the speaker's voice by
+// ui/voices.ts. At most MAX_SPEAKERS speak at once, the nearest the camera winning; PACE paces the rest. It runs in
 // useFrame, so it stops with the render loop, and nothing new starts while a panel covers the view.
 // window.__mmChatter shows the recent lines and who's speaking.
-// Adapted from cubefarm client/src/world/Chatter.tsx (MIT): the babble voices come with the sound effects, the CEO's
-// floor walk is cut, and the chatter level stays lively (no setting yet).
+// Adapted from cubefarm client/src/world/Chatter.tsx (MIT): the babble voices are ui/voices.ts's (every bubble, not
+// only these), the CEO's floor walk is cut, and the chatter level stays lively (no setting yet).
 import { useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';

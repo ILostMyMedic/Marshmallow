@@ -9,7 +9,12 @@ export interface AudioPrefs {
   muted: boolean;
 }
 
-export const DEFAULT_AUDIO_PREFS: AudioPrefs = { volume: 70, muted: false };
+export const DEFAULT_AUDIO_PREFS: AudioPrefs = { volume: 80, muted: false };
+
+/** The first release's default volume, saved by anyone who pressed M back then: read as "the default", not a choice. */
+const FIRST_DEFAULT = 70;
+/** Saved prefs carry this, so a volume saved since is taken as chosen. */
+const VERSION = 2;
 
 /** A 0-100 percentage, or the fallback when it's missing, not a number or out of range. */
 function percent(v: unknown, fallback: number): number {
@@ -19,8 +24,12 @@ function percent(v: unknown, fallback: number): number {
 /** Any saved value as complete, in-range prefs. */
 export function normalizeAudioPrefs(raw: unknown): AudioPrefs {
   const p = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  return { volume: percent(p.volume, DEFAULT_AUDIO_PREFS.volume), muted: p.muted === true };
+  const volume = p.v !== VERSION && p.volume === FIRST_DEFAULT ? DEFAULT_AUDIO_PREFS.volume : percent(p.volume, DEFAULT_AUDIO_PREFS.volume);
+  return { volume, muted: p.muted === true };
 }
+
+/** The prefs as saved (JSON text). */
+export const serializeAudioPrefs = (p: AudioPrefs) => JSON.stringify({ v: VERSION, volume: p.volume, muted: p.muted });
 
 /** The prefs saved as JSON text (null when nothing is saved). */
 export function parseAudioPrefs(text: string | null): AudioPrefs {

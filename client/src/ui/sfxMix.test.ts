@@ -1,6 +1,6 @@
 // Adapted from cubefarm client/src/ui/sfxMix.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { audible, distance, distanceGain, DROP_NEW, MAX_DISTANCE, panOf, PLAY, REF_DISTANCE, voiceToDrop } from './sfxMix';
+import { audible, distance, distanceGain, DROP_NEW, MAX_DISTANCE, panOf, PLAY, REACH, REF_DISTANCE, voiceToDrop } from './sfxMix';
 
 describe('distanceGain', () => {
   it('is full volume up close and falls off with distance', () => {
@@ -13,6 +13,22 @@ describe('distanceGain', () => {
   it('makes a desk 10 m away faint', () => {
     expect(distanceGain(10)).toBeLessThan(0.1);
     expect(distanceGain(10)).toBeGreaterThan(0.03);
+  });
+});
+
+describe('reach', () => {
+  it("carries voices further than the room's things, and the gong across the whole floor", () => {
+    expect(distanceGain(8, 'far')).toBeGreaterThan(3 * distanceGain(8));
+    expect(distanceGain(25, 'floor')).toBeGreaterThan(0.3);
+    expect(distanceGain(25, 'floor')).toBeLessThan(distanceGain(5, 'floor'));
+    for (const r of ['room', 'far', 'floor'] as const) expect(distanceGain(0, r)).toBe(1);
+  });
+
+  it('culls each reach at its own distance', () => {
+    expect(audible(20)).toBe(false);
+    expect(audible(20, 'far')).toBe(true);
+    expect(audible(REACH.far.max + 1, 'far')).toBe(false);
+    expect(audible(45, 'floor')).toBe(true);
   });
 });
 

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { LogEntry } from '../../shared/types.ts';
 import type { SessionCallbacks, SessionOptions, SessionResult } from '../sessions/session.ts';
+import { WorkerTerminal } from '../sessions/terminal.ts';
 import { createDemoBackend, type DemoBackend } from './demo.ts';
 
 const INSTANT = { stepMs: () => 1, prepareMs: 1, installMs: 1, cloneMs: 1, checksMs: () => 5, closeAfterMergeMs: 5 };
@@ -151,6 +152,21 @@ describe('the fake sessions', () => {
     const handle = b.startSession(options('/x'), { log: () => undefined, tool: () => undefined, sessionId: () => undefined, browserUrl: () => undefined, screenshot: () => undefined, finished: (r) => (result = r) });
     handle.stop();
     expect(result).toMatchObject({ ok: false, errors: ['Stopped by the manager'] });
+  });
+
+  it("shows the manager's message in the terminal, as typed at the prompt, and answers it", async () => {
+    const b = createDemoBackend({ home: null, timing: { ...INSTANT, stepMs: () => 20 } });
+    backends.push(b);
+    const terminal = new WorkerTerminal();
+    const logs: LogEntry[] = [];
+    const handle = b.startSession(options('/x', { terminal }), { log: (e) => logs.push(...e), tool: () => undefined, sessionId: () => undefined, browserUrl: () => undefined, screenshot: () => undefined, finished: () => undefined });
+    handle.send('Keep the hook as it is');
+    await wait(60);
+    handle.stop();
+    await terminal.flush();
+    expect(terminal.screen()).toContain('> Keep the hook as it is');
+    expect(terminal.screen()).toContain('Got it: "Keep the hook as it is"');
+    expect(logs.some((e) => e.text.includes('Got it'))).toBe(true);
   });
 });
 

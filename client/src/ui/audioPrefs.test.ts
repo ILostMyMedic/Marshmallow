@@ -1,20 +1,26 @@
 // Adapted from cubefarm client/src/ui/audioPrefs.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_AUDIO_PREFS, normalizeAudioPrefs, parseAudioPrefs, sliderGain } from './audioPrefs';
+import { DEFAULT_AUDIO_PREFS, normalizeAudioPrefs, parseAudioPrefs, serializeAudioPrefs, sliderGain } from './audioPrefs';
 
 describe('parseAudioPrefs', () => {
   it('uses the defaults when nothing is saved', () => {
     expect(parseAudioPrefs(null)).toEqual(DEFAULT_AUDIO_PREFS);
-    expect(DEFAULT_AUDIO_PREFS).toEqual({ volume: 70, muted: false });
+    expect(DEFAULT_AUDIO_PREFS).toEqual({ volume: 80, muted: false });
   });
 
   it('round-trips saved settings', () => {
     for (const saved of [
       { volume: 40, muted: true },
       { volume: 0, muted: false },
+      { volume: 70, muted: false },
       { volume: 100, muted: true },
     ])
-      expect(parseAudioPrefs(JSON.stringify(saved))).toEqual(saved);
+      expect(parseAudioPrefs(serializeAudioPrefs(saved))).toEqual(saved);
+  });
+
+  it("reads the first release's saved default (70) as today's default, keeping its mute", () => {
+    expect(parseAudioPrefs('{"volume":70,"muted":true}')).toEqual({ volume: DEFAULT_AUDIO_PREFS.volume, muted: true });
+    expect(parseAudioPrefs('{"volume":40,"muted":false}')).toEqual({ volume: 40, muted: false });
   });
 
   it("keeps cubefarm-style settings' volume and mute, and drops the rest", () => {
@@ -28,7 +34,7 @@ describe('parseAudioPrefs', () => {
 
 describe('normalizeAudioPrefs', () => {
   it('replaces an out-of-range or non-numeric volume with the default', () => {
-    for (const volume of [140, -5, '50', NaN, Infinity, null, {}, []]) expect(normalizeAudioPrefs({ volume }).volume).toBe(70);
+    for (const volume of [140, -5, '50', NaN, Infinity, null, {}, []]) expect(normalizeAudioPrefs({ volume }).volume).toBe(DEFAULT_AUDIO_PREFS.volume);
   });
 
   it('keeps the ends of the range and rounds to whole percent', () => {

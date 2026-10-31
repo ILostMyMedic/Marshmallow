@@ -1,17 +1,19 @@
 // What you hear, mounted once inside the Canvas (Game.tsx): the listener kept where you are (on foot, your head; in the
-// overview, where you left yourself, so the floor still sounds as it did), the outside's ambience for the floor you're
-// on (ui/outsideSfx.ts, quiet behind a panel and while the elevator carries you), and the working workers typing at
-// their desks in time with their hands (ui/typingSfx.ts; only the nearest few). Everything else is played by the thing
-// that makes it.
+// overview, where you left yourself, so the floor still sounds as it did), the outside's ambience and the room's tone
+// for the floor you're on (ui/outsideSfx.ts, ui/roomTone.ts; quiet behind a panel and while the elevator carries you),
+// the voices following their speakers' heads (ui/voices.ts), and the working workers typing at their desks in time
+// with their hands (ui/typingSfx.ts; only the nearest few). Everything else is played by the thing that makes it.
 // Adapted from cubefarm client/src/world/SoundListener.tsx, OutsideSounds.tsx and TypingSounds.tsx (MIT): one
 // component for the three; the listener follows you in third person rather than the camera.
 import { useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useStore } from '../store';
 import { setOutsideQuiet, startOutside, stopOutside } from '../ui/outsideSfx';
+import { setRoomToneQuiet, startRoomTone, stopRoomTone } from '../ui/roomTone';
 import { listenerAt, setListener } from '../ui/sfx';
 import { keyboardFor } from '../ui/keyboards';
 import { TYPING_CHANNELS, TYPING_RANGE, placeTypingChannel, typingGeneration, typingSound } from '../ui/typingSfx';
+import { followVoices } from '../ui/voices';
 import { useRide } from './elevatorRide';
 import { kindOf } from './floors';
 import { isCelebrating } from './gongState';
@@ -24,6 +26,7 @@ import { useView } from './view';
 /** The ears: where you stand, facing where you look. Reads the camera's world matrix directly: no allocations per frame. */
 function Listener() {
   useFrame(({ camera }) => {
+    followVoices();
     if (rigOwnsCamera()) return setListener(playerAt.x, EYE_HEIGHT, playerAt.z, -Math.sin(playerAt.yaw), 0, -Math.cos(playerAt.yaw), 0, 1, 0);
     // Column 3 is the position, column 1 the up axis, and the camera looks down its -Z axis (column 2).
     const e = camera.matrixWorld.elements;
@@ -143,10 +146,17 @@ export function Sounds({ floor }: { floor: number }) {
   const kind = kindOf(floor);
   const panel = useView((s) => s.overlay !== null);
   const riding = useRide((s) => s.phase === 'dark');
-  useEffect(() => setOutsideQuiet(panel || riding), [panel, riding]);
+  useEffect(() => {
+    setOutsideQuiet(panel || riding);
+    setRoomToneQuiet(panel || riding);
+  }, [panel, riding]);
   useEffect(() => {
     startOutside(kind);
-    return stopOutside;
+    startRoomTone(kind);
+    return () => {
+      stopOutside();
+      stopRoomTone();
+    };
   }, [kind]);
   return (
     <>

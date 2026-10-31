@@ -38,8 +38,8 @@ export class Ceo {
     return this.queue;
   }
 
-  /** The office gets a CEO, who onboards every floor it doesn't know yet. */
-  hire(): Worker {
+  /** The office gets a CEO, who onboards every floor it doesn't know yet; on `model` from the start, or the office default. */
+  hire(model = ''): Worker {
     const { store } = this.ctx;
     if (this.worker) throw new HttpError(409, 'The office has a CEO already');
     const now = Date.now();
@@ -50,7 +50,7 @@ export class Ceo {
       role: 'ceo',
       seed: randomInt(2 ** 31),
       desk: 0,
-      model: '',
+      model,
       effort: '',
       host: 'local',
       status: 'idle',

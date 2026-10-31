@@ -1,5 +1,5 @@
 // Adapted from cubefarm client/src/world/Character.tsx (MIT): toys hitting people, themes, the screen's glow on the
-// face, the handshake and the chatter's voices are cut; their steps, chair and merge cheer are heard (ui/).
+// face and the handshake are cut; their steps, chair, voice (every bubble, ui/voices.ts) and merge cheer are heard.
 import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -8,6 +8,7 @@ import { qaKey, useStore } from '../store';
 import { cheerVoice } from '../ui/cheerRules';
 import { cheerFrom } from '../ui/cheerSfx';
 import { hearBody, hearing } from '../ui/peopleSounds';
+import { registerVoice } from '../ui/voices';
 import { seededAppearance } from './appearance';
 import { Piece } from './Batched';
 import { WALK_SPEED, gait, newBodyState, smooth, stepBody, type BodyTarget, type Gait, type Gesture } from './body';
@@ -300,6 +301,7 @@ export function Character({
   const voice = useMemo(() => ({ v: cheerVoice(id, look.look), party: false, head: new THREE.Vector3() }), [id, look.look]);
   useEffect(() => trackBody(id, move.s), [id, move]);
   useEffect(() => hearing(id), [id]);
+  useEffect(() => registerVoice(id, worker.name, look.look, worker.role), [id, worker.name, look.look, worker.role]);
   // Leaving mid-stretch (another floor): don't leave them standing.
   useEffect(
     () => () => {
@@ -340,7 +342,7 @@ export function Character({
       st.standX = te[0] * standAt.x + te[8] * standAt.z + te[12];
       st.standZ = te[2] * standAt.x + te[10] * standAt.z + te[14];
       stepBody(st, goal ?? null, dt);
-      if (!isHidden(id)) hearBody(id, st, te[13]);
+      if (!isHidden(id)) hearBody(id, st, dt, te[13]);
       const b = body.current;
       if (b && st.stage === 'seated') {
         b.position.set(0, 0, 0);

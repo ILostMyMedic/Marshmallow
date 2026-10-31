@@ -71,6 +71,16 @@ describe('Floors', () => {
     expect(events.filter((e) => e.type === 'issuesFiled')).toEqual([expect.objectContaining({ floorId: REPO, numbers: [n] })]);
   });
 
+  it("files the manager's task as an issue and shows it on the floor straight away", async () => {
+    await floors.connect(REPO);
+    await floors.sync(REPO);
+    const { number } = await floors.fileIssue(REPO, '  Export to CSV ', 'A button on the list page.');
+    expect(store.floor(REPO).issues).toContainEqual(expect.objectContaining({ number, title: 'Export to CSV' }));
+    await expect(floors.fileIssue(REPO, '   ', '')).rejects.toMatchObject({ status: 400 });
+    await expect(floors.fileIssue(REPO, 'x'.repeat(300), '')).rejects.toMatchObject({ status: 400 });
+    await expect(floors.fileIssue('nobody/nothing', 'Hi', '')).rejects.toMatchObject({ status: 404 });
+  });
+
   it('says on the floor when a sync fails', async () => {
     await floors.connect(REPO);
     await floors.sync(REPO);

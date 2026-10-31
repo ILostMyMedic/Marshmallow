@@ -77,10 +77,11 @@ app.post(
 );
 app.post('/api/floors/:floor/plan', route((req) => pipeline.ctx.ceo.plan(String(req.params.floor), req.body?.mission === undefined ? undefined : str(req.body.mission))));
 // The CEO: hired and let go, and the manager's messages to it
-app.post('/api/ceo', route(() => pipeline.ctx.ceo.hire()));
+app.post('/api/ceo', route((req) => pipeline.ctx.ceo.hire(str(req.body?.model).trim())));
 app.delete('/api/ceo', route(() => pipeline.ctx.ceo.letGo()));
 app.post('/api/ceo/message', route((req) => pipeline.ctx.ceo.message(str(req.body?.text))));
 app.post('/api/floors/:floor/sync', route((req) => floors.sync(String(req.params.floor))));
+app.post('/api/floors/:floor/issues', route((req) => floors.fileIssue(String(req.params.floor), str(req.body?.title), str(req.body?.body))));
 // Questions to the manager: asked on an issue (the CEO's ask_manager later; a test meanwhile), and answered here or on GitHub
 app.post(
   '/api/floors/:floor/issues/:n/questions',
@@ -152,6 +153,8 @@ app.patch(
 app.patch('/api/settings', route((req) => store.updateSettings(settingsPatch(req.body, store.getSettings()))));
 app.post('/api/workers/:id/stop', route((req) => pipeline.stopWorker(String(req.params.id))));
 app.post('/api/workers/:id/reset', route((req) => pipeline.resetWorker(String(req.params.id))));
+// The manager's note, dropped into the worker's running session (409 without one); the CEO's goes to the CEO
+app.post('/api/workers/:id/message', route((req) => pipeline.messageWorker(String(req.params.id), str(req.body?.text))));
 // Box workers: the Upstash key and tokens (kept in secrets.json, never sent back), moving a worker, signing one in
 app.put('/api/cloud/key', route((req) => pipeline.ctx.cloud.account.setKey(str(req.body?.key))));
 app.put(

@@ -85,6 +85,20 @@ export class Floors {
     return next;
   }
 
+  /**
+   * Files a task the manager wrote as an issue on floor `id`'s repository (a plain issue, so auto-assign takes it like
+   * any other), then syncs the floor so its board shows it at once.
+   */
+  async fileIssue(id: string, title: string, body: string): Promise<{ number: number }> {
+    const floor = this.store.floor(id);
+    const t = title.trim();
+    if (!t) throw new HttpError(400, 'A task needs a title');
+    if (t.length > 256) throw new HttpError(400, 'Keep the title under 256 characters; the rest can go in the details');
+    const number = await this.backend.github.createIssue(floor.fullName, t, body.trim());
+    await this.sync(id).catch(() => undefined); // filed either way: the next sync shows it if this one fails
+    return { number };
+  }
+
   /** Syncs every floor: the timer's tick. A floor that fails says so on its own (syncError). */
   async syncAll(): Promise<void> {
     await Promise.all(this.store.floorList().map((f) => this.sync(f.id).catch(() => undefined)));

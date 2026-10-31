@@ -106,7 +106,7 @@ export function tourStops(o: Office, now: number): TourStop[] {
       title: "The CEO's office",
       card: ceo
         ? [`${ceo.name} runs the company from up here: onboarding new floors, turning briefs into issues and sizing the teams.`, busy(ceo) ? `${ceo.name} is busy right now.` : `${ceo.name} has a moment, if you want to say hi.`]
-        : ["The CEO's office, waiting for a CEO. Hire one from the debug page and they'll plan the floors' work."],
+        : ["The CEO's office, waiting for a CEO. Hire one in the manager's console (O) and they'll plan the floors' work."],
       say: ceo ? [`The corner office!`, `${ceo.name} runs things from here.`] : ['The corner office…', "We haven't hired a CEO yet."],
     },
     {

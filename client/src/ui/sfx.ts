@@ -7,13 +7,13 @@
 // room's reverb and the walls' muffling, the photo-mode tap, the captions, the event cues, the alarm, the phone's
 // chirp, the toys' and the roomba's sounds and the fridge's hum are cut. Groups are labels for the probe only.
 
-import { parseAudioPrefs, sliderGain, type AudioPrefs } from './audioPrefs';
-import { audible, distance, distanceGain, DROP_NEW, MAX_DISTANCE, panOf, PLAY, REF_DISTANCE, ROLLOFF, type Vec3, voiceToDrop } from './sfxMix';
+import { parseAudioPrefs, serializeAudioPrefs, sliderGain, type AudioPrefs } from './audioPrefs';
+import { audible, distance, distanceGain, DROP_NEW, panOf, PLAY, REACH, type Reach, type Vec3, voiceToDrop } from './sfxMix';
 
-export type { Vec3 } from './sfxMix';
+export type { Reach, Vec3 } from './sfxMix';
 
-/** What a sound is, for the probe: the room's things, people (steps, typing, sips, cheers), or outside. */
-export type SoundGroup = 'room' | 'people' | 'outside';
+/** What a sound is, for the probe: the room's things, people (steps, typing, voices, cheers), outside, or a notification. */
+export type SoundGroup = 'room' | 'people' | 'outside' | 'alerts';
 
 const PREFS_KEY = 'marshmallow:audio';
 
@@ -33,6 +33,12 @@ let master: GainNode | null = null;
 let unlocked = false;
 
 const COMPRESSOR_TRIM = 10 ** (-2.81 / 20);
+/**
+ * The whole mix, lifted (+12 dB) into the compressor: the sounds are designed soft relative to each other, and at their
+ * own level plain speakers lost them. Measured at the speakers at the default volume: the indoor bed about -32 dBFS RMS,
+ * a voice or a chime peaking around -15, the gong near the top (the compressor and the limiter round it off).
+ */
+const MAKEUP = 4;
 
 const masterLevel = () => (prefs.muted ? 0 : sliderGain(prefs.volume));
 
@@ -46,17 +52,26 @@ export function audio(): { ctx: AudioContext; out: GainNode } | null {
       ctx = new AC();
       master = ctx.createGain();
       master.gain.value = masterLevel();
-      // Gentle: it only touches the loudest moments (many sounds at once), so single sounds are unchanged.
+      const lift = ctx.createGain();
+      lift.gain.value = MAKEUP;
+      // It only touches the loudest moments (the gong, many sounds at once), so the soft ones come through unchanged.
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -12;
-      comp.knee.value = 12;
-      comp.ratio.value = 4;
-      comp.attack.value = 0.005;
-      comp.release.value = 0.25;
-      // The compressor adds its own makeup gain (+2.8 dB for these settings, measured in Chromium): take it back off.
+      comp.threshold.value = -14;
+      comp.knee.value = 10;
+      comp.ratio.value = 6;
+      comp.attack.value = 0.004;
+      comp.release.value = 0.3;
+      // The compressor adds its own makeup gain (about +2.8 dB, measured in Chromium): take it back off.
       const trim = ctx.createGain();
       trim.gain.value = COMPRESSOR_TRIM;
-      master.connect(comp).connect(trim).connect(ctx.destination);
+      // A last, fast limiter, so nothing reaches the speakers hard enough to clip.
+      const limit = ctx.createDynamicsCompressor();
+      limit.threshold.value = -2;
+      limit.knee.value = 0;
+      limit.ratio.value = 20;
+      limit.attack.value = 0.001;
+      limit.release.value = 0.12;
+      master.connect(lift).connect(comp).connect(trim).connect(limit).connect(ctx.destination);
       writeListener();
     }
     if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
@@ -100,9 +115,9 @@ function glide(gain: GainNode, level: number) {
 }
 
 export function setAudioPrefs(patch: Partial<AudioPrefs>) {
-  prefs = parseAudioPrefs(JSON.stringify({ ...prefs, ...patch, volume: Math.max(0, Math.min(100, Number(patch.volume ?? prefs.volume))) }));
+  prefs = parseAudioPrefs(serializeAudioPrefs({ ...prefs, ...patch, volume: Math.max(0, Math.min(100, Number(patch.volume ?? prefs.volume))) }));
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    localStorage.setItem(PREFS_KEY, serializeAudioPrefs(prefs));
   } catch {
     // storage may be unavailable (private mode); the setting just won't be remembered
   }
@@ -209,9 +224,9 @@ export const typingLog: SfxRecord[] = [];
  * Records a sound in window.__mmSfx (the last 50). tone() and noise() call it themselves; long-lived loops call it
  * when they start. `peak` is the sound's level before distance; returns the record so `played` can be set later.
  */
-export function recordSfx(name: string, { group, pos, pan = 0, peak, played }: { group?: SoundGroup; pos?: Vec3; pan?: number; peak: number; played?: boolean }, log: SfxRecord[] = probe) {
+export function recordSfx(name: string, { group, pos, pan = 0, peak, played, reach = 'room' }: { group?: SoundGroup; pos?: Vec3; pan?: number; peak: number; played?: boolean; reach?: Reach }, log: SfxRecord[] = probe) {
   const d = pos ? distance(ear, pos) : 0;
-  const atDistance = !pos ? 1 : audible(d) ? distanceGain(d) : 0;
+  const atDistance = !pos ? 1 : audible(d, reach) ? distanceGain(d, reach) : 0;
   const rec: SfxRecord = {
     name,
     group: group ?? null,
@@ -270,14 +285,14 @@ if (typeof window !== 'undefined') {
 
 // ---------- routing (exported for long-lived loops that manage their own nodes) ----------
 
-/** A PannerNode with the office's distance model, placed at `pos`. Connect it to output(). */
-export function createPanner(c: BaseAudioContext, pos: Vec3) {
+/** A PannerNode with the office's distance model for `reach` (sfxMix.ts), placed at `pos`. Connect it to output(). */
+export function createPanner(c: BaseAudioContext, pos: Vec3, reach: Reach = 'room') {
   const p = c.createPanner();
   p.panningModel = 'equalpower';
   p.distanceModel = 'inverse';
-  p.refDistance = REF_DISTANCE;
-  p.rolloffFactor = ROLLOFF;
-  p.maxDistance = MAX_DISTANCE;
+  p.refDistance = REACH[reach].ref;
+  p.rolloffFactor = REACH[reach].rolloff;
+  p.maxDistance = REACH[reach].max;
   setPannerPosition(p, pos.x, pos.y, pos.z);
   return p;
 }
@@ -311,16 +326,18 @@ export interface PlaceOpts {
   pos?: Vec3;
   /** A fixed stereo position, -1 (left) to 1 (right), for sounds without `pos` (your own feet). */
   pan?: number;
+  /** How far a sound at `pos` carries (sfxMix.ts REACH; default 'room', culled past ~16 m). */
+  reach?: Reach;
   /** Part of a sound already in __mmSfx (recordSfx): one entry for a sound made of several parts. */
   into?: SfxRecord;
 }
 
 /** Records a sound for the probe and decides whether it plays: where to connect it and its loudness for the voice cap, or null. */
-function place(kind: string, { name, group, pos, pan, into }: PlaceOpts, peak: number): { a: { ctx: AudioContext; out: GainNode }; dest: AudioNode; loud: number } | null {
-  const rec = into ?? recordSfx(name ?? kind, { group, pos, pan, peak });
+function place(kind: string, { name, group, pos, pan, into, reach = 'room' }: PlaceOpts, peak: number): { a: { ctx: AudioContext; out: GainNode }; dest: AudioNode; loud: number } | null {
+  const rec = into ?? recordSfx(name ?? kind, { group, pos, pan, peak, reach });
   const d = pos ? distance(ear, pos) : 0;
-  if (pos && !audible(d)) return null;
-  const loud = peak * (pos ? distanceGain(d) : 1);
+  if (pos && !audible(d, reach)) return null;
+  const loud = peak * (pos ? distanceGain(d, reach) : 1);
   const a = audio();
   if (!a) return null;
 
@@ -343,7 +360,7 @@ function place(kind: string, { name, group, pos, pan, into }: PlaceOpts, peak: n
   let dest: AudioNode = a.out;
   try {
     if (pos) {
-      const p = createPanner(a.ctx, pos);
+      const p = createPanner(a.ctx, pos, reach);
       p.connect(dest);
       dest = p;
     } else if (pan && a.ctx.createStereoPanner) {
@@ -483,39 +500,47 @@ export function doorSlide(pos: Vec3, opening: boolean) {
 
 let lastGong = -Infinity;
 
-// A gong's inharmonic partials over its ~92 Hz fundamental: [ratio, peak, seconds to fade out]. The low ones ring
+// A gong's inharmonic partials over its deep ~72 Hz fundamental: [ratio, peak, seconds to fade out]. The low ones ring
 // longest; the ratios are off whole numbers, which is what makes it a gong rather than a bell or a chord.
-const GONG_F0 = 92;
+const GONG_F0 = 72;
 const GONG_PARTIALS: [number, number, number][] = [
-  [1.52, 0.09, 5],
-  [2.03, 0.08, 4.6],
-  [2.74, 0.065, 4],
-  [3.43, 0.05, 3.4],
-  [4.18, 0.04, 2.9],
-  [5.4, 0.028, 2.3],
-  [6.79, 0.02, 1.9],
+  [1.52, 0.13, 7],
+  [2.03, 0.12, 6.5],
+  [2.74, 0.1, 5.6],
+  [3.43, 0.09, 4.8],
+  // the partials small speakers can play (300-900 Hz) carry the strike there: stronger than a real gong's
+  [4.18, 0.1, 4.4],
+  [5.4, 0.085, 3.8],
+  [6.79, 0.07, 3.2],
+  [8.21, 0.05, 2.6],
+  [10.2, 0.032, 2],
+  [12.6, 0.02, 1.6],
 ];
 
 /**
- * The merge gong: a soft mallet thud, a long low boom with a slow beat, inharmonic partials and a shimmer that swells
- * in after the hit and rings for ~6 s. The loudest sound in the office (its peaks add up to under 1, and the
- * compressor catches the rest). Without a place, so it carries across the floor. At most one a second.
+ * The giant merge gong, from its disc at `pos` (all round without one): a padded mallet's thud, a deep boom (a triangle,
+ * so small speakers still hear its overtones, a near twin beating slowly against it and a sub-octave under them),
+ * inharmonic partials, and a shimmer that swells in after the hit; it rings for about 8 s. The loudest sound in the
+ * office (the compressor rounds it off), heard across the whole floor ('floor' reach). At most one a second.
  */
-export function gong() {
+export function gong(pos?: Vec3) {
   if (performance.now() - lastGong < 1000) return;
   lastGong = performance.now();
-  const o = { name: 'gong', group: 'room' } as const;
+  const into = recordSfx('gong', { group: 'room', pos, peak: 0.6, reach: 'floor' });
+  const o = { group: 'room', pos, reach: 'floor', into } as const;
   // the padded mallet: a low thud and a dull puff, no click
-  tone({ ...o, freq: 150, to: 62, dur: 0.35, peak: 0.12, attack: 0.004 });
-  noise({ ...o, dur: 0.14, peak: 0.07, filter: 'lowpass', freq: 900, to: 180, attack: 0.003 });
-  // the boom: the fundamental (a triangle, so small speakers still hear its overtones) and a near twin that beats with it
-  tone({ ...o, freq: GONG_F0, type: 'triangle', dur: 6.5, peak: 0.2, attack: 0.02 });
-  tone({ ...o, freq: GONG_F0 * 1.008, dur: 6, peak: 0.08, attack: 0.04 });
+  tone({ ...o, freq: 160, to: 58, dur: 0.4, peak: 0.2, attack: 0.004 });
+  noise({ ...o, dur: 0.18, peak: 0.12, filter: 'lowpass', freq: 1000, to: 200, attack: 0.003 });
+  // the boom
+  tone({ ...o, freq: GONG_F0, type: 'triangle', dur: 8, peak: 0.3, attack: 0.02 });
+  tone({ ...o, freq: GONG_F0 * 1.006, dur: 7.5, peak: 0.14, attack: 0.04 });
+  tone({ ...o, freq: GONG_F0 / 2, dur: 5, peak: 0.12, attack: 0.03 });
   for (const [ratio, peak, dur] of GONG_PARTIALS) tone({ ...o, freq: GONG_F0 * ratio, dur, peak, attack: 0.015 });
   // the shimmer: bright partials and a hiss that bloom in after the hit, the way a struck gong swells
-  tone({ ...o, freq: GONG_F0 * 8.9, type: 'triangle', at: 0.05, dur: 4, peak: 0.016, attack: 0.9 });
-  tone({ ...o, freq: GONG_F0 * 11.7, at: 0.05, dur: 3.5, peak: 0.012, attack: 1.1 });
-  noise({ ...o, at: 0.05, dur: 4.5, peak: 0.028, filter: 'bandpass', freq: 1800, to: 3200, q: 1.5, attack: 1.2 });
+  tone({ ...o, freq: GONG_F0 * 8.9, type: 'triangle', at: 0.05, dur: 5.5, peak: 0.045, attack: 0.9 });
+  tone({ ...o, freq: GONG_F0 * 11.7, at: 0.05, dur: 5, peak: 0.032, attack: 1.1 });
+  tone({ ...o, freq: GONG_F0 * 14.3, at: 0.1, dur: 4.5, peak: 0.02, attack: 1.4 });
+  noise({ ...o, at: 0.05, dur: 6, peak: 0.06, filter: 'bandpass', freq: 1800, to: 3600, q: 1.5, attack: 1.4 });
 }
 
 /** A burst of confetti at `pos`: a party popper's pop and the paper fluttering down. New in Marshmallow. */

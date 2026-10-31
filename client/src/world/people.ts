@@ -49,11 +49,20 @@ export interface Saying {
   until?: number;
 }
 
+const sayListeners = new Set<(id: string, text: string | null) => void>();
+
+/** Hears every bubble as it goes up (its text) or comes down (null): ui/voices.ts says them out loud. */
+export function onSay(fn: (id: string, text: string | null) => void) {
+  sayListeners.add(fn);
+  return () => void sayListeners.delete(fn);
+}
+
 /** Shows a speech bubble over someone (null hides it), for `seconds` or until hidden. Character.tsx draws it. */
 export function say(id: string, text: string | null, seconds?: number) {
   const at = performance.now();
   if (text) said.set(id, { text, at, until: seconds ? at + seconds * 1000 : undefined });
   else said.delete(id);
+  for (const fn of sayListeners) fn(id, text);
 }
 
 /** What someone is saying now, if anything. */

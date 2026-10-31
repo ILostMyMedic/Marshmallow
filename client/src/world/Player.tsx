@@ -186,7 +186,8 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__mmPlayer = {
       get at() {
-        return { x: pos.current.x, z: pos.current.z, yaw: look.current.yaw, floor, person: useView.getState().person };
+        const v = useView.getState();
+        return { x: pos.current.x, z: pos.current.z, yaw: look.current.yaw, floor, person: v.person, mode: v.mode, overlay: v.overlay?.kind ?? null };
       },
       place(x: number, z: number, yawDeg = 0, pitchDeg = -3) {
         pos.current = { x, z };
@@ -245,7 +246,7 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       look.current.pitch = Math.max(third ? BEHIND.minPitch : -1.35, Math.min(third ? BEHIND.maxPitch : 1.35, look.current.pitch - d[1] * k * (invertY ? -1 : 1)));
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTyping(e)) return;
+      if (isTyping(e) || e.defaultPrevented) return; // handled already: the Esc that closed a panel (Panel.tsx)
       const view = useView.getState();
       if (view.overlay) return;
       keys.current.add(e.code);

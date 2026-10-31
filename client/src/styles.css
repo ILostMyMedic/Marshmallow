@@ -998,3 +998,1563 @@ button.link {
 .sound-toggle.muted {
   background: rgba(255, 236, 236, 0.92);
 }
+
+/* the office's buttons (ui/HUD.tsx OfficeBar): under the sound button, top right */
+.office-bar {
+  position: absolute;
+  top: 96px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  z-index: 4;
+}
+
+.office-bar button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  border: 2px solid #1f1d2b;
+  background: rgba(255, 253, 245, 0.92);
+  box-shadow: 0 2px 0 #1f1d2b;
+  font: 600 0.9rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  color: #1f1d2b;
+  cursor: pointer;
+}
+
+.office-bar button:hover {
+  background: #ffe8a3;
+}
+
+.office-bar kbd {
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1.5px solid #1f1d2b;
+  background: #fffdf5;
+  font: 600 0.75rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.office-badge {
+  animation: office-badge-in 0.5s ease-out;
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  border: 2px solid #1f1d2b;
+  background: #ef476f;
+  color: #ffffff;
+  font: 700 0.75rem/16px Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+}
+
+/* the help screen (ui/HelpPanel.tsx) */
+.help-group h3 {
+  margin: 12px 0 6px;
+  font-size: 1rem;
+}
+
+.help-keys {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.help-row {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.help-row dt {
+  text-align: right;
+}
+
+.help-row dd {
+  margin: 0;
+}
+
+.help-row kbd {
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1.5px solid #1f1d2b;
+  background: #fffdf5;
+  box-shadow: 0 1.5px 0 #1f1d2b;
+  font: 600 0.82rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+/* the office's toasts (ui/Toasts.tsx): stacked bottom left, newest at the bottom */
+.toasts {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: min(380px, calc(100vw - 32px));
+  z-index: 12;
+}
+
+.toast {
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 2px solid #1f1d2b;
+  border-left-width: 6px;
+  background: #fffdf5;
+  box-shadow: 0 2px 0 #1f1d2b;
+  color: #1f1d2b;
+  font: 500 0.88rem/1.3 Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast-good {
+  border-left-color: #2dc653;
+}
+
+.toast-info {
+  border-left-color: #4cc9f0;
+}
+
+.toast-warn {
+  border-left-color: #ff9f1c;
+}
+
+.toast-error {
+  border-left-color: #ef476f;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+/* ---------- the worker panel and the phone (ui/WorkerPanel.tsx, ui/Phone.tsx, ui/MessageBox.tsx) ---------- */
+
+textarea.msg-box {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box; /* MessageBox sets its height from scrollHeight, padding and border included */
+  padding: 7px 10px;
+  border: 2px solid #1f1d2b;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f1d2b;
+  font: 0.9rem/1.35 system-ui, sans-serif;
+  max-height: calc(6 * 1.35em + 18px);
+  resize: none;
+  overflow-y: auto;
+}
+
+textarea.msg-box:disabled {
+  background: #f1ece0;
+  color: #5c6078;
+}
+
+.wp-btn,
+.phone-send {
+  flex: none;
+  padding: 5px 12px;
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #fffdf5;
+  box-shadow: 0 2px 0 #1f1d2b;
+  color: #1f1d2b;
+  font: 600 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.wp-btn:disabled,
+.phone-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wp-btn-go,
+.phone-send {
+  background: #ffd166;
+}
+
+.wp-btn-bad {
+  background: #ffd6dc;
+}
+
+.wp-btn-ghost {
+  box-shadow: none;
+}
+
+.wp-muted,
+.phone-muted {
+  color: #5c6078;
+}
+
+.wp-error,
+.phone-error {
+  margin: 6px 0 0;
+  color: #c0392b;
+  font-size: 0.85rem;
+}
+
+.wp-status {
+  padding: 1px 9px;
+  border-radius: 999px;
+  border: 1.5px solid #1f1d2b;
+  background: #ece4d4;
+  font: 600 0.78rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  vertical-align: middle;
+}
+
+.wp-status-working,
+.wp-status-preparing {
+  background: #cfe3ff;
+}
+
+.wp-status-done {
+  background: #d3f5d9;
+}
+
+.wp-status-error {
+  background: #ffd6dc;
+}
+
+.wp-status-stopped {
+  background: #ffe3b3;
+}
+
+.wp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+}
+
+.wp-meta a {
+  color: #3a56d4;
+}
+
+.wp-meta code {
+  padding: 0 5px;
+  border-radius: 5px;
+  background: #ece4d4;
+  font-size: 0.8rem;
+}
+
+.wp-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1.5px solid #c9bfa9;
+  background: #ffffff;
+  color: #3d405b;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.wp-chip-good {
+  border-color: #2dc653;
+  background: #e3fbe7;
+}
+
+.wp-signin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: 2px solid #1f1d2b;
+  border-radius: 12px;
+  background: #fff3d6;
+  font-size: 0.88rem;
+}
+
+.wp-signin > span {
+  flex: 1;
+}
+
+.wp-message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.wp-message .wp-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.wp-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px solid #ece4d4;
+}
+
+.wp-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #5c6078;
+}
+
+.wp-field input,
+.wp-field select {
+  padding: 4px 8px;
+  border: 2px solid #1f1d2b;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f1d2b;
+  font: 0.85rem system-ui, sans-serif;
+}
+
+.wp-model {
+  width: 190px;
+}
+
+.wp-confirm {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 2px solid #1f1d2b;
+  border-radius: 12px;
+  background: #ffe0e6;
+  font-size: 0.88rem;
+}
+
+.wp-confirm > span {
+  flex: 1;
+  min-width: 240px;
+}
+
+.wp-setup .wp-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* in the panel the terminal fills its box (the debug page keeps its fixed height) */
+.panel-terminal .live-term {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-radius: 0;
+}
+
+.panel-terminal .live-term-screen {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* the phone: bottom right of the view, a bezel round a paper screen, tabs under it */
+.phone-backdrop {
+  place-items: end end;
+  padding: 16px 24px;
+  background: rgba(31, 29, 43, 0.22);
+}
+
+.phone {
+  width: min(390px, calc(100vw - 32px));
+  height: min(740px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 10px 10px 8px;
+  border: 4px solid #1f1d2b;
+  border-radius: 38px;
+  background: #23263a;
+  box-shadow:
+    0 8px 0 #1f1d2b,
+    inset 0 0 0 3px #3b3f5c;
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+  animation: phone-up 0.22s ease-out;
+}
+
+@keyframes phone-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+.phone-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 16px 8px;
+  color: #e9e9f5;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.phone-notch {
+  width: 90px;
+  height: 18px;
+  border-radius: 999px;
+  background: #15151f;
+}
+
+.phone-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 26px 26px 12px 12px;
+  background: #fffdf5;
+  color: #1f1d2b;
+}
+
+.phone-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 4px 2px;
+}
+
+.phone-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #b8bbd6;
+  font: 600 0.78rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.phone-tab > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-tab-on {
+  background: #3b3f5c;
+  color: #ffffff;
+}
+
+.phone-tab-icon {
+  position: relative;
+  font-size: 1.3rem;
+}
+
+.phone-badge {
+  position: absolute;
+  top: -6px;
+  right: -14px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  border: 2px solid #1f1d2b;
+  background: #ef476f;
+  color: #ffffff;
+  font: 700 0.65rem/14px Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+}
+
+.phone-hint {
+  padding-top: 4px;
+  color: #8e92b3;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.phone-hint kbd {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #fffdf5;
+  color: #1f1d2b;
+  font: 600 0.7rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.phone-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+.phone-h {
+  margin: 12px 2px 8px;
+  font-size: 1rem;
+}
+
+.phone-h:first-child {
+  margin-top: 0;
+}
+
+.phone-empty {
+  padding: 8px 6px;
+  color: #5c6078;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.phone-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.phone-link {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  color: #3a56d4;
+  font: 600 0.82rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.phone-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.phone-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 2px solid #ece4d4;
+  background: #ffffff;
+  font-size: 0.9rem;
+}
+
+.phone-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid #1f1d2b;
+  background: #9b5de5;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.phone-busy {
+  color: #d9480f;
+  font-weight: 600;
+}
+
+.phone-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: #f4f1ea;
+}
+
+.phone-row {
+  display: flex;
+}
+
+.phone-row-me {
+  justify-content: flex-end;
+}
+
+.phone-bubble {
+  max-width: 86%;
+  padding: 7px 11px 5px;
+  border: 2px solid #1f1d2b;
+  border-radius: 16px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.phone-bubble-them {
+  background: #ffffff;
+  border-bottom-left-radius: 4px;
+}
+
+.phone-bubble-me {
+  background: #ffd6a5;
+  border-bottom-right-radius: 4px;
+}
+
+.phone-bubble-from {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #5c6078;
+}
+
+.phone-bubble-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: system-ui, sans-serif;
+}
+
+.phone-bubble-time {
+  margin-top: 2px;
+  color: #5c6078;
+  font-size: 0.65rem;
+  text-align: right;
+}
+
+.phone-typing {
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.phone-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5c6078;
+  animation: phone-typing 1.2s infinite;
+}
+
+.phone-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.phone-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes phone-typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.phone-quick {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 10px 0;
+  background: #ffffff;
+}
+
+.phone-chip {
+  flex: none;
+  padding: 4px 10px;
+  border: 1.5px solid rgba(31, 29, 43, 0.3);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1f1d2b;
+  font: 600 0.75rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.phone-chip:hover {
+  border-color: #1f1d2b;
+}
+
+.phone-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  background: #ffffff;
+}
+
+.phone-chat .phone-error {
+  margin: 0;
+  padding: 0 12px 8px;
+  background: #ffffff;
+}
+
+.phone-hire {
+  padding: 12px;
+  background: #ffffff;
+  border-top: 2px solid #ece4d4;
+  font-size: 0.88rem;
+}
+
+.phone-hire p {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.phone-card {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 2px solid #1f1d2b;
+  border-radius: 14px;
+  background: #ffffff;
+  font-size: 0.85rem;
+}
+
+.phone-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.phone-quote {
+  margin: 6px 0 8px;
+  padding: 6px 10px;
+  border-left: 4px solid #ffd166;
+  background: #fffaf0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: system-ui, sans-serif;
+}
+
+.phone-input-card {
+  padding: 0 0 6px;
+}
+
+.phone-answer {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.phone-notices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phone-notices li {
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: #f4f1ea;
+  font-size: 0.85rem;
+}
+
+/* ---------- the manager's console and the first-run setup (ui/ManagerConsole.tsx, ui/console/, ui/SetupWizard.tsx) ---------- */
+
+.console {
+  color-scheme: light; /* the panel is paper in either theme, so its inputs are too */
+  font-size: 0.92rem;
+}
+
+.console a {
+  color: #2b5e9e;
+}
+
+.console code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #f4f1ea;
+  font-size: 0.82rem;
+}
+
+.console input:not([type="checkbox"]):not([type="radio"]),
+.console select,
+.console textarea {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 5px 9px;
+  border: 2px solid #c9c0ae;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f1d2b;
+  font: 0.9rem system-ui, sans-serif;
+}
+
+.console input:focus-visible,
+.console select:focus-visible,
+.console textarea:focus-visible {
+  outline: none;
+  border-color: #1f1d2b;
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.7);
+}
+
+.console input[aria-invalid="true"] {
+  border-color: #d9534f;
+}
+
+.console input[type="number"] {
+  width: 9ch;
+}
+
+.console textarea {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  resize: vertical;
+}
+
+.console-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.console-tab {
+  padding: 6px 14px;
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1f1d2b;
+  font: 600 0.95rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.console-tab:hover {
+  background: #fff3d6;
+}
+
+.console-tab.on {
+  background: #ffd166;
+  box-shadow: 0 2px 0 #1f1d2b;
+}
+
+.console-count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ef476f;
+  color: #ffffff;
+  font-size: 0.75rem;
+}
+
+/* a refused command: it stays in sight while the tab scrolls */
+.console-problem {
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 6px 12px;
+  border: 2px solid #d9534f;
+  border-radius: 12px;
+  background: #ffe0e6;
+  color: #7a1f2b;
+}
+
+.console-problem span {
+  flex: 1;
+}
+
+.console-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.console-span {
+  grid-column: 1 / -1;
+}
+
+.console-card {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 2px solid #1f1d2b;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.console-grid > .console-card {
+  margin: 0;
+}
+
+.console-floor {
+  border-left-width: 8px;
+}
+
+.console-floor.on {
+  box-shadow: 0 0 0 3px #ffd166;
+}
+
+.console-ceo {
+  border-left: 8px solid #9b5de5;
+}
+
+.console-h {
+  margin: 0 0 8px;
+  font: 600 1.02rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.console-h4 {
+  margin: 12px 0 6px;
+  font-size: 0.9rem;
+  color: #3d405b;
+}
+
+.console-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.console-row.wrap {
+  flex-wrap: wrap;
+}
+
+.console-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.console-hint {
+  color: #5c6078;
+  font-size: 0.85rem;
+}
+
+.console-bad {
+  margin: 4px 0;
+  color: #b3261e;
+  font-size: 0.85rem;
+}
+
+.console-good {
+  color: #1f7a3a;
+  font-size: 0.85rem;
+}
+
+.console-meta {
+  color: #3d405b;
+  font-size: 0.85rem;
+}
+
+.console-line {
+  overflow: hidden;
+  color: #5c6078;
+  font: 0.8rem ui-monospace, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-btn {
+  flex: none;
+  padding: 4px 12px;
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #fffdf5;
+  box-shadow: 0 2px 0 #1f1d2b;
+  color: #1f1d2b;
+  font: 600 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.console-btn:hover:not(:disabled) {
+  background: #ffe8a3;
+}
+
+.console-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #1f1d2b;
+}
+
+.console-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.console-btn.good {
+  background: #ffd166;
+}
+
+.console-btn.bad {
+  background: #ffd6dc;
+}
+
+.console-btn.ghost {
+  background: transparent;
+  box-shadow: none;
+}
+
+.console-btn.small {
+  padding: 2px 10px;
+  font-size: 0.8rem;
+}
+
+.console-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.console-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.console-row .console-toggle {
+  margin: 0;
+}
+
+.console-toggle input {
+  margin-top: 3px;
+  accent-color: #f4a300;
+}
+
+.console-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 0 10px;
+}
+
+.console-field-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #3d405b;
+}
+
+.console-chip {
+  padding: 1px 8px;
+  border: 1.5px solid #c9c0ae;
+  border-radius: 999px;
+  background: #fffdf5;
+  color: #3d405b;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.console-chip.warn {
+  border-color: #e0a800;
+  background: #fff3d6;
+  color: #7a5600;
+}
+
+.console-status {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #eeeae0;
+  color: #3d405b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.console-status-preparing,
+.console-status-working {
+  background: #dbeafe;
+  color: #1d4f91;
+}
+
+.console-status-done {
+  background: #e3fbe7;
+  color: #1f7a3a;
+}
+
+.console-status-error {
+  background: #ffe0e6;
+  color: #a32035;
+}
+
+.console-status-stopped {
+  background: #fff3d6;
+  color: #7a5600;
+}
+
+.console-floor-no {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  font-size: 0.85rem;
+}
+
+.console-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid #1f1d2b;
+  border-radius: 50%;
+  background: #e6dcff;
+  font-size: 1.1rem;
+}
+
+.console-details {
+  margin: 8px 0 2px;
+}
+
+.console-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.console-pre {
+  max-height: 220px;
+  margin: 4px 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #f4f1ea;
+  font: 0.8rem ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
+.console-held {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #fff3d6;
+  font-size: 0.88rem;
+}
+
+.console-held ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.console-held li {
+  margin: 3px 0;
+}
+
+.console-done {
+  margin: 6px 0 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #e3fbe7;
+  font-size: 0.9rem;
+}
+
+.console-repos {
+  max-height: 300px;
+  margin: 8px 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 2px solid #ece4d4;
+  border-radius: 12px;
+}
+
+.console-repos li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #ece4d4;
+}
+
+.console-repos li:last-child {
+  border-bottom: none;
+}
+
+.console-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.console .console-size input[type="number"] {
+  width: 7ch;
+}
+
+.console-scroll {
+  overflow-x: auto;
+}
+
+.console-team {
+  font-size: 0.88rem;
+}
+
+.console-team th,
+.console-team td {
+  padding: 5px 6px;
+  border-bottom: 1px solid #ece4d4;
+  vertical-align: middle;
+}
+
+.console-team tr:last-child > * {
+  border-bottom: none;
+}
+
+.console-task {
+  max-width: 30ch;
+}
+
+.console-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.console-actions > * + * {
+  margin-left: 4px;
+}
+
+.console .console-model {
+  width: 24ch;
+}
+
+.console-questions,
+.console-answered {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.console-question {
+  margin: 8px 0;
+  padding: 4px 0 8px 12px;
+  border-left: 3px solid #2f7fd1;
+}
+
+.console-question p {
+  margin: 0;
+}
+
+.console-question blockquote {
+  margin: 4px 0 6px;
+  font-style: italic;
+}
+
+.console-answered li {
+  padding: 3px 0;
+  font-size: 0.85rem;
+}
+
+.console-floor-picks {
+  margin: 0 0 10px;
+}
+
+.console-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 4px;
+  border: 2px solid #c9c0ae;
+  border-radius: 999px;
+  background: #fffdf5;
+  color: #1f1d2b;
+  font: 600 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.console-pick.on {
+  background: #ffe8c2;
+  box-shadow: 0 2px 0 #1f1d2b;
+}
+
+.console-pick .console-floor-no {
+  width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+}
+
+/* the settings' Save: along the bottom of the panel while something isn't saved */
+.console-save {
+  position: sticky;
+  bottom: -16px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px -16px -16px;
+  padding: 10px 16px;
+  border-top: 2px solid #ece4d4;
+  background: #fffdf5;
+  font-weight: 600;
+}
+
+.wizard {
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+.wizard h2 {
+  margin: 4px 0 6px;
+  font: 700 1.5rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+}
+
+.wizard-steps {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.wizard-dot {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.wizard-dot.on {
+  width: 26px;
+  background: #ffd166;
+}
+
+.wizard-dot.done {
+  background: #1f1d2b;
+}
+
+.wizard-icon {
+  font-size: 2.6rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.wizard-tag {
+  margin: 0 0 14px;
+  color: #3d405b;
+  text-align: center;
+}
+
+.wizard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.wizard-list li {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #fff6dd;
+}
+
+.wizard kbd {
+  padding: 0 6px;
+  border: 1.5px solid #1f1d2b;
+  border-radius: 6px;
+  background: #fffdf5;
+  box-shadow: 0 1.5px 0 #1f1d2b;
+  font: 600 0.82rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.wizard-go {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #1f1d2b;
+  border-radius: 14px;
+  background: #ffd166;
+  box-shadow: 0 3px 0 #1f1d2b;
+  color: #1f1d2b;
+  font: 700 1.05rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.wizard-go:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.wizard-meta {
+  margin: 10px 0 0;
+  color: #5c6078;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.wizard-choice {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border: 2px solid #ece4d4;
+  border-radius: 12px;
+}
+
+.wizard-choice:has(input:checked) {
+  border-color: #1f1d2b;
+  background: #fff6dd;
+}
+
+.wizard-choice > span {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wizard-model {
+  margin: 2px 0;
+}
+
+.wizard-ends {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.wizard-nav {
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 2px solid #ece4d4;
+}
+
+/* the front desk's way to the console (ui/FrontDeskPanel.tsx) */
+.frontdesk-console {
+  display: block;
+  width: 100%;
+  margin: 6px 0 4px;
+  padding: 7px 10px;
+  border: 2px solid #1f1d2b;
+  border-radius: 14px;
+  background: #fffdf5;
+  box-shadow: 0 2px 0 #1f1d2b;
+  color: #1f1d2b;
+  font: 600 0.95rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.frontdesk-console:hover {
+  background: #ffe8a3;
+}
+
+.frontdesk-console kbd {
+  padding: 0 5px;
+  border: 1.5px solid #1f1d2b;
+  border-radius: 5px;
+  background: #ffffff;
+  font: 600 0.75rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.frontdesk-floors button.link {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: #2b5e9e;
+  font: inherit;
+  text-decoration: underline;
+}
+
+/* the board's new task (ui/KanbanView.tsx NewTask) */
+.kanban-plus {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  border: 1.5px solid #1f1d2b;
+  background: #ffd166;
+  color: #1f1d2b;
+  font: 600 0.78rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.kanban-plus:hover {
+  background: #ffdc85;
+}
+
+.kanban-new {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1.5px solid #1f1d2b;
+  background: #fffdf5;
+}
+
+.kanban-new input,
+.kanban-new textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 7px;
+  border-radius: 7px;
+  border: 1.5px solid #cbbfa6;
+  font: 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  resize: vertical;
+}
+
+.kanban-new-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.kanban-new-actions .link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #3a6ea5;
+  text-decoration: underline;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.kanban-add {
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1.5px solid #1f1d2b;
+  background: #ffd166;
+  font: 600 0.82rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.kanban-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.kanban-error {
+  margin: 0;
+  color: #c9184a;
+  font-size: 0.8rem;
+}
+
+/* the phone's button with something new on it: a ring round it, and the badge pops in (it remounts on each new count) */
+.office-bar button.office-news {
+  border-color: #ef476f;
+  box-shadow: 0 2px 0 #1f1d2b, 0 0 0 3px rgba(239, 71, 111, 0.28);
+}
+
+@keyframes office-badge-in {
+  0% {
+    transform: scale(0.4);
+  }
+  55% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

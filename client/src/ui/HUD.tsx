@@ -1,9 +1,12 @@
 // What sits on top of the 3D view: in first person the crosshair, what E does with what it's on, what you can do with
-// what you hold, and how to look round; in the overview, how to get about; a passing note (view.ts toast) either way.
+// what you hold, and how to look round; in the overview, how to get about; either way a passing note (view.ts toast)
+// and the office's buttons (the console, the phone with a count of what's new on it, help).
 // Adapted from cubefarm client/src/ui/HUD.tsx (MIT).
 import { useEffect, useState } from 'react';
 import { toggleWalk } from '../world/Player';
 import { sipLabel } from '../world/sip';
+import { togglePanel } from './OfficeKeys';
+import { usePhoneNews } from './Phone';
 import { PongHud } from './PongHud';
 import { TourCard } from './TourCard';
 import { useView, type Held } from '../world/view';
@@ -28,6 +31,39 @@ function Toast() {
   return <div className="hud-toast">{toast.text}</div>;
 }
 
+/** What's new on the phone, in words, for the button's tooltip. */
+function newsLine(n: ReturnType<typeof usePhoneNews>) {
+  const parts = [n.questions && `${n.questions} question${n.questions === 1 ? '' : 's'} waiting`, n.chat && `${n.chat} from the CEO`, n.notices && `${n.notices} notice${n.notices === 1 ? '' : 's'}`].filter(Boolean);
+  return parts.length ? `Your phone (P): ${parts.join(', ')}` : 'Your phone (P)';
+}
+
+/**
+ * The office's buttons, top right under the sound: the manager's console, the phone and help, each with its key. Always
+ * up, even while you look round, so the phone's badge (questions waiting, the CEO's texts, notices) is never out of
+ * sight; it pulses when something new comes in.
+ */
+function OfficeBar() {
+  const news = usePhoneNews();
+  return (
+    <nav className="office-bar">
+      <button onClick={() => togglePanel({ kind: 'console' })} title="The manager's console (O)">
+        🗂 Office <kbd>O</kbd>
+      </button>
+      <button className={news.total ? 'office-news' : undefined} onClick={() => togglePanel({ kind: 'phone' })} title={newsLine(news)}>
+        📱 Phone <kbd>P</kbd>
+        {news.total > 0 && (
+          <span key={news.total} className="office-badge">
+            {news.total}
+          </span>
+        )}
+      </button>
+      <button onClick={() => togglePanel({ kind: 'help' })} title="Help (H)">
+        ❔ Help <kbd>H</kbd>
+      </button>
+    </nav>
+  );
+}
+
 export function HUD() {
   const mode = useView((s) => s.mode);
   const focus = useView((s) => s.focus);
@@ -41,6 +77,7 @@ export function HUD() {
       <>
         <Toast />
         <TourCard />
+        <OfficeBar />
         <button className="hud-walk" onClick={toggleWalk}>
           🚶 Walk the floor <kbd>Tab</kbd>
         </button>
@@ -52,6 +89,7 @@ export function HUD() {
     <>
       <Toast />
       <TourCard />
+      <OfficeBar />
       {locked && !playing && <div className={`crosshair${focus ? ' on' : ''}`} />}
       {focus && locked && !playing && <div className="hud-use">E / Click: {focus.label}</div>}
       {playing && <PongHud />}

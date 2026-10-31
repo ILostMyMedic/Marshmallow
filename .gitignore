@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+*.log
+# The isolated home for development (MARSHMALLOW_HOME=./.mm-home) and CI's
+.mm-home
+.ci-mm-home
+# Written by an editor plugin, not part of the project
+ruvector.db

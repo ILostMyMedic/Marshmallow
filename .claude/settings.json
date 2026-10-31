@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "additionalDirectories": ["D:\\Projects\\cubefarm-main"],
+    "deny": ["Edit(//d/Projects/cubefarm-main/**)"]
+  }
+}

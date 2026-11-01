@@ -27,6 +27,9 @@ export const CITY = {
 /** Half a street: the road and the pavement on one side. */
 export const CORRIDOR_HALF = CITY.roadHalf + CITY.pavement;
 
+/** How far the streets sit below the plaza, whose top is just under the lobby's floor (so neither flickers through it). */
+export const STREET_Y = -0.16;
+
 /** Our building with its balconies on the west and east sides: what the gap is kept from. */
 export const HOME_FOOTPRINT = { halfX: BALCONY_OUT, halfZ: HALF_D };
 

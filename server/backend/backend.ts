@@ -5,6 +5,7 @@
 import type { GhRepoSummary, IssueInfo, PullInfo } from '../../shared/types.ts';
 import type { MachineProvider } from '../machines/machines.ts';
 import type { BoxApi } from '../machines/box/box.ts';
+import type { PreviewBackend } from '../previewRunner.ts';
 import type { BoxSignIn, KeptBoxCli, ReconnectedCli } from '../sessions/cliRunner.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
 import type { WorkerTerminal } from '../sessions/terminal.ts';
@@ -92,6 +93,8 @@ export interface Backend {
   startSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle;
   /** Box workers' cloud: Upstash, the manager's gh and git, and their CLIs in the Boxes. */
   cloud: CloudBackend;
+  /** Floors' previews: each floor's app run from a worktree of its own on the floor's port (server/previews.ts). */
+  previews: PreviewBackend;
 }
 
 /** What Box workers need from the world: the real one, or the demo's fakes. Adapted from cubefarm server/backend.ts (MIT). */

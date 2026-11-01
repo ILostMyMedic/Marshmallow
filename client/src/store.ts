@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { EMPTY_CLOUD } from '../../shared/cloud';
 import { EMPTY_WORLD, type WorldView } from '../../shared/worldEvents';
-import { DEFAULT_SETTINGS, EMPTY_RECORDS, isMoment, type CloudView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
+import { DEFAULT_SETTINGS, EMPTY_RECORDS, isMoment, type CloudView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type PreviewView, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
 const LOG_KEEP = 200;
@@ -28,6 +28,7 @@ export interface Office {
   records: RecordsView;
   look: PlayerLook | null;
   floorPlans: Record<string, FloorItem[]>;
+  previews: Record<string, PreviewView>; // by floor id (server/previews.ts)
   world: WorldView; // the world events on now
 }
 
@@ -48,6 +49,7 @@ export const EMPTY_OFFICE: Office = {
   records: EMPTY_RECORDS,
   look: null,
   floorPlans: {},
+  previews: {},
   world: EMPTY_WORLD,
 };
 
@@ -81,6 +83,7 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         records: d.records ?? EMPTY_RECORDS,
         look: d.look ?? null,
         floorPlans: d.floorPlans ?? {},
+        previews: d.previews ?? {},
         world: d.world ?? EMPTY_WORLD,
       };
     }
@@ -123,6 +126,8 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
       return { ...o, look: ev.look };
     case 'floorPlan':
       return { ...o, floorPlans: { ...o.floorPlans, [ev.floorId]: ev.items } };
+    case 'preview':
+      return { ...o, previews: { ...o.previews, [ev.preview.floorId]: ev.preview } };
     case 'world':
       return { ...o, world: ev.world };
   }

@@ -2662,3 +2662,291 @@ textarea.msg-box:disabled {
   cursor: pointer;
   font-weight: 600;
 }
+
+/* the app viewer (AppViewer.tsx): the toolbar, the address line, the stage with the app in its frame, its output */
+.app-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-pill {
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: #eeeae0;
+  color: #3d405b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.app-pill-preparing,
+.app-pill-installing,
+.app-pill-starting {
+  background: #fff3d6;
+  color: #7a5600;
+}
+
+.app-pill-running {
+  background: #e3fbe7;
+  color: #1f7a3a;
+}
+
+.app-pill-error {
+  background: #ffe0e6;
+  color: #a32035;
+}
+
+.app-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: min(78vh, 900px);
+}
+
+.app-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+a.console-btn {
+  text-decoration: none;
+}
+
+.app-seg {
+  display: inline-flex;
+  overflow: hidden;
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  box-shadow: 0 2px 0 #1f1d2b;
+}
+
+.app-seg-btn {
+  padding: 4px 12px;
+  border: 0;
+  border-left: 2px solid #1f1d2b;
+  background: #fffdf5;
+  color: #1f1d2b;
+  font: 600 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.app-seg-btn:first-child {
+  border-left: 0;
+}
+
+.app-seg-btn:hover:not(.on) {
+  background: #ffe8a3;
+}
+
+.app-seg-btn.on {
+  background: #ffd166;
+}
+
+.app-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 3px 4px 3px 14px;
+  border: 2px solid #1f1d2b;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.app-origin {
+  color: #5c6078;
+  font: 0.85rem ui-monospace, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.app-address input {
+  flex: 1;
+  min-width: 8ch;
+  padding: 3px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #1f1d2b;
+  font: 0.9rem ui-monospace, Consolas, monospace;
+}
+
+.app-address-problem {
+  flex-basis: 100%;
+  margin: 0 0 3px;
+}
+
+.app-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  border: 2px solid #1f1d2b;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.app-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #ffffff;
+}
+
+/* phone and tablet: the frame at that width, centred on a mat */
+.app-stage-device {
+  padding: 10px 0;
+  background: #e9e3d6;
+}
+
+.app-stage-device .app-frame {
+  max-width: calc(100% - 20px);
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px #1f1d2b;
+}
+
+.app-frame-hint {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  padding: 8px 12px;
+  border: 2px solid #1f1d2b;
+  border-radius: 10px;
+  background: #fff3d6;
+  font-size: 0.88rem;
+}
+
+.app-state {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  overflow: auto;
+  background: #fffdf5;
+  text-align: center;
+}
+
+.app-state h3 {
+  margin: 0;
+  font: 600 1.2rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.app-state-left {
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.app-state-icon {
+  font-size: 2.6rem;
+}
+
+.app-spin {
+  animation: app-spin 2.4s linear infinite;
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-steps {
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+  color: #8a8ea8;
+  text-align: left;
+}
+
+.app-steps li {
+  margin: 3px 0;
+}
+
+.app-steps li.done {
+  color: #1f7a3a;
+}
+
+.app-steps li.now {
+  color: #1f1d2b;
+  font-weight: 600;
+}
+
+.app-runs {
+  max-width: 62ch;
+  margin: 0;
+}
+
+.console-btn.app-start {
+  padding: 8px 22px;
+  font-size: 1.05rem;
+}
+
+.app-error {
+  max-height: 40%;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #ffe0e6;
+  color: #7a1f2b;
+  font: 0.82rem ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
+.app-output summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.app-log {
+  height: 120px;
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #1b1b29;
+  color: #e8e8f2;
+  font: 0.78rem/1.35 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.app-foot {
+  margin: 0;
+  color: #5c6078;
+  font-size: 0.8rem;
+}
+
+/* a floor's app on its card in the console (console/FloorsTab.tsx) */
+.console-preview {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #f4f1ea;
+}
+
+.console-preview .console-row {
+  margin: 4px 0;
+}
+
+.console-preview a {
+  font: 0.85rem ui-monospace, Consolas, monospace;
+}
+
+.console-preview input {
+  min-width: 0;
+}
+
+/* the app monitor's live look (world/AppMonitor.tsx): behind the canvas, seen through the hole it punches */
+.app-look {
+  z-index: -1;
+}

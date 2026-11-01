@@ -1,5 +1,6 @@
 // Folders on this computer: each floor's own checkout, and each worker's machine.
 //   <WORKSPACE_ROOT>/<owner>__<repo>/main      the floor's checkout: fetched, never worked in; machines borrow its objects
+//   <WORKSPACE_ROOT>/<owner>__<repo>/preview   a worktree of it where the floor's preview runs (server/previews.ts)
 //   <MACHINES_DIR>/<machine>/repos/<owner>__<repo>   the worker's own clone (no checkout of its own)
 //   <MACHINES_DIR>/<machine>/work/<owner>__<repo>    its worktree, where the worker's branches are checked out
 //   <MACHINES_DIR>/<machine>/tmp                     its temp folder
@@ -22,6 +23,9 @@ function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 
 const repoFolder = (fullName: string) => fullName.replace('/', '__');
 export const mainDir = (fullName: string) => path.join(WORKSPACE_ROOT, repoFolder(fullName), 'main');
+export const previewDir = (fullName: string) => path.join(WORKSPACE_ROOT, repoFolder(fullName), 'preview');
+/** The preview worktree's branch, in the floor's checkout only: nothing is ever committed or pushed from it. */
+const PREVIEW_BRANCH = 'mm/preview';
 
 async function exists(p: string) {
   return fs
@@ -183,6 +187,15 @@ async function setUpWorktree(clone: string, wt: string, fullName: string, base: 
   return wt;
 }
 
+/**
+ * The floor's preview worktree, beside its checkout and out of the workers' way (they work in clones of their own), on
+ * the default branch's latest commit (fetched first). Its ignored files (node_modules) stay between runs.
+ */
+export async function preparePreview(fullName: string, defaultBranch: string, note?: (text: string) => void): Promise<string> {
+  if (!(await exists(path.join(mainDir(fullName), '.git')))) await ensureClone(fullName);
+  return withLock(fullName, () => setUpWorktree(mainDir(fullName), previewDir(fullName), fullName, { defaultBranch }, PREVIEW_BRANCH, note));
+}
+
 // ---------- leftover processes ----------
 
 // Only these kinds of processes are stopped when walking up from a leftover to its (orphaned) launcher.
@@ -213,10 +226,11 @@ export function leftoversInDesk(listing: string, desk: string, keep: OfficeProce
 }
 
 /**
- * Stops what a worker left running: anything listening on its port or whose command line points into one of `dirs`,
- * plus the shell/node chain that launched it. Never the office's own processes: the walk up stops at them.
+ * Stops what a worker left running: anything listening on its port (null: leave the port alone) or whose command line
+ * points into one of `dirs`, plus the shell/node chain that launched it. Never the office's own processes: the walk up
+ * stops at them.
  */
-async function releaseDirs(dirs: string[], port: number, keep: OfficeProcesses): Promise<void> {
+async function releaseDirs(dirs: string[], port: number | null, keep: OfficeProcesses): Promise<void> {
   const spare = [process.pid, ...keep.pids];
   if (process.platform === 'win32') {
     const psList = (paths: string[]) =>
@@ -228,7 +242,7 @@ async function releaseDirs(dirs: string[], port: number, keep: OfficeProcesses):
 $ErrorActionPreference = 'SilentlyContinue'
 $spare = @(${spare.join(', ')})
 $seed = @()
-Get-NetTCPConnection -LocalPort ${port} -State Listen | ForEach-Object { $seed += [int]$_.OwningProcess }
+${port === null ? '' : `Get-NetTCPConnection -LocalPort ${port} -State Listen | ForEach-Object { $seed += [int]$_.OwningProcess }`}
 $desks = @(${psList(dirs)})
 $marks = @(${psList(keep.markers)})
 $all = Get-CimInstance Win32_Process
@@ -257,7 +271,7 @@ Write-Output $kill.Count`;
     await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeoutMs: 30_000 }).catch(() => undefined);
     return;
   }
-  const listening = await run('sh', ['-c', `lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null || true`]).catch(() => '');
+  const listening = port === null ? '' : await run('sh', ['-c', `lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null || true`]).catch(() => '');
   const listing = await run('ps', ['-A', '-ww', '-o', 'pid=,args=']).catch(() => '');
   const pids = new Set([...listening.split(/\s+/).map(Number), ...dirs.flatMap((d) => leftoversInDesk(listing, d, keep))]);
   for (const pid of pids) {
@@ -348,6 +362,14 @@ export function prepareMachineDesk(machine: string, fullName: string, base: Desk
 /** Stops what a worker left running: on their port, or started in their worktree. Not their temp folder's browser. */
 export function releaseMachine(machine: string, fullName: string, port: number, keep: OfficeProcesses = { pids: [], markers: [] }): Promise<void> {
   return releaseDirs([machineDesk(machine, fullName)], port, keep);
+}
+
+/**
+ * Stops what floors' previews left running in their worktrees, and with `port` whatever answers on it (only ever the
+ * port of a preview the office itself just ran: a port another program holds is never fought over).
+ */
+export function releasePreviews(fullNames: string[], port: number | null, keep: OfficeProcesses = { pids: [], markers: [] }): Promise<void> {
+  return releaseDirs(fullNames.map(previewDir), port, keep);
 }
 
 /** Deletes finished mm/issue-* and mm/qa-* branches in a machine's clone that its worktree doesn't have out and `keep` doesn't name. */

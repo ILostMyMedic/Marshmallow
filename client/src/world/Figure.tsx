@@ -2,7 +2,7 @@
 import { useLayoutEffect, type RefObject } from 'react';
 import type * as THREE from 'three';
 import { ACCENTS, BUILD_SHAPE, type Appearance } from './appearance';
-import { PARTS } from './characterParts';
+import { hairUnder, PARTS } from './characterParts';
 import { EYES, MORPHS, MORPH_AT, type FaceState } from './face';
 import { Piece } from './Batched';
 import { mix, shade } from './materials';
@@ -104,7 +104,7 @@ export function HeadParts({ look, busy, face }: { look: Appearance; busy: boolea
   const feminine = look.look === 'feminine';
   const skin = look.skin;
   const hair = look.hair === 'buzz' ? mix(look.hairColor, look.skin, 0.35) : look.hairColor;
-  const hairGeo = PARTS.hair[look.hair];
+  const hairGeo = hairUnder(look.headwear, look.hair);
   const facialGeo = PARTS.facialHair[look.facialHair];
   const glassesGeo = PARTS.glasses[look.glasses];
   const hatGeo = PARTS.headwear[look.headwear];

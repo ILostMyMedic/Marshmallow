@@ -1,13 +1,15 @@
-// The debug page: the CEO, every floor with its workers, queue and pull requests, the office's messages and the
-// latest moments. It stays on as the admin view once the game exists. In the demo it can also hire and let go of pretend
-// workers, and fake Claude's usage warning or limit (server/demoRoutes.ts).
+// The debug page: the CEO, the world events outside, every floor with its workers, queue and pull requests, the
+// office's messages and the latest moments. It stays on as the admin view once the game exists. In the demo it can also
+// hire and let go of pretend workers, and fake Claude's usage warning or limit (server/demoRoutes.ts).
 import { Fragment, useEffect, useState } from 'react';
 import { DAY_MODES, isBusy, type DayMode, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
 import { BOX_SIZE_INFO, BOX_SIZES } from '../../../shared/cloud';
 import { CLAUDE_MODELS } from '../../../shared/models';
+import { EVENTS, type EventId, type EventSide } from '../../../shared/worldEvents';
 import { command, floorPath, query } from '../api';
 import { qaKey, useStore } from '../store';
 import { activityIcon, momentText, taskText } from './describe';
+import { eventGroups, eventHint, logLine, nextPick, span, timeLeft, type WorldLogEntry } from './worldDebug';
 import { LiveTerminal } from '../ui/LiveTerminal';
 
 type Run = (method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown) => void;
@@ -38,6 +40,7 @@ export function DebugPage() {
         <span className={`pill ${connected ? 'pill-ok' : 'pill-bad'}`}>{connected ? 'Connected' : 'Reconnecting…'}</span>
         {demo && <span className="pill">DEMO MODE</span>}
         <a href="/">🏢 The office</a>
+        <a href="/lab">🧸 Character lab</a>
         {usage.state !== 'normal' && (
           <span className="pill pill-warn" title={usage.warning?.limit ?? undefined}>
             {usage.state === 'paused' ? '⛔ Paused' : '🐢 Pacing'}
@@ -71,6 +74,7 @@ export function DebugPage() {
         <>
           <CeoSection run={run} />
           <CloudSection run={run} />
+          <WorldSection run={run} />
         </>
       )}
       {!loaded ? null : floors.length === 0 ? (
@@ -101,6 +105,98 @@ function OfficeClockPicker({ run }: { run: Run }) {
         ))}
       </select>
     </label>
+  );
+}
+
+/** The clock, ticking every `ms`: for what counts down. */
+function useNow(ms: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(timer);
+  }, [ms]);
+  return now;
+}
+
+/**
+ * The world events outside, for every tab at once (server/worldRoutes.ts): start any of them now, on a side or either;
+ * what's on, with the time it has left, to end; when the director picks next, or soon; and what ran lately. The game's
+ * ?event= and window.__mmEvents do the same.
+ */
+function WorldSection({ run }: { run: Run }) {
+  const world = useStore((s) => s.world);
+  const connected = useStore((s) => s.connected);
+  const now = useNow(1000);
+  const [side, setSide] = useState<'either' | EventSide>('either');
+  const [log, setLog] = useState<WorldLogEntry[]>([]);
+  // what ran changes only as events start and end, or the director's next pick moves
+  useEffect(() => {
+    if (connected) query<WorldLogEntry[]>('/api/world/log').then(setLog, () => undefined);
+  }, [connected, world.running, world.nextAt]);
+  const trigger = (id: EventId) => run('POST', '/api/world/trigger', { event: id, side: side === 'either' ? undefined : side });
+  return (
+    <section>
+      <div className="floor-title">
+        <h2>World events</h2>
+        <label className="connect" title="Which side of the building: the sky's over that side, the street's down the street on that side">
+          side
+          <select value={side} onChange={(e) => setSide(e.target.value as 'either' | EventSide)}>
+            <option value="either">either</option>
+            <option value="west">west</option>
+            <option value="east">east</option>
+          </select>
+        </label>
+      </div>
+      {eventGroups().map((g) => (
+        <div key={g.title} className="floor-title" style={{ margin: '6px 0' }}>
+          <strong title={g.hint}>{g.title}</strong>
+          {g.events.map((e) => (
+            <button key={e.id} title={eventHint(e)} onClick={() => trigger(e.id)}>
+              {e.label}
+            </button>
+          ))}
+        </div>
+      ))}
+      <h3>On now</h3>
+      {world.running.length === 0 ? (
+        <p className="muted">Nothing outside right now.</p>
+      ) : (
+        <ul className="moments">
+          {world.running.map((r) => (
+            <li key={r.key}>
+              {EVENTS[r.id].label}{' '}
+              <span className="muted">
+                · {r.side} side · {span(timeLeft(r, now))} left{r.forced ? ' · on demand' : ''}
+              </span>{' '}
+              <button className="link" onClick={() => run('POST', '/api/world/end', { event: r.id })}>
+                End
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="connect">
+        Next pick {nextPick(world.nextAt, now)}
+        <button title="Have the director pick the next event 5 seconds from now" onClick={() => run('POST', '/api/world/soon', { seconds: 5 })}>
+          Soon
+        </button>
+        <button disabled={!world.running.length} onClick={() => run('POST', '/api/world/end', {})}>
+          End all
+        </button>
+      </p>
+      {log.length > 0 && (
+        <>
+          <h3>Lately</h3>
+          <ul className="moments">
+            {log.slice(0, 8).map((e) => (
+              <li key={e.key}>
+                <span className="muted">{time(e.startedAt)}</span> {logLine(e, now)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
 

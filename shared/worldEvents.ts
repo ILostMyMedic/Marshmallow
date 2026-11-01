@@ -2,18 +2,18 @@
 // kaiju and the hurricane cut, and with them the weather, the day/night rules and Settings' frequency and calm mode;
 // one fixed pace instead, quick to the first event so a visit sees one.
 
-// World events outside: the catalogue (from an airliner crossing to a giant rubber duck floating past) and the director
-// that picks one every so often. Pure and seeded (no clock of its own: it's stepped with the seconds that passed), so
+// World events outside: the catalogue (from an airliner crossing to a giant rubber duck floating past, and down on the
+// street round the office a rock band's tour bus or a parade) and the director that picks one every so often. Pure and seeded (no clock of its own: it's stepped with the seconds that passed), so
 // the schedule is tested without a server. The office runs it (server/db/world.ts) for every tab at once; each tab
 // draws what's on (client/src/world/events/).
 
-export const EVENT_IDS = ['plane', 'helicopter', 'birds', 'balloon', 'blimp', 'skywriting', 'ufo', 'rainbow', 'duck', 'whale'] as const;
+export const EVENT_IDS = ['plane', 'helicopter', 'birds', 'balloon', 'blimp', 'skywriting', 'ufo', 'rainbow', 'duck', 'whale', 'rockbus', 'icecream', 'firetruck', 'foodtruck', 'parade'] as const;
 export type EventId = (typeof EVENT_IDS)[number];
 
 /** Everyday sights, fun ones, weird ones, and the absurd and rare. */
 export type Tier = 'everyday' | 'fun' | 'weird' | 'absurd';
 
-/** The side of the building an event is on: where the windows to watch it from are. */
+/** The side of the building an event is on: where the windows to watch it from are (for the street's, which street). */
 export type EventSide = 'west' | 'east';
 
 export interface EventDef {
@@ -28,9 +28,11 @@ export interface EventDef {
   seconds: number;
   /** The rare ones put a note over the view. */
   toast: boolean;
+  /** Down on the street beside the office rather than in the sky: one at a time, so two never meet. */
+  street: boolean;
 }
 
-const def = (id: EventId, label: string, tier: Tier, weight: number, seconds: number): EventDef => ({
+const def = (id: EventId, label: string, tier: Tier, weight: number, seconds: number, street = false): EventDef => ({
   id,
   label,
   tier,
@@ -38,6 +40,7 @@ const def = (id: EventId, label: string, tier: Tier, weight: number, seconds: nu
   weight,
   seconds,
   toast: tier === 'weird' || tier === 'absurd',
+  street,
 });
 
 export const EVENTS: Record<EventId, EventDef> = {
@@ -51,6 +54,12 @@ export const EVENTS: Record<EventId, EventDef> = {
   rainbow: def('rainbow', 'A rainbow', 'weird', 1, 70),
   duck: def('duck', 'A giant rubber duck floating past', 'absurd', 1, 75),
   whale: def('whale', 'A whale-shaped airship', 'absurd', 1, 85),
+  // the street's, the odd surprise: about a fifth of what happens (their times fit their routes, client/src/world/events/streetPath.ts)
+  rockbus: def('rockbus', 'A rock band playing on a tour bus', 'fun', 3, 77, true),
+  icecream: def('icecream', 'An ice cream truck with its jingle', 'everyday', 3, 78, true),
+  firetruck: def('firetruck', 'A fire engine racing by', 'everyday', 2, 29, true),
+  foodtruck: def('foodtruck', 'A food truck and its queue', 'everyday', 2, 104, true),
+  parade: def('parade', 'A parade with a giant marshmallow', 'weird', 1, 95, true),
 };
 
 const ALIASES: Record<string, EventId> = {
@@ -67,6 +76,18 @@ const ALIASES: Record<string, EventId> = {
   saucer: 'ufo',
   'rubber-duck': 'duck',
   'whale-airship': 'whale',
+  'rock-bus': 'rockbus',
+  'tour-bus': 'rockbus',
+  rock: 'rockbus',
+  'ice-cream': 'icecream',
+  'ice-cream-truck': 'icecream',
+  'fire-engine': 'firetruck',
+  'fire-truck': 'firetruck',
+  fire: 'firetruck',
+  'food-truck': 'foodtruck',
+  food: 'foodtruck',
+  'marching-band': 'parade',
+  marshmallow: 'parade',
 };
 
 /** An event's name as typed (`?event=duck`, __mmEvents.trigger('blimp')), or null when it isn't one. */
@@ -101,10 +122,15 @@ export const EMPTY_WORLD: WorldView = { running: [], nextAt: 0 };
 
 // ---------- what happens next ----------
 
-/** One event picked by weight (`roll` in [0, 1)), leaving out what's running and, while a big one runs, every big one. */
+/** Whether two events may not run at once: the same one, two big ones, or two on the street. */
+export const clashes = (a: EventId, b: EventId) => a === b || (EVENTS[a].big && EVENTS[b].big) || (EVENTS[a].street && EVENTS[b].street);
+
+/**
+ * One event picked by weight (`roll` in [0, 1)), leaving out what's running, every big one while a big one runs, and
+ * every street one while a street one does.
+ */
 export function pickEvent(running: readonly { id: EventId; big: boolean }[], roll: number): EventId | null {
-  const bigNow = running.some((r) => r.big);
-  const options = Object.values(EVENTS).filter((e) => !running.some((r) => r.id === e.id) && !(bigNow && e.big));
+  const options = Object.values(EVENTS).filter((e) => !running.some((r) => clashes(e.id, r.id)));
   const total = options.reduce((a, e) => a + e.weight, 0);
   if (total <= 0) return null;
   let r = roll * total;

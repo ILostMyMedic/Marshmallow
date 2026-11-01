@@ -44,6 +44,13 @@ export function homeProblem(home: string, cwd: string, demo: boolean): string | 
 }
 
 export const PORT = Number(process.env.MARSHMALLOW_PORT ?? 4600);
+/** Vite's port in development (vite.config.ts): a floor's preview never takes it. */
+export const CLIENT_PORT = Number(process.env.MARSHMALLOW_CLIENT_PORT || 5600);
+/**
+ * Floor previews run on this port + the floor's number (6601, 6602…), clear of the office (4600/5600), workers' dev
+ * servers (5200-5899) and cubefarm's ports. Moving it keeps a second office's previews clear of the first's.
+ */
+export const PREVIEW_PORT = Number(process.env.MARSHMALLOW_PREVIEW_PORT || 6600);
 // Workers run commands on this machine and there's no sign-in, so the server only takes connections from it.
 export const HOST = '127.0.0.1';
 export const VERSION: string = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '..', 'package.json'), 'utf8')).version;

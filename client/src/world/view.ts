@@ -11,7 +11,7 @@ export type ConsoleTab = 'floors' | 'team' | 'issues' | 'settings';
 
 /**
  * A panel over the view: a worker's panel (their terminal), a floor's board, the elevator's buttons, your look, the
- * front desk, the manager's console, the phone, the help screen, the first-run setup, or the trophies.
+ * front desk, the manager's console, the phone, the help screen, the first-run setup, the trophies, or a floor's running app.
  */
 export type Overlay =
   | { kind: 'terminal'; workerId: string }
@@ -23,9 +23,10 @@ export type Overlay =
   | { kind: 'phone' }
   | { kind: 'help' }
   | { kind: 'setup' }
-  | { kind: 'trophies' };
+  | { kind: 'trophies' }
+  | { kind: 'app'; floorId: string };
 
-const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk', 'console', 'phone', 'help', 'setup', 'trophies'] satisfies Overlay['kind'][];
+const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk', 'console', 'phone', 'help', 'setup', 'trophies', 'app'] satisfies Overlay['kind'][];
 
 /**
  * What E does with what's under the crosshair: open a panel, or do something in the room (actions.ts hands those to

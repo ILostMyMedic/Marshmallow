@@ -130,6 +130,8 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [x] **Roof terrace** on the top floor: lookouts over the city, billboards, a fireplace, deck chairs, a garden · L → `roof/`
 - [ ] **Weather**: rain, snow, or your real weather · M → `weather/`
 - [x] **World events**: planes, blimps and the odd surprise in the sky, and workers going to the windows to watch · M → `events/`
+- [x] **Street events**: surprises down on the street round the office, starting with a rock bus with a band playing on its roof; best seen from the lobby's windows, looking down from the floors and from the roof · M (new: not in cubefarm)
+- [x] **World events on the debug page**: trigger any of them now, see what's on and end it, bring the next pick forward, and the log of what ran · S (new)
 - [ ] **Holiday themes** · M → `themes/`
 - [ ] **Graphics tiers and post-processing** (bloom, ambient occlusion) · M → `gfx/`
 - [ ] **Instanced batching** for 10 floors of 15 workers · L → `batch.ts`
@@ -201,7 +203,7 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [ ] **Phone mini-games** (tetris, snake, pet) · M
 - [ ] **Tutorial** · M
 - [ ] **Mission control table**: throughput, lead time, cost · M → `server/metrics.ts`
-- [ ] **Floor previews**: run each floor's app and open it in the office · L → `server/previews.ts`
+- [x] **Floor previews**: run each floor's app (its default branch, from a worktree of its own, on a port kept for the floor) and open it in the office: a big app monitor on every floor, and E on it for the app viewer with the live app · L → `server/previews.ts`, `client/src/ui/AppViewer.tsx`
 - [ ] **PR theatre**: run a PR beside main · L
 - [ ] **Office doctor**: find and fix stuck work · M → `server/watchdog.ts`
 - [ ] **Activity ticker** · S → `server/ticker.ts`

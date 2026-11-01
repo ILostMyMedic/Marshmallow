@@ -80,4 +80,18 @@ export const MIGRATIONS: readonly Migration[] = [
       create index world_events_by_end on world_events (ends_at desc);
     `,
   },
+  {
+    id: 3,
+    name: 'floor previews',
+    sql: `
+      -- what the manager set for each floor's preview (null: the office decides); kept for a floor that leaves, as its
+      -- plan is. Whether a preview runs isn't kept: after a restart every preview is stopped.
+      create table preview_settings (
+        floor_id text primary key,
+        command text,
+        port integer,
+        updated_at timestamptz not null default now()
+      );
+    `,
+  },
 ];

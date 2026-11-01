@@ -334,6 +334,31 @@ export interface FloorItem {
 /** The manager's look in the game, as the client keeps it (client/src/world/appearance.ts); stored as it comes. */
 export type PlayerLook = Record<string, unknown>;
 
+// ---------- floor previews (server/previews.ts) ----------
+
+/** Where a floor's preview is: off, its worktree being refreshed, dependencies installing, the app coming up, up, or failed. */
+export type PreviewState = 'stopped' | 'preparing' | 'installing' | 'starting' | 'running' | 'error';
+
+/** What the manager set for a floor's preview; null leaves it to the office (the package.json's script, the floor's port). */
+export interface PreviewConfig {
+  command: string | null;
+  port: number | null;
+}
+
+/** A floor's app, run for the manager to check what the team shipped. */
+export interface PreviewView {
+  floorId: string;
+  state: PreviewState;
+  url: string | null; // where it answers (http://127.0.0.1:<port>), once it's up
+  port: number; // the port it runs on: the manager's, or the one kept for the floor
+  command: string | null; // what runs it: the manager's, or what the office found ("npm run dev"); null until found
+  config: PreviewConfig;
+  sha: string | null; // the commit it runs
+  startedAt: number | null;
+  error: string | null;
+  log: string[]; // the last lines of its output, oldest first
+}
+
 /** What a tab needs to draw everything, sent when it connects. */
 export interface Snapshot {
   version: string;
@@ -352,6 +377,7 @@ export interface Snapshot {
   look: PlayerLook | null;
   floorPlans: Record<string, FloorItem[]>; // by floor id
   world: WorldView; // the world events on now (shared/worldEvents.ts)
+  previews: Record<string, PreviewView>; // by floor id
 }
 
 /** Changes to the state: the snapshot with these folded in is what the server has. */
@@ -373,7 +399,8 @@ export type StateEvent =
   | { type: 'records'; records: RecordsView }
   | { type: 'look'; look: PlayerLook | null }
   | { type: 'floorPlan'; floorId: string; items: FloorItem[] }
-  | { type: 'world'; world: WorldView }; // a world event started or ended, or the next one moved
+  | { type: 'world'; world: WorldView } // a world event started or ended, or the next one moved
+  | { type: 'preview'; preview: PreviewView };
 
 /**
  * Things that happened, for the game's moments (arrivals, celebrations) and the debug page's feed. They change no

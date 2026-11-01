@@ -1,6 +1,6 @@
 // Adapted from cubefarm client/src/world/events/director.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { EVENT_IDS, EVENTS, FIRST, GAP, newDirector, parseEventId, parseEventParam, pickEvent, RETRY_SECONDS, roll, seeded, startRunning, stepDirector, type Director, type EventId } from './worldEvents.ts';
+import { clashes, EVENT_IDS, EVENTS, FIRST, GAP, newDirector, parseEventId, parseEventParam, pickEvent, RETRY_SECONDS, roll, seeded, startRunning, stepDirector, type Director, type EventId } from './worldEvents.ts';
 
 /** Runs a director for `minutes`, starting each event it picks; returns what started when. */
 function simulate(minutes: number, seed = 1, step = 1, d: Director = newDirector(seed)) {
@@ -12,8 +12,9 @@ function simulate(minutes: number, seed = 1, step = 1, d: Director = newDirector
       started.push({ id, at: d.clock });
       startRunning(d, ++key, id);
     }
-    // never two big ones at once
+    // never two big ones at once, nor two on the street
     expect(d.running.filter((r) => r.big).length).toBeLessThanOrEqual(1);
+    expect(d.running.filter((r) => EVENTS[r.id].street).length).toBeLessThanOrEqual(1);
   }
   return started;
 }
@@ -33,6 +34,29 @@ describe('the catalogue', () => {
     expect(parseEventParam('?event=Airliner')).toBe('plane');
     expect(parseEventParam('?event=kaiju')).toBeNull();
     expect(parseEventId(null)).toBeNull();
+    expect(parseEventParam('?event=rock_bus')).toBe('rockbus');
+    expect(parseEventParam('?event=ice cream')).toBe('icecream');
+    expect(parseEventParam('?event=fire-engine')).toBe('firetruck');
+    expect(parseEventParam('?event=marshmallow')).toBe('parade');
+  });
+
+  it('has a few events down on the street, the rock bus among them', () => {
+    const street = EVENT_IDS.filter((id) => EVENTS[id].street);
+    expect(street).toEqual(['rockbus', 'icecream', 'firetruck', 'foodtruck', 'parade']);
+    expect(EVENTS.plane.street).toBe(false);
+    // the rock bus draws a crowd at the windows; the parade is rare enough for a note too
+    expect(EVENTS.rockbus).toMatchObject({ tier: 'fun', big: true, toast: false, street: true });
+    expect(EVENTS.parade).toMatchObject({ tier: 'weird', big: true, toast: true, street: true });
+    for (const id of ['icecream', 'firetruck', 'foodtruck'] as const) expect(EVENTS[id]).toMatchObject({ tier: 'everyday', big: false, toast: false });
+  });
+
+  it('weights the street as the odd surprise, never crowding out the sky', () => {
+    const weight = (street: boolean) => Object.values(EVENTS).reduce((a, e) => a + (e.street === street ? e.weight : 0), 0);
+    const share = weight(true) / (weight(true) + weight(false));
+    expect(share).toBeGreaterThan(0.12);
+    expect(share).toBeLessThan(0.3);
+    expect(EVENTS.parade.weight).toBeLessThan(EVENTS.rockbus.weight);
+    expect(EVENTS.rockbus.weight).toBeLessThanOrEqual(EVENTS.blimp.weight);
   });
 });
 
@@ -45,6 +69,22 @@ describe('what happens next', () => {
     }
     for (let i = 0; i < 200; i++) expect(pickEvent([{ id: 'plane', big: false }], i / 200)).not.toBe('plane');
     expect(pickEvent(EVENT_IDS.map((id) => ({ id, big: EVENTS[id].big })), 0.5)).toBeNull();
+  });
+
+  it('never picks a second street event while one is on the street', () => {
+    for (let i = 0; i < 200; i++) {
+      const id = pickEvent([{ id: 'icecream', big: false }], i / 200)!;
+      expect(EVENTS[id].street, id).toBe(false);
+    }
+    // the rock bus is big and on the street: neither another big one nor another street one
+    for (let i = 0; i < 200; i++) {
+      const id = pickEvent([{ id: 'rockbus', big: true }], i / 200)!;
+      expect(EVENTS[id].big || EVENTS[id].street, id).toBe(false);
+    }
+    expect(clashes('firetruck', 'foodtruck')).toBe(true);
+    expect(clashes('firetruck', 'plane')).toBe(false);
+    expect(clashes('rockbus', 'blimp')).toBe(true);
+    expect(clashes('plane', 'birds')).toBe(false);
   });
 
   it('weights the everyday higher than the rare', () => {

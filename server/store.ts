@@ -108,7 +108,9 @@ export class Store {
   private boxClis = new Map<string, BoxCliRecord>();
   private clients = new Set<WebSocket>();
   private dbView: () => DbView = () => NO_DB;
+  private previewView: () => Snapshot['previews'] = () => ({});
   private momentListeners: ((m: Moment) => void)[] = [];
+  private floorGoneListeners: ((floorId: string) => void)[] = [];
   private logSeq = 0;
   private saveTimer: NodeJS.Timeout | null = null;
   private writing: Promise<void> = Promise.resolve();
@@ -166,7 +168,13 @@ export class Store {
       usage: this.usage,
       cloud: this.cloud,
       ...this.dbView(),
+      previews: this.previewView(),
     };
+  }
+
+  /** The floors' previews' part of the snapshot (server/previews.ts). */
+  attachPreviews(view: () => Snapshot['previews']) {
+    this.previewView = view;
   }
 
   /** The office database's part of the snapshot (server/db/office.ts). */
@@ -263,7 +271,14 @@ export class Store {
   }
 
   removeFloor(id: string) {
-    if (this.floors.delete(id)) this.emit({ type: 'floorRemoved', floorId: id });
+    if (!this.floors.delete(id)) return;
+    this.emit({ type: 'floorRemoved', floorId: id });
+    for (const fn of this.floorGoneListeners) fn(id);
+  }
+
+  /** Hears each floor that leaves, removed or emptied by the demo's reset (its preview stops). */
+  onFloorGone(fn: (floorId: string) => void) {
+    this.floorGoneListeners.push(fn);
   }
 
   putWorker(worker: Worker) {
@@ -391,9 +406,11 @@ export class Store {
 
   /** Empties the office but keeps its settings, and sends every tab the new snapshot (the demo's reset). */
   reset() {
+    const gone = [...this.floors.keys()];
     for (const map of [this.floors, this.workers, this.qa, this.logs, this.questions]) map.clear();
     this.messages = [];
     this.emit({ type: 'snapshot', data: this.snapshot() });
+    for (const id of gone) for (const fn of this.floorGoneListeners) fn(id);
   }
 
   /** Writes state.json now (before the server stops), after any write in progress. */

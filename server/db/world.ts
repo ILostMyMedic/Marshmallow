@@ -2,7 +2,7 @@
 // moment: the director (shared/worldEvents.ts) ticked on the server's clock at the pace a tab used to keep, with its
 // schedule and a log of what ran in the office database, so neither a reload nor a restart starts it over. What's on
 // goes in the snapshot, and every change to the tabs; each tab draws an event from its start time and seed.
-import { EVENTS, newDirector, parseEventId, roll, scheduleFirst, startRunning, stepDirector, stopRunning, type Director, type EventId, type EventSide, type WorldRun, type WorldView } from '../../shared/worldEvents.ts';
+import { clashes, EVENTS, newDirector, parseEventId, roll, scheduleFirst, startRunning, stepDirector, stopRunning, type Director, type EventId, type EventSide, type WorldRun, type WorldView } from '../../shared/worldEvents.ts';
 import type { Store } from '../store.ts';
 import type { Db } from './db.ts';
 
@@ -154,9 +154,10 @@ export class World {
     return rows.map((r) => ({ key: r.id, id: r.event, side: sideOf(r.side), seed: r.seed, forced: r.forced, startedAt: r.started_at.getTime(), endsAt: r.ends_at.getTime() }));
   }
 
-  // A big event ends any other big one, so two never overlap; the same event starts over.
+  // A big event ends any other big one, so two never overlap, and a street event any other street one, so two never
+  // meet down there; the same event starts over.
   private async begin(id: EventId, side: EventSide, seed: number, forced: boolean, now: number): Promise<WorldRun> {
-    for (const r of this.runs.filter((x) => x.id === id || (EVENTS[id].big && EVENTS[x.id].big))) await this.cut(r.key, now);
+    for (const r of this.runs.filter((x) => clashes(id, x.id))) await this.cut(r.key, now);
     const seconds = EVENTS[id].seconds;
     const row = (
       await this.db.query<{ id: number }>('insert into world_events (event, side, seed, forced, started_at, ends_at) values ($1, $2, $3, $4, $5, $6) returning id', [id, side, seed, forced, new Date(now), new Date(now + seconds * 1000)])

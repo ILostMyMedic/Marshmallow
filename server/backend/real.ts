@@ -7,6 +7,7 @@ import { realGithub } from '../github/github.ts';
 import { upstashBoxes } from '../machines/box/box.ts';
 import { localMachines } from '../machines/local.ts';
 import { ensureClone, mainDir } from '../machines/workspace.ts';
+import { realPreviews } from '../previewRunner.ts';
 import { detachBoxClis, officeProcesses, reconnectBoxClis, startBoxSignIn, startCliSession } from '../sessions/cliRunner.ts';
 import type { Backend, CloudBackend } from './backend.ts';
 
@@ -34,4 +35,5 @@ export const realBackend: Backend = {
   machines: localMachines(officeProcesses),
   startSession: startCliSession,
   cloud: realCloud,
+  previews: realPreviews(officeProcesses),
 };

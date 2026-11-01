@@ -1,8 +1,9 @@
 // World events' sounds (world/events/), all synthesized: an airliner's distant rumble, a helicopter's chop, a flock's
 // wings and chirps, a balloon's burner, an airship's engines, a UFO's hum, beam and zip, a rubber duck's squeak, a
-// rainbow's chime and whale song. Everything goes through one small bus into the master gain, muffled through the
-// glass indoors and full on a balcony or the roof, panned towards where it happens and quieter with distance. Silent
-// while quiet (a panel, the elevator ride) or hidden.
+// rainbow's chime and whale song; and down on the street a rock band's riff and drums, a marching band, an ice cream
+// truck's jingle, a fire engine's siren and horn, a truck's diesel and a griddle's sizzle. Everything goes through one
+// small bus into the master gain, muffled through the glass indoors and full on a balcony or the roof, panned towards
+// where it happens and quieter with distance. Silent while quiet (a panel, the elevator ride) or hidden.
 // Adapted from cubefarm client/src/ui/eventSfx.ts (MIT): the kaiju's, the fireworks' and the hurricane's sounds are cut
 // with their events.
 
@@ -33,7 +34,7 @@ let quiet = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 let hearing: OutsideHearing = { level: 0, clarity: 0, from: null };
 const open: Record<Side, number> = { west: 0, east: 0 };
-const live = new Set<LoopImpl>();
+const live = new Set<Loop>();
 
 // ---------- the floor, quiet, where you hear from ----------
 
@@ -91,7 +92,9 @@ const heard = { pan: 0, gain: 0 };
 
 // ---------- loops ----------
 
-export type LoopKind = 'jet' | 'rotor' | 'hum' | 'flap' | 'engine';
+export type LoopKind = 'jet' | 'rotor' | 'hum' | 'flap' | 'engine' | 'diesel' | 'siren' | 'sizzle' | TuneKind;
+/** The loops that are tunes, played note by note (TuneLoop). */
+export type TuneKind = 'rock' | 'band' | 'jingle';
 
 export interface Loop {
   /** Its loudness (0-1 of its own full level) and pan; `pitch` bends it (1 = as built). Cheap: call it every frame. */
@@ -100,7 +103,7 @@ export interface Loop {
 }
 
 /** Each loop at full level, before the bus. */
-const LOOP_GAIN: Record<LoopKind, number> = { jet: 0.16, rotor: 0.14, hum: 0.05, flap: 0.09, engine: 0.09 };
+const LOOP_GAIN: Record<LoopKind, number> = { jet: 0.16, rotor: 0.14, hum: 0.05, flap: 0.09, engine: 0.09, diesel: 0.08, siren: 0.05, sizzle: 0.035, rock: 0.15, band: 0.13, jingle: 0.08 };
 
 class LoopImpl implements Loop {
   private last = { gain: -1, pan: 2, pitch: -1 };
@@ -139,6 +142,275 @@ class LoopImpl implements Loop {
   }
 }
 
+// ---------- tunes (the street's bands and jingles) ----------
+
+const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
+
+/** One step of a pattern: a note (a MIDI number, or 1 for a drum hit) and how many steps it lasts; null for none. */
+type Step = { note: number; steps: number } | null;
+
+/** A pattern as steps: a MIDI note, `x` for a hit, `.` for nothing, `-` holding what came before; `|` between bars is ignored. */
+function pattern(s: string): Step[] {
+  const toks = s.split(/\s+/).filter((t) => t && t !== '|');
+  return toks.map((t, i) => {
+    if (t === '.' || t === '-') return null;
+    let n = 1;
+    while (toks[i + n] === '-') n++;
+    return { note: t === 'x' ? 1 : Number(t), steps: n };
+  });
+}
+
+/** What a tune plays its steps on (TuneLoop). Times are the context's. */
+interface Voices {
+  /** A distorted guitar's power chord on `midi`. */
+  power(midi: number, at: number, dur: number): void;
+  kick(at: number): void;
+  snare(at: number, level?: number): void;
+  hat(at: number, open?: boolean): void;
+  crash(at: number, level?: number): void;
+  brass(midi: number, at: number, dur: number, level?: number): void;
+  tuba(midi: number, at: number, dur: number): void;
+  /** A marching band's bass drum. */
+  boom(at: number): void;
+  /** A music box's note. */
+  bell(midi: number, at: number, level?: number): void;
+}
+
+interface Tune {
+  /** Seconds a step. */
+  step: number;
+  /** Plays step `i` (counted from the start, round and round) at `at`. */
+  play(v: Voices, i: number, at: number): void;
+}
+
+// a garage band's riff in E: two bars of eighths at 140 bpm, a fill every fourth time round
+const RIFF = pattern('40 40 . 40 43 . 45 - | 40 40 . 40 46 45 . 43');
+const KICK = pattern('x . . . x x . . | x . . . x x . x');
+const SNARE = pattern('. . x . . . x . | . . x . . . x x');
+// a march in C at 116 bpm: eight bars of 2/4, its oom-pah under it and a roll at the end
+const MARCH = pattern('67 - 72 - | 76 - 74 72 | 71 - 74 - | 79 - - . | 77 - 76 74 | 72 - 76 - | 74 - 71 - | 72 - - .');
+const OOM = pattern('48 . 43 . | 48 . 43 . | 43 . 50 . | 43 . 47 . | 41 . 48 . | 48 . 43 . | 43 . 50 . | 48 . 48 .');
+const BARS = [60, 60, 55, 55, 53, 60, 55, 60];
+// an ice cream truck's music box, round and round at 160 bpm
+const JINGLE = pattern('79 76 79 76 | 84 83 81 79 | 77 81 77 81 | 86 84 83 81 | 79 76 79 76 | 84 83 81 79 | 77 74 76 77 | 72 - - .');
+const JINGLE_BASS = pattern('60 . 67 . | 60 . 67 . | 65 . 72 . | 67 . 74 . | 60 . 67 . | 60 . 67 . | 65 . 67 . | 60 . . .');
+
+const TUNES: Record<TuneKind, Tune> = {
+  rock: {
+    step: 60 / 140 / 2,
+    play(v, i, at) {
+      const s = i % 16;
+      const g = RIFF[s];
+      if (g) v.power(g.note, at, g.steps * TUNES.rock.step * 0.85);
+      if (KICK[s]) v.kick(at);
+      if (SNARE[s] || i % 64 >= 60) v.snare(at, SNARE[s] ? 1 : 0.7);
+      v.hat(at, s % 8 === 7);
+      if (i % 64 === 0) v.crash(at);
+    },
+  },
+  band: {
+    step: 60 / 116 / 2,
+    play(v, i, at) {
+      const s = i % 32;
+      const step = TUNES.band.step;
+      const m = MARCH[s];
+      if (m) v.brass(m.note, at, m.steps * step * 0.9);
+      const o = OOM[s];
+      if (o) v.tuba(o.note, at, step * 0.8);
+      if (s % 2 === 1) {
+        // the off-beat "pah": the bar's chord, a third and a fifth up
+        const root = BARS[Math.floor(s / 4)];
+        v.brass(root + 4, at, step * 0.5, 0.16);
+        v.brass(root + 7, at, step * 0.5, 0.16);
+      }
+      if (s % 4 === 0) v.boom(at);
+      if (s % 2 === 1 || s >= 28) v.snare(at, s >= 28 ? 0.8 : 0.5);
+      if (s === 0 || s === 16) v.crash(at, 0.2);
+    },
+  },
+  jingle: {
+    step: 60 / 160 / 2,
+    play(v, i, at) {
+      const s = i % 32;
+      const n = JINGLE[s];
+      if (n) v.bell(n.note, at, 0.5);
+      const b = JINGLE_BASS[s];
+      if (b) v.bell(b.note - 12, at, 0.2);
+    },
+  },
+};
+
+let drive: Float32Array<ArrayBuffer> | null = null;
+/** The guitar amp's soft clipping. */
+const driveCurve = () => {
+  if (drive) return drive;
+  drive = new Float32Array(1024);
+  for (let i = 0; i < drive.length; i++) drive[i] = Math.tanh(((i / (drive.length - 1)) * 2 - 1) * 3);
+  return drive;
+};
+
+/** How far ahead a tune's notes are scheduled: set() comes every frame, so a quarter of a second is plenty. */
+const AHEAD = 0.25;
+
+/** A tune for as long as the event wants it: each set() (every frame) schedules its next notes, a step at a time. */
+class TuneLoop implements Loop, Voices {
+  private last = { gain: -1, pan: 2 };
+  private stopped = false;
+  private i = 0;
+  private next: number;
+  private amp: AudioNode | null = null;
+  constructor(
+    private c: BaseAudioContext,
+    private out: GainNode,
+    private pan: StereoPannerNode | null,
+    private tune: Tune,
+    private noiseBuf: AudioBuffer,
+    private max: number,
+  ) {
+    this.next = c.currentTime + 0.05;
+  }
+  set(gain: number, pan: number) {
+    if (this.stopped) return;
+    const g = Math.max(0, Math.min(1, gain)) * this.max;
+    if (Math.abs(g - this.last.gain) > 0.0005) glideOn(this.c, this.out.gain, (this.last.gain = g), 0.12);
+    if (this.pan && Math.abs(pan - this.last.pan) > 0.02) glideOn(this.c, this.pan.pan, (this.last.pan = pan), 0.12);
+    const now = this.c.currentTime;
+    // behind (a hidden tab, a long frame): skip what was missed, keeping to the beat
+    if (this.next < now) {
+      const missed = Math.ceil((now - this.next) / this.tune.step);
+      this.i += missed;
+      this.next += missed * this.tune.step;
+    }
+    for (; this.next < now + AHEAD; this.i++, this.next += this.tune.step) {
+      try {
+        this.tune.play(this, this.i, this.next);
+      } catch {
+        // audio is optional
+      }
+    }
+  }
+  stop(fade = 0.6) {
+    if (this.stopped) return;
+    this.stopped = true;
+    live.delete(this);
+    try {
+      this.out.gain.cancelScheduledValues(this.c.currentTime);
+      this.out.gain.setTargetAtTime(0, this.c.currentTime, fade / 4);
+    } catch {
+      // audio is optional
+    }
+    setTimeout(() => {
+      try {
+        this.out.disconnect();
+      } catch {
+        // already gone
+      }
+    }, (fade + 1) * 1000);
+  }
+
+  // ---------- its instruments ----------
+
+  private env(src: AudioNode, at: number, attack: number, hold: number, release: number, level: number, dest: AudioNode = this.out) {
+    const g = this.c.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(level, at + attack);
+    g.gain.setValueAtTime(level, at + attack + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + attack + hold + release);
+    src.connect(g).connect(dest);
+  }
+  private osc(type: OscillatorType, f: number, at: number, end: number, to?: number) {
+    const o = this.c.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f, at);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, end);
+    o.start(at);
+    o.stop(end + 0.05);
+    return o;
+  }
+  private hiss(at: number, end: number) {
+    const s = this.c.createBufferSource();
+    s.buffer = this.noiseBuf;
+    s.loop = true;
+    s.start(at, Math.random());
+    s.stop(end + 0.05);
+    return s;
+  }
+  private filter(type: BiquadFilterType, f: number, q = 0.7) {
+    const b = this.c.createBiquadFilter();
+    b.type = type;
+    b.frequency.value = f;
+    b.Q.value = q;
+    return b;
+  }
+  /** The guitar amp: driven into soft clipping, then a speaker cabinet's band. */
+  private ampIn(): AudioNode {
+    if (this.amp) return this.amp;
+    const pre = this.c.createGain();
+    pre.gain.value = 7;
+    const shaper = this.c.createWaveShaper();
+    shaper.curve = driveCurve();
+    const post = this.c.createGain();
+    post.gain.value = 0.2;
+    pre.connect(shaper).connect(this.filter('lowpass', 2800, 0.8)).connect(this.filter('highpass', 100)).connect(post).connect(this.out);
+    return (this.amp = pre);
+  }
+  power(midi: number, at: number, dur: number) {
+    const amp = this.ampIn();
+    const end = at + dur;
+    for (const [semi, type, level] of [
+      [0, 'sawtooth', 0.5],
+      [7, 'sawtooth', 0.4],
+      [12, 'square', 0.22],
+    ] as const)
+      this.env(this.osc(type, hz(midi + semi) * (1 + (Math.random() - 0.5) * 0.004), at, end + 0.1), at, 0.005, Math.max(0.02, dur - 0.05), 0.08, level, amp);
+  }
+  kick(at: number) {
+    this.env(this.osc('sine', 150, at, at + 0.3, 42), at, 0.002, 0.04, 0.26, 0.9);
+    this.env(this.hiss(at, at + 0.03).connect(this.filter('lowpass', 2500)), at, 0.001, 0.005, 0.02, 0.2);
+  }
+  snare(at: number, level = 1) {
+    this.env(this.hiss(at, at + 0.2).connect(this.filter('bandpass', 1900, 0.7)), at, 0.002, 0.02, 0.16, 0.55 * level);
+    this.env(this.osc('triangle', 190, at, at + 0.1, 150), at, 0.002, 0.01, 0.08, 0.3 * level);
+  }
+  hat(at: number, open = false) {
+    const d = open ? 0.28 : 0.045;
+    this.env(this.hiss(at, at + d + 0.02).connect(this.filter('highpass', 7500)), at, 0.001, 0.005, d, open ? 0.14 : 0.1);
+  }
+  crash(at: number, level = 0.32) {
+    this.env(this.hiss(at, at + 1.7).connect(this.filter('highpass', 4800, 0.6)), at, 0.002, 0.04, 1.6, level);
+  }
+  brass(midi: number, at: number, dur: number, level = 0.42) {
+    const f = hz(midi);
+    const end = at + dur;
+    // the lips' blat: the filter opens bright on the attack and settles
+    const lp = this.c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 1.2;
+    lp.frequency.setValueAtTime(500, at);
+    lp.frequency.exponentialRampToValueAtTime(2600, at + 0.05);
+    lp.frequency.exponentialRampToValueAtTime(1500, at + 0.2);
+    this.osc('sawtooth', f, at, end + 0.1).connect(lp);
+    this.osc('sawtooth', f * 1.004, at, end + 0.1).connect(lp);
+    this.env(lp, at, 0.03, Math.max(0.03, dur - 0.08), 0.08, level);
+  }
+  tuba(midi: number, at: number, dur: number) {
+    this.env(this.osc('sawtooth', hz(midi), at, at + dur + 0.1).connect(this.filter('lowpass', 650, 1)), at, 0.02, Math.max(0.03, dur - 0.1), 0.1, 0.55);
+  }
+  boom(at: number) {
+    this.env(this.osc('sine', 100, at, at + 0.45, 48), at, 0.003, 0.05, 0.4, 0.85);
+    this.env(this.hiss(at, at + 0.15).connect(this.filter('lowpass', 400)), at, 0.002, 0.02, 0.1, 0.3);
+  }
+  bell(midi: number, at: number, level = 0.5) {
+    const f = hz(midi);
+    for (const [k, l, d] of [
+      [1, 1, 0.5],
+      [2, 0.35, 0.3],
+      [3, 0.12, 0.15],
+    ])
+      this.env(this.osc('sine', f * k, at, at + d + 0.05), at, 0.003, 0.01, d, l * level);
+  }
+}
+
 const NONE: Loop = { set: () => undefined, stop: () => undefined };
 
 /** A long sound for as long as the event wants it (an engine, a rotor); stop() it when done. Silent without audio. */
@@ -152,6 +424,11 @@ export function loop(k: LoopKind): Loop {
     out.gain.value = 0;
     const pan = typeof c.createStereoPanner === 'function' ? c.createStereoPanner() : null;
     (pan ? out.connect(pan) : out).connect(b.input);
+    if (k === 'rock' || k === 'band' || k === 'jingle') {
+      const t = new TuneLoop(c, out, pan, TUNES[k], b.noise, LOOP_GAIN[k]);
+      live.add(t);
+      return t;
+    }
     const srcs: AudioScheduledSourceNode[] = [];
     const tune: AudioParam[] = [];
     const noise = () => {
@@ -230,6 +507,41 @@ export function loop(k: LoopKind): Loop {
         tune.push(saw.frequency);
         break;
       }
+      case 'diesel': {
+        // a truck's diesel: a lumpy low rumble, its firing in the throb; pitch it up as it pulls away
+        const saw = osc('sawtooth', 38);
+        const lp = filter('lowpass', 210, 1.1);
+        throb(saw.connect(lp), 9, 0.55, 0.45, 'square').connect(out);
+        const g = c.createGain();
+        g.gain.value = 0.45;
+        noise().connect(filter('lowpass', 150, 0.7)).connect(g).connect(out);
+        tune.push(saw.frequency, lp.frequency);
+        break;
+      }
+      case 'siren': {
+        // a fire engine's wail: a bright tone sweeping slowly up and down
+        const lfo = osc('triangle', 0.3);
+        const depth = c.createGain();
+        depth.gain.value = 360;
+        lfo.connect(depth);
+        const lp = filter('lowpass', 2400, 0.7);
+        for (const [type, level] of [['sawtooth', 0.55], ['square', 0.3]] as const) {
+          const o = osc(type, 860 * (type === 'square' ? 1.004 : 1));
+          depth.connect(o.frequency);
+          const g = c.createGain();
+          g.gain.value = level;
+          o.connect(g).connect(lp);
+          tune.push(o.frequency);
+        }
+        lp.connect(out);
+        break;
+      }
+      case 'sizzle': {
+        // a food truck's griddle: a hiss that sputters
+        const hp = filter('highpass', 3200, 0.6);
+        throb(throb(noise().connect(hp), 13, 0.5, 0.5, 'square'), 5.3, 0.6, 0.4, 'square').connect(out);
+        break;
+      }
     }
     const l = new LoopImpl(c, out, pan, tune, srcs, LOOP_GAIN[k]);
     live.add(l);
@@ -241,10 +553,10 @@ export function loop(k: LoopKind): Loop {
 
 // ---------- one-shots ----------
 
-export type OneShot = 'zip' | 'beam' | 'squeak' | 'chime' | 'whale' | 'chirps' | 'burner';
+export type OneShot = 'zip' | 'beam' | 'squeak' | 'chime' | 'whale' | 'chirps' | 'burner' | 'horn' | 'bell' | 'crash';
 
 /** Each one-shot at full level, before the bus. */
-const SHOT_GAIN: Record<OneShot, number> = { zip: 0.08, beam: 0.07, squeak: 0.1, chime: 0.07, whale: 0.12, chirps: 0.05, burner: 0.15 };
+const SHOT_GAIN: Record<OneShot, number> = { zip: 0.08, beam: 0.07, squeak: 0.1, chime: 0.07, whale: 0.12, chirps: 0.05, burner: 0.15, horn: 0.11, bell: 0.08, crash: 0.08 };
 
 /** A one-off sound `delay` seconds from now, at `gain` (0-1 of its full level, distance included) from `pan`. */
 export function play(k: OneShot, { gain = 1, pan = 0, delay = 0, pitch = 1 }: { gain?: number; pan?: number; delay?: number; pitch?: number } = {}) {
@@ -338,6 +650,18 @@ export function play(k: OneShot, { gain = 1, pan = 0, delay = 0, pitch = 1 }: { 
         break;
       case 'burner':
         env(noise(t0, 1.4).connect(filter('lowpass', 420, 650, t0, 1.2, 0.6)), t0, 0.08, 0.9, 0.4);
+        break;
+      case 'horn':
+        // a big vehicle's air horn: two brassy tones a third apart
+        for (const hz of [233, 294]) env(osc('sawtooth', hz, hz * 0.98, t0, 0.75).connect(filter('lowpass', 1500, 1200, t0, 0.75, 0.9)), t0, 0.02, 0.55, 0.15, 0.7);
+        break;
+      case 'bell':
+        // a serving bell's ding
+        [1568, 2349, 3136].forEach((hz, i) => env(osc('sine', hz, hz, t0, 1.4), t0, 0.004, 0.02, 1.3 - i * 0.3, [1, 0.45, 0.2][i]));
+        break;
+      case 'crash':
+        // a cymbal crash
+        env(noise(t0, 1.9).connect(filter('highpass', 5200, 3800, t0, 1.8, 0.7)), t0, 0.003, 0.05, 1.7);
         break;
     }
   } catch {

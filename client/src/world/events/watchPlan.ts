@@ -8,6 +8,7 @@ import type { Gesture } from '../body';
 import { HALF_W, SIDE_OPENINGS, WINDOW, sideSign, type Side } from '../layout';
 import type { FloorKind, Spot } from '../walkways';
 import type { EventId } from '../../../../shared/worldEvents';
+import { isStreetEvent, passing } from './streetPath';
 
 const EAST = 0;
 const WEST = Math.PI;
@@ -57,5 +58,27 @@ export function watchBeats(id: EventId, roll: number): Beat[] {
       return [look, { gesture: 'point', seconds: 3, say: '🎈' }, { gesture: 'none', seconds: 3 }];
     case 'birds':
       return [look, { gesture: 'point', seconds: 2.5, say: '🐦' }, { gesture: 'none', seconds: 3 }];
+    case 'rockbus':
+      return [look, { gesture: 'point', seconds: 3, say: '🎸' }, { gesture: 'cheer', seconds: 3, say: pick(['🤘', '🎶', '🔥']) }, { gesture: 'clap', seconds: 3 }, { gesture: 'cheer', seconds: 2.6, say: '🤘' }, { gesture: 'none', seconds: 2 }];
+    case 'parade':
+      return [look, { gesture: 'point', seconds: 3, say: pick(['🎺', '🥁', '🎈']) }, { gesture: 'wave', seconds: 3, say: '😍' }, { gesture: 'cheer', seconds: 2.5, say: '🎉' }, { gesture: 'clap', seconds: 2.5 }, { gesture: 'wave', seconds: 2.5 }, { gesture: 'none', seconds: 1.5 }];
+    case 'icecream':
+      return [look, { gesture: 'point', seconds: 3, say: '🍦' }, { gesture: 'none', seconds: 2.5 }];
+    case 'firetruck':
+      return [look, { gesture: 'point', seconds: 2.5, say: '🚒' }, { gesture: 'gasp', seconds: 2, say: '😮' }, { gesture: 'none', seconds: 2 }];
+    case 'foodtruck':
+      return [look, { gesture: 'point', seconds: 3, say: pick(['🍔', '🌮', '🤤']) }, { gesture: 'none', seconds: 3 }];
   }
+}
+
+/**
+ * When it's worth going to the window for a big event (seconds into it): from `from`, nobody setting off after `until`.
+ * A sky event is up there to see a couple of seconds in; a street event has to come down the street first, so they go
+ * a little before it passes the office (streetPath.ts) and stop going once it's on its way off.
+ */
+export function watchWindow(id: EventId, seconds: number): { from: number; until: number } {
+  if (!isStreetEvent(id)) return { from: 2, until: seconds - 14 };
+  const [enter, exit] = passing(id);
+  const from = Math.max(2, enter - 10);
+  return { from, until: Math.max(from + 4, Math.min(seconds - 14, exit - 6)) };
 }

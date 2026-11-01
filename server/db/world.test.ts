@@ -77,6 +77,21 @@ describe('the world events', () => {
     expect(world.get().running).toEqual([]);
   });
 
+  it('keeps one event on the street at a time: a new one cuts the one there short', async () => {
+    const world = await open();
+    const truck = await world.trigger('icecream', 'west');
+    const plane = await world.trigger('plane');
+    now += 3000;
+    await world.trigger('firetruck', 'east');
+    expect(world.get().running.map((r) => r.id)).toEqual(['plane', 'firetruck']);
+    expect((await world.log()).find((e) => e.key === truck.key)?.endsAt).toBe(now);
+    // the rock bus is big and on the street: it ends the fire engine, and a blimp after it ends the bus
+    await world.trigger('rockbus', 'west');
+    await world.trigger('blimp');
+    expect(world.get().running.map((r) => r.id)).toEqual(['plane', 'blimp']);
+    expect(world.get().running[0].key).toBe(plane.key);
+  });
+
   it('carries on after a restart: what was running, and the schedule', async () => {
     let world = await open();
     const blimp = await world.trigger('blimp', 'west');

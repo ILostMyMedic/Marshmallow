@@ -198,6 +198,11 @@ export const GONG = { x: -8.85, z: -11.3, w: 2.3, d: 0.9, h: 2.35, r: 0.72, y: 1
 export const gongRect = (): Rect => ({ minX: GONG.x - GONG.w / 2, maxX: GONG.x + GONG.w / 2, minZ: -HALF_D, maxZ: GONG.z + GONG.d / 2 });
 /** Where someone stands in front of the gong. */
 export const GONG_SPOT = { x: GONG.x, z: GONG.z + GONG.d / 2 + 0.9 };
+/**
+ * The app monitor (AppMonitor.tsx) on the north wall, in the corner west of the plant and the gong, where cubefarm has
+ * it: the picture w by h with its middle y up, a bezel round it, sticking `depth` out from the wall.
+ */
+export const APP_SCREEN = { x: -13.7, y: 2.25, w: 3.2, h: 1.8, bezel: 0.09, depth: 0.12 };
 /** A floor's plants: x, z and how big. */
 export const OFFICE_PLANTS: [number, number, number][] = [
   [-7.1, -HALF_D + 0.7, 1],
@@ -223,6 +228,7 @@ export function officeColliders(doorway = true): Rect[] {
     }
   }
   out.push(rect(0, -HALF_D + 0.25, BOARD.w + 0.4, 0.5)); // whiteboard + marker tray
+  out.push(rect(APP_SCREEN.x, -HALF_D + APP_SCREEN.depth / 2, APP_SCREEN.w + APP_SCREEN.bezel * 2, APP_SCREEN.depth)); // app monitor
   out.push(rect(COUCH.x, COUCH.z, 1.1, 3.2));
   out.push(rect(COFFEE_TABLE.x, COFFEE_TABLE.z, 0.9, 1.4));
   out.push(pongTableRect());

@@ -222,32 +222,81 @@ function headphoneGeometry() {
   return { shell: merge(band, ...cups), covers: merge(...covers) };
 }
 
+type Hat = Exclude<Headwear, 'none'>;
+
+/** Each hat's crown: a dome of radius r down to `t` radians from its top, moved to `at` and tipped back by `tip`. */
+export const HATS: Record<Hat, { r: number; t: number; at: [number, number, number]; tip: number }> = {
+  beanie: { r: 0.228, t: 1.42, at: [0, 0.035, 0.02], tip: 0.35 },
+  cap: { r: 0.224, t: 1.35, at: [0, 0.02, 0.015], tip: 0.18 },
+};
+
 function headwearGeometry(kind: Headwear): THREE.BufferGeometry | null {
+  if (kind === 'none') return null;
+  const { r, t, at, tip: back } = HATS[kind];
+  const tip: Xf = { at, rot: [back, 0, 0] };
+  const crown = xf(new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, t), tip);
+  const top = (lift: number): [number, number, number] => [0, at[1] + (r + lift) * Math.cos(back), at[2] + (r + lift) * Math.sin(back)];
   switch (kind) {
-    case 'none':
-      return null;
-    case 'beanie': {
-      // dome + turned-up cuff + pom-pom, tipped back a little
-      const r = 0.228;
-      const t = 1.42;
-      const tip: Xf = { at: [0, 0.035, 0.02], rot: [0.35, 0, 0] };
-      return merge(
-        xf(new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, t), tip),
-        xf(xf(new THREE.TorusGeometry(r * Math.sin(t), 0.03, 8, 28), { at: [0, r * Math.cos(t), 0], rot: [Math.PI / 2, 0, 0] }), tip),
-        xf(sphere(0.06, 12, 8), { at: [0, 0.035 + (r + 0.03) * Math.cos(0.35), 0.02 + (r + 0.03) * Math.sin(0.35)] }),
-      );
-    }
+    case 'beanie':
+      // dome + turned-up cuff + pom-pom
+      return merge(crown, xf(xf(new THREE.TorusGeometry(r * Math.sin(t), 0.03, 8, 28), { at: [0, r * Math.cos(t), 0], rot: [Math.PI / 2, 0, 0] }), tip), xf(sphere(0.06, 12, 8), { at: top(0.03) }));
     case 'cap': {
-      const r = 0.224;
-      const t = 1.35;
-      const tip: Xf = { at: [0, 0.02, 0.015], rot: [0.18, 0, 0] };
-      return merge(
-        xf(new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, t), tip),
-        xf(xf(new THREE.CylinderGeometry(0.14, 0.14, 0.014, 24, 1, false, Math.PI / 2, Math.PI), { at: [0, r * Math.cos(t), -0.13], rot: [-0.08, 0, 0], scale: [1, 1, 0.9] }), tip),
-        xf(sphere(0.022, 8, 6), { at: [0, 0.02 + r * Math.cos(0.18), 0.015 + r * Math.sin(0.18)] }),
-      );
+      // a peak reaching well out over the face, curved down at its sides and tipped down a little, and the button
+      const peak = new THREE.CylinderGeometry(0.19, 0.19, 0.018, 28, 2, false, Math.PI / 2, Math.PI);
+      const p = peak.attributes.position;
+      for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) - 0.35 * p.getX(i) ** 2);
+      peak.computeVertexNormals();
+      return merge(crown, xf(xf(peak, { at: [0, r * Math.cos(t), -0.1], rot: [-0.3, 0, 0], scale: [1, 1, 1.15] }), tip), xf(sphere(0.022, 8, 6), { at: top(0) }));
     }
   }
+}
+
+const TUCK_GAP = 0.015; // under the crown by more than the hair's ink line, so neither shows through
+const TUCK_BAND = 0.3; // radians below the rim over which the hair eases back out
+
+/**
+ * A hairstyle under a hat: whatever of it would show through the crown is pulled in under it, easing back out just below
+ * the rim, so the hair comes out from under the hat instead of through it.
+ */
+function tuck(hair: THREE.BufferGeometry, hat: Hat) {
+  const { r, t, at, tip } = HATS[hat];
+  const g = hair.clone();
+  const p = g.attributes.position;
+  const n = g.attributes.normal;
+  const toHat = new THREE.Matrix4().makeRotationX(-tip).multiply(new THREE.Matrix4().makeTranslation(-at[0], -at[1], -at[2]));
+  const toHead = toHat.clone().invert();
+  const v = new THREE.Vector3();
+  const out = new THREE.Vector3();
+  const nrm = new THREE.Vector3();
+  const inner = r - TUCK_GAP;
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).applyMatrix4(toHat);
+    const len = v.length();
+    if (len <= inner) continue;
+    const a = Math.acos(Math.min(1, Math.max(-1, v.y / len)));
+    const u = Math.min(1, Math.max(0, (a - t) / TUCK_BAND));
+    const k = 1 - u * u * (3 - 2 * u);
+    if (k <= 0) continue;
+    v.multiplyScalar((len + (inner - len) * k) / len);
+    out.copy(v).applyMatrix4(toHead);
+    p.setXYZ(i, out.x, out.y, out.z);
+    // the tucked part lies on the dome: its normal turns out from the crown's middle
+    nrm.copy(v).normalize().applyAxisAngle(new THREE.Vector3(1, 0, 0), tip);
+    v.fromBufferAttribute(n, i).lerp(nrm, k).normalize();
+    n.setXYZ(i, v.x, v.y, v.z);
+  }
+  return g;
+}
+
+const tucked = new Map<string, THREE.BufferGeometry | null>();
+
+/** The hair as drawn under `headwear` (just the hairstyle with none), made once per pairing and shared. */
+export function hairUnder(headwear: Headwear, style: HairStyle): THREE.BufferGeometry | null {
+  const hair = PARTS.hair[style];
+  if (headwear === 'none' || !hair) return hair;
+  const key = `${headwear}:${style}`;
+  if (!tucked.has(key)) tucked.set(key, tuck(hair, headwear));
+  return tucked.get(key)!;
 }
 
 /** Torso-space extras for the outfits (the plain tee needs nothing but the collar). */

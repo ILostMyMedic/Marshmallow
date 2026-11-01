@@ -15,6 +15,7 @@ import { demoRoutes } from './demoRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
 import { createPipeline } from './pipeline/pipeline.ts';
+import { Previews } from './previews.ts';
 import { handleHook, handleMcp, hooksReady, releaseClis, setOfficeUrl } from './sessions/cliRunner.ts';
 import { Terminals } from './sessions/terminals.ts';
 import { route } from './route.ts';
@@ -57,6 +58,9 @@ setInterval(() => void pipeline.sweep(), DESK_SWEEP_INTERVAL_MS).unref();
 setInterval(() => pipeline.watchdog.tick(), WATCHDOG_INTERVAL_MS).unref();
 // The world events outside: the office picks them for every tab
 office.world.start();
+// The floors' apps, started by hand only: none runs yet, so whatever a hard stop left in their worktrees goes
+const previews = new Previews(store, backend, office.previewSettings);
+void previews.clearOrphans();
 
 const app = express();
 // Workers' CLIs calling back: hooks and the status line (a tool result can be a large screenshot, hence the limit). The
@@ -94,6 +98,13 @@ app.post('/api/ceo', route((req) => pipeline.ctx.ceo.hire(str(req.body?.model).t
 app.delete('/api/ceo', route(() => pipeline.ctx.ceo.letGo()));
 app.post('/api/ceo/message', route((req) => pipeline.ctx.ceo.message(str(req.body?.text))));
 app.post('/api/floors/:floor/sync', route((req) => floors.sync(String(req.params.floor))));
+// A floor's preview: its app run from a worktree of its own on the floor's port. Each answers the floor's PreviewView;
+// a start on a port another program holds is a 409. The PATCH takes { command?, port? }: {port} in a command is filled
+// in, and null hands either back to the office (the package.json's script, the port kept for the floor).
+app.post('/api/floors/:floor/preview/start', route((req) => previews.start(String(req.params.floor))));
+app.post('/api/floors/:floor/preview/stop', route((req) => previews.stop(String(req.params.floor))));
+app.post('/api/floors/:floor/preview/restart', route((req) => previews.restart(String(req.params.floor))));
+app.patch('/api/floors/:floor/preview', route((req) => previews.configure(String(req.params.floor), req.body ?? {})));
 app.post('/api/floors/:floor/issues', route((req) => floors.fileIssue(String(req.params.floor), str(req.body?.title), str(req.body?.body))));
 // Questions to the manager: asked on an issue (the CEO's ask_manager later; a test meanwhile), and answered here or on GitHub
 app.post(
@@ -260,7 +271,7 @@ const shutdown = (signal: string) => {
   backend.cloud.detach();
   for (const ws of [...wss.clients, ...terms.clients]) ws.terminate();
   server.close();
-  void Promise.all([store.flush(), demo?.github.flush(), terminals.saveAll(), office.close()])
+  void Promise.all([store.flush(), demo?.github.flush(), terminals.saveAll(), office.close(), previews.stopAll()])
     .catch((err) => console.error('  could not save the state:', err))
     .finally(() => process.exit(0));
 };

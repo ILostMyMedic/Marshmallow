@@ -1,5 +1,5 @@
 // One floor of the building: its room and the building around it, a desk for every seat (each worker at the desk their
-// `desk` number names, with a lamp that comes on at night, the rest vacant), the whiteboard, the lounge with its couch, the kitchenette, the water cooler,
+// `desk` number names, with a lamp that comes on at night, the rest vacant), the whiteboard, the app monitor, the lounge with its couch, the kitchenette, the water cooler,
 // the clock, the ping-pong table, the gong and the plants, all where cubefarm has them, and the errand director
 // sending people out to them. The lobby (Lobby.tsx) and the CEO's floor (CeoFloor.tsx) are floors of their own.
 // Adapted from cubefarm client/src/world/OfficeFloor.tsx (MIT): signs are cut.
@@ -7,6 +7,7 @@ import { memo, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Floor, Worker } from '../../../shared/types';
 import { useStore } from '../store';
+import { AppMonitor } from './AppMonitor';
 import { Desk } from './Desk';
 import { ErrandDirector } from './ErrandDirector';
 import { Gong } from './Gong';
@@ -58,6 +59,7 @@ export const OfficeFloor = memo(function OfficeFloor({ floor, top }: { floor: Fl
       ))}
       <DeskLamps workers={workers} />
       <KanbanBoard floor={floor} />
+      <AppMonitor floor={floor} />
       <Couch position={at(COUCH)} rotationY={-Math.PI / 2} color={shade(color, -0.05)} />
       <CoffeeTable position={at(COFFEE_TABLE)} rotationY={Math.PI / 2} />
       <Kitchenette position={at(KITCHEN)} floor={floor.floor} />

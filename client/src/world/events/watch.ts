@@ -1,8 +1,8 @@
 // Adapted from cubefarm client/src/world/events/watch.ts (MIT), for Marshmallow's errand director and its workers.
 
 // The 'watch' errand: while a big world event is on (eventsState.ts), free workers on the floor you're on hurry to a
-// window or the glass door on its side of the building, look, point, gasp or cheer (with a little bubble), then go back
-// to their desks. It goes through the errand director (errands.ts): its rules for who may go (busy workers keep
+// window or the glass door on its side of the building (for a street event, as it comes past: watchPlan.ts's
+// watchWindow), look, point, gasp or cheer (with a little bubble), then go back to their desks. It goes through the errand director (errands.ts): its rules for who may go (busy workers keep
 // working) and its walker cap apply. Each worker watches each event once; nobody shares a spot (watchPlan.ts has the
 // spots and the reactions). ErrandDirector.tsx imports this for its registration.
 
@@ -11,19 +11,18 @@ import { isFree, registerErrand, type ActStep, type ErrandActor } from '../erran
 import { onErrand, say } from '../people';
 import { standable, walkways } from '../walkways';
 import { bigEvent, eventsProbe } from './eventsState';
-import { watchBeats, watchSpots } from './watchPlan';
-
-/** Start watching a couple of seconds in, and stop sending people out this long before the end. */
-const LOOK = { from: 2, last: 14 };
+import { watchBeats, watchSpots, watchWindow } from './watchPlan';
 
 /** Who stands where (worker → spot id), and which run each worker has watched already. */
 const holders = new Map<string, string>();
 const watched = new Map<string, number>();
 
-/** The big event that's on and still worth running to the window for, or null. */
+/** The big event that's on and worth running to the window for now (watchWindow), or null. */
 function watchable() {
   const run = bigEvent();
-  return run && run.t >= LOOK.from && run.t < run.seconds - LOOK.last ? run : null;
+  if (!run) return null;
+  const { from, until } = watchWindow(run.id, run.seconds);
+  return run.t >= from && run.t < until ? run : null;
 }
 
 function actor(id: string): ErrandActor {

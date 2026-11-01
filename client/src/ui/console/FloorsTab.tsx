@@ -1,13 +1,18 @@
-// The console's Floors tab: every floor with its settings, a sync, the CEO's planning of its brief and the issues held
-// for you, and connecting a repository as a new floor. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (FloorsTab,
-// FloorRow, FloorBrief) and ProjectPicker.tsx's GitHub mode (MIT). Cut: folders on this computer and new projects,
-// disconnecting, floor colours, linked repos, auto-merge (always on here), the office's own update and app previews.
+// The console's Floors tab: every floor with its settings, its app (the preview: start, stop, restart, its address, the
+// command and port to run it with), a sync, the CEO's planning of its brief and the issues held for you, and connecting
+// a repository as a new floor. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (FloorsTab, FloorRow, FloorBrief),
+// AppViewer.tsx (PreviewSettings) and ProjectPicker.tsx's GitHub mode (MIT). Cut: folders on this computer and new
+// projects, disconnecting, floor colours, linked repos, auto-merge (always on here), the office's own update, and the
+// preview's environment.
 import { useEffect, useRef, useState } from 'react';
 import type { Floor, GhRepoSummary } from '../../../../shared/types';
 import { floorPath, query } from '../../api';
+import { configPatch, firstLine, isOn, parsePort, shortUrl, stoppedPreview } from '../../preview';
 import { useStore } from '../../store';
+import { act } from '../../world/actions';
 import { rideTo } from '../../world/elevatorRide';
 import { useView } from '../../world/view';
+import { PreviewPill } from '../AppViewer';
 import { FloorBadge } from './fields';
 import { freeRepos, repoName } from './forms';
 import { showTab } from './nav';
@@ -83,6 +88,85 @@ function Held({ floor }: { floor: Floor }) {
   );
 }
 
+/** The floor's app, run to check what the team shipped (server/previews.ts): only ever started by hand. */
+function Preview({ floor }: { floor: Floor }) {
+  const p = useStore((s) => s.previews[floor.id]) ?? stoppedPreview(floor.id);
+  const fp = floorPath(floor.id);
+  const [doing, setDoing] = useState<'start' | 'stop' | 'restart' | null>(null);
+  const send = (verb: 'start' | 'stop' | 'restart') => {
+    setDoing(verb);
+    void run('POST', `/api/floors/${fp}/preview/${verb}`).finally(() => setDoing(null));
+  };
+  const [cmd, setCmd] = useState(p.config.command ?? '');
+  const [port, setPort] = useState(p.config.port === null ? '' : String(p.config.port));
+  useEffect(() => setCmd(p.config.command ?? ''), [p.config.command]);
+  useEffect(() => setPort(p.config.port === null ? '' : String(p.config.port)), [p.config.port]);
+  const [saving, go] = useBusy();
+  const parsed = parsePort(port);
+  const patch = parsed.problem ? null : configPatch(p.config, cmd, parsed.port);
+  const running = p.state === 'running' && p.url;
+  return (
+    <div className="console-preview">
+      <div className="console-row wrap">
+        <strong>🖥 App</strong>
+        <PreviewPill state={p.state} />
+        {running ? (
+          <a href={p.url!} target="_blank" rel="noreferrer" title="Open it in a new tab">
+            {shortUrl(p.url)} ↗
+          </a>
+        ) : (
+          p.state === 'error' && <span className="console-bad">{firstLine(p.error) ?? 'It stopped unexpectedly.'}</span>
+        )}
+        <span className="console-grow" />
+        {isOn(p.state) ? (
+          <>
+            <button className="console-btn small" disabled={!!doing} title="Stop it and start it again, from the latest commit" onClick={() => send('restart')}>
+              {doing === 'restart' ? 'Restarting…' : '↻ Restart'}
+            </button>
+            <button className="console-btn small bad" disabled={!!doing} onClick={() => send('stop')}>
+              {doing === 'stop' ? 'Stopping…' : '■ Stop'}
+            </button>
+          </>
+        ) : (
+          <button className="console-btn small good" disabled={!!doing} title={`Run ${floor.defaultBranch}'s latest commit on this computer`} onClick={() => send('start')}>
+            {doing === 'start' ? 'Starting…' : p.state === 'error' ? '↻ Try again' : '▶ Start'}
+          </button>
+        )}
+        <button className="console-btn small" onClick={() => act({ kind: 'app', floorId: floor.id })}>
+          Open in the viewer
+        </button>
+      </div>
+      <form
+        className="console-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (patch) void go(run('PATCH', `/api/floors/${fp}/preview`, patch));
+        }}
+      >
+        <input
+          className="console-grow"
+          value={cmd}
+          placeholder={!p.config.command && p.command ? `Command: ${p.command} (found)` : 'Command: automatic'}
+          aria-label="Command that runs the app"
+          spellCheck={false}
+          onChange={(e) => setCmd(e.target.value)}
+        />
+        <input value={port} placeholder={`Port: ${!p.config.port && p.port ? p.port : 'automatic'}`} aria-label="Port" inputMode="numeric" style={{ width: '13ch' }} onChange={(e) => setPort(e.target.value)} />
+        <button className="console-btn small good" disabled={!patch || saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </form>
+      {parsed.problem ? (
+        <p className="console-bad">{parsed.problem}</p>
+      ) : (
+        <p className="console-hint">
+          Empty boxes are automatic: the package.json's dev, start or preview script, on a port kept for the floor.{isOn(p.state) && ' A change applies from the next start.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function FloorCard({ floor, focused }: { floor: Floor; focused: boolean }) {
   const team = useStore((s) => Object.values(s.workers).filter((w) => w.floorId === floor.id && w.role !== 'ceo').length);
   const hasCeo = useStore((s) => Object.values(s.workers).some((w) => w.role === 'ceo'));
@@ -129,6 +213,7 @@ function FloorCard({ floor, focused }: { floor: Floor; focused: boolean }) {
           <input type="checkbox" checked={floor.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> 🌐 Browser testing in QA
         </label>
       </div>
+      <Preview floor={floor} />
       <Held floor={floor} />
       <Brief floor={floor} hasCeo={hasCeo} />
     </article>

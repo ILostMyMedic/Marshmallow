@@ -66,6 +66,7 @@ const snapshot: Snapshot = {
   records: EMPTY_RECORDS,
   look: null,
   floorPlans: {},
+  previews: {},
   world: EMPTY_WORLD,
 };
 

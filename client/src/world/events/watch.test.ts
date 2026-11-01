@@ -7,7 +7,7 @@ import { standable, walkways } from '../walkways';
 import { EVENT_IDS, EVENTS, type EventId } from '../../../../shared/worldEvents';
 import { runningEvents, showRuns } from './eventsState';
 import './watch';
-import { watchBeats, watchSpots } from './watchPlan';
+import { watchBeats, watchSpots, watchWindow } from './watchPlan';
 
 let key = 0;
 /** The office starts `id` now, alongside what's on (a big one replacing any other big one); returns this tab's run. */
@@ -79,6 +79,25 @@ describe('the watch errand', () => {
     expect(wanted(errands(), busy, state()).map((e) => e.name)).not.toContain('watch');
     blimp.t = blimp.seconds - 5;
     expect(watch.when(idle, state())).toBe(false); // too late to go
+    endAll();
+  });
+
+  it('waits for a street event to come down the street before sending anyone to the window', () => {
+    const bus = triggerEvent('rockbus', 'west');
+    const { from, until } = watchWindow('rockbus', bus.seconds);
+    expect(from).toBeGreaterThan(5);
+    expect(until).toBeGreaterThan(from + 10);
+    expect(until).toBeLessThan(bus.seconds - 10);
+    bus.t = 3;
+    expect(watch.when(idle, state())).toBe(false); // still down the street
+    bus.t = from + 1;
+    expect(watch.when(idle, state())).toBe(true);
+    const spot = watch.place!(idle, state());
+    expect(spot!.x).toBeLessThan(0); // the west street's windows
+    bus.t = until + 1;
+    expect(watch.when(idle, state())).toBe(false); // on its way off
+    // a sky event's window is as it was
+    expect(watchWindow('blimp', 85)).toEqual({ from: 2, until: 71 });
     endAll();
   });
 

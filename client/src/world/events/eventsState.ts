@@ -119,7 +119,7 @@ export const eventsProbe: Record<string, unknown> = {
     return query('/api/world/log');
   },
   get catalog() {
-    return Object.values(EVENTS).map((e) => ({ id: e.id, label: e.label, tier: e.tier, big: e.big, seconds: e.seconds }));
+    return Object.values(EVENTS).map((e) => ({ id: e.id, label: e.label, tier: e.tier, big: e.big, street: e.street, seconds: e.seconds }));
   },
   /** Starts an event now for every tab ('plane', 'blimp', 'duck'…), on 'west' or 'east' (either by default): a promise of it, or null for an unknown name. */
   async trigger(name: string, side?: Side) {

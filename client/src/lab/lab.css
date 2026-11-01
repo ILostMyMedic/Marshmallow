@@ -1,0 +1,206 @@
+/* The character lab (/lab): the game's cream-and-ink panels beside a soft room. */
+
+.lab {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+  color: #23263a;
+  background: #f5ede2;
+  color-scheme: light;
+}
+
+.lab-panel {
+  overflow-y: auto;
+  padding: 14px 14px 24px;
+  background: #fffdf5;
+  border-right: 2px solid #1f1d2b;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lab-panel h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.lab-panel h2 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6a5f55;
+}
+
+.lab-panel header p {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.lab-panel a {
+  color: #c1442e;
+}
+
+.lab-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.lab-buttons button,
+.lab-cell-name {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 2px solid #1f1d2b;
+  background: #fff;
+  color: #23263a;
+  box-shadow: 0 2px 0 #1f1d2b;
+  cursor: pointer;
+}
+
+.lab-buttons button:hover {
+  background: #fff4dc;
+}
+
+.lab-buttons button.on {
+  background: #ffd166;
+}
+
+.lab-buttons button:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #1f1d2b;
+}
+
+.lab-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 8px;
+  font-size: 0.82rem;
+  margin-bottom: 6px;
+}
+
+.lab-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.lab-range input {
+  flex: 1;
+}
+
+.lab-hint,
+.lab-look {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #6a5f55;
+  line-height: 1.35;
+}
+
+.lab-tweaks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+  font-size: 0.8rem;
+}
+
+.lab-tweaks label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lab-tweaks select {
+  font: inherit;
+  font-size: 0.8rem;
+  border: 2px solid #1f1d2b;
+  border-radius: 8px;
+  background: #fff;
+  padding: 1px 4px;
+}
+
+.lab-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid #1f1d2b;
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+
+.lab-costs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.lab-costs th,
+.lab-costs td {
+  padding: 3px 4px;
+  text-align: right;
+  border-bottom: 1px solid #eadfce;
+}
+
+.lab-costs th:first-child,
+.lab-costs td:first-child {
+  text-align: left;
+}
+
+.lab-stage {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 35%, #fffaf2 0%, #f3e6d4 60%, #e8d5bd 100%);
+}
+
+.lab-stage canvas {
+  touch-action: none;
+}
+
+.lab-cell {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  border-right: 1px solid rgba(31, 29, 43, 0.1);
+  border-bottom: 1px solid rgba(31, 29, 43, 0.1);
+}
+
+.lab-cell-name {
+  pointer-events: auto;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: rgba(255, 253, 245, 0.94);
+  font-weight: 600;
+}
+
+.lab-cell-name small {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: #6a5f55;
+}
+
+.lab-blurb {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  max-width: min(460px, calc(100% - 20px));
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 2px solid #1f1d2b;
+  background: rgba(255, 253, 245, 0.94);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}

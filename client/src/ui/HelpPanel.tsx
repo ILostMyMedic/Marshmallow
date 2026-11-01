@@ -22,6 +22,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
       ['Click', 'Look around (the mouse turns you)'],
       ['W A S D', 'Walk, Shift to run'],
       ['E or click', 'Use what you aim at: a desk’s terminal, the board, the elevator, the coffee machine, a lookout, a worker to say hi'],
+      ['E on the big screen', 'The app monitor: start the floor’s app and try what the team shipped, in the app viewer'],
       ['E', 'Sip or bite what you hold'],
       ['G', 'Put down what you hold'],
       ['V', 'First or third person'],
@@ -34,7 +35,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
       ['Drag', 'Turn round the floor'],
       ['Right-drag or W A S D', 'Move'],
       ['Wheel', 'Zoom'],
-      ['Click', 'Open what’s under the mouse: a person’s chip, the board'],
+      ['Click', 'Open what’s under the mouse: a person’s chip, the board, the app monitor'],
     ],
   },
   {

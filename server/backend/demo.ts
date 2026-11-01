@@ -9,6 +9,7 @@ import type { SessionCallbacks, SessionHandle, SessionOptions } from '../session
 import type { Backend } from './backend.ts';
 import { demoCloud } from './demoCloud.ts';
 import { FakeGitHub } from './demoGithub.ts';
+import { demoPreviews } from './demoPreviews.ts';
 import { fakeSession } from './demoSessions.ts';
 
 /** How long the demo's pretend work takes, in ms (the tests make it all instant). */
@@ -21,6 +22,8 @@ export interface DemoTiming {
   closeAfterMergeMs: number;
   /** The fake Upstash account's base delay (creating a Box takes 2.5 of these). */
   boxMs: number;
+  /** Each step of a floor's preview coming up (the install takes two). */
+  previewMs: number;
 }
 
 const DEFAULT_TIMING: DemoTiming = {
@@ -31,6 +34,7 @@ const DEFAULT_TIMING: DemoTiming = {
   checksMs: () => 12_000 + Math.random() * 10_000,
   closeAfterMergeMs: 5_000,
   boxMs: 1000,
+  previewMs: 800,
 };
 
 // How each kind of log line looks in the worker's terminal.
@@ -91,6 +95,7 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
   const installed = new Set<string>();
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const deskDir = (machine: string, fullName: string) => `/demo/machines/${machine}/work/${fullName}`;
+  const previews = demoPreviews(github, timing.previewMs);
 
   const machines: MachineProvider = {
     deskDir,
@@ -138,10 +143,12 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
     // A Box worker's desk is known by their Box: every Box keeps a repo's worktree at the same path.
     startSession: (o, cb) => typedInto(o, fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.box ? `box:${o.box.boxId}` : o.cwd) ?? null, rand, stepMs: timing.stepMs })),
     cloud: demoCloud((boxId, desk) => desks.set(`box:${boxId}`, desk), timing.boxMs),
+    previews,
     reset: () => {
       github.reset();
       desks.clear();
       installed.clear();
+      previews.reset();
     },
   };
 }

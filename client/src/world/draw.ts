@@ -1,7 +1,8 @@
-// Adapted from cubefarm client/src/world/draw.ts (MIT): the terminal, name tags, signs, glass, the facade and the
-// whiteboard; the app screen and the browser pane are cut.
+// Adapted from cubefarm client/src/world/draw.ts (MIT): the terminal, name tags, signs, glass, the facade, the
+// whiteboard and the app screen (without its PR channels and screenshots); the browser pane is cut.
 import type { ActivityKind, Floor, LogLine, Worker } from '../../../shared/types';
 import type { CardTone, KanbanCard, KanbanColumns } from '../kanban';
+import type { MonitorCaption, MonitorTone } from '../preview';
 import { seededAppearance } from './appearance';
 
 // 2D canvas painters for everything in the office that shows text: the desks' monitors, signs and name tags.
@@ -427,4 +428,128 @@ function drawNote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
   }
   ctx.restore();
   ctx.textBaseline = 'middle';
+}
+
+// ---------- the app monitor (adapted from cubefarm draw.ts: drawAppScreen) ----------
+
+const APP_TONE: Record<MonitorTone, string> = { off: '#6c6c88', busy: '#f4a261', live: '#ef233c', bad: '#e63946' };
+
+export interface AppScreenInfo {
+  floor: number;
+  name: string;
+  color: string;
+  caption: MonitorCaption;
+  /** When a running app came up, as the clock shows it. */
+  since: string | null;
+}
+
+/** The big screen on an office floor's north wall: the floor's app and how it's doing (preview.ts monitorCaption). */
+export function drawAppScreen(ctx: CanvasRenderingContext2D, w: number, h: number, info: AppScreenInfo) {
+  const c = info.caption;
+  ctx.fillStyle = TERM.bg;
+  ctx.fillRect(0, 0, w, h);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+
+  // the header: the floor's chip, the repo's name, the state's badge
+  const headH = 118;
+  ctx.fillStyle = TERM.bar;
+  ctx.fillRect(0, 0, w, headH);
+  ctx.fillStyle = info.color;
+  ctx.fillRect(0, headH - 6, w, 6);
+  ctx.font = `700 34px ${SANS}`;
+  const chip = `FLOOR ${info.floor}`;
+  const chipW = ctx.measureText(chip).width + 44;
+  roundRect(ctx, 40, 30, chipW, 54, 27);
+  ctx.fillStyle = info.color;
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(chip, 62, 58);
+  ctx.font = `700 38px ${SANS}`;
+  const badgeW = ctx.measureText(c.badge).width + 52;
+  roundRect(ctx, w - 40 - badgeW, 28, badgeW, 58, 29);
+  ctx.fillStyle = APP_TONE[c.tone];
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText(c.badge, w - 40 - badgeW / 2, 58);
+  ctx.textAlign = 'left';
+  ctx.font = `700 50px ${SANS}`;
+  const nameX = 40 + chipW + 26;
+  ctx.fillText(fitText(ctx, info.name, w - 40 - badgeW - 26 - nameX), nameX, 58);
+
+  const centred = (text: string, y: number, size: number, color: string, weight = 700, font = SANS) => {
+    ctx.font = `${weight} ${size}px ${font}`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.fillText(fitText(ctx, text, w - 100), w / 2, y);
+    ctx.textAlign = 'left';
+  };
+  const footH = 100;
+  const midY = headH + (h - headH - footH) / 2;
+
+  if (c.tone === 'off') {
+    // a big play button
+    const cy = midY - 70;
+    ctx.fillStyle = info.color;
+    ctx.beginPath();
+    ctx.arc(w / 2, cy, 84, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 26, cy - 42);
+    ctx.lineTo(w / 2 - 26, cy + 42);
+    ctx.lineTo(w / 2 + 44, cy);
+    ctx.closePath();
+    ctx.fill();
+    centred(c.title, midY + 70, 72, '#ffffff');
+    centred(c.detail, midY + 145, 38, '#b8b8cc', 600);
+    centred(c.footer, h - footH + 50, 32, '#8d8da8', 600);
+  } else if (c.tone === 'busy') {
+    centred('Getting the app ready…', headH + 80, 46, '#b8b8cc', 600);
+    centred(c.title, midY - 20, 72, '#ffffff');
+    // a three-step progress bar
+    const gap = 18;
+    const segW = (w - 200 - gap * 2) / 3;
+    for (let i = 0; i < 3; i++) {
+      const x = 100 + i * (segW + gap);
+      roundRect(ctx, x, midY + 80, segW, 34, 17);
+      ctx.fillStyle = i < c.step ? TERM.done : i === c.step ? '#f4a261' : '#3a3a52';
+      ctx.fill();
+    }
+    centred(c.detail, midY + 160, 32, '#b8b8cc', 600);
+    centred(c.footer, h - footH + 50, 28, '#8d8da8', 500, MONO);
+  } else if (c.tone === 'live') {
+    // the "running at" card the live look covers once the app has loaded in it (AppMonitor.tsx)
+    const left = 70;
+    ctx.font = `600 36px ${SANS}`;
+    ctx.fillStyle = '#b8b8cc';
+    ctx.fillText('Running at', left, headH + 90);
+    ctx.font = `700 76px ${MONO}`;
+    ctx.fillStyle = TERM.tool;
+    ctx.fillText(fitText(ctx, c.title, w - 2 * left), left, headH + 180);
+    if (c.detail) {
+      ctx.font = `700 42px ${SANS}`;
+      const dW = ctx.measureText(c.detail).width + 48;
+      roundRect(ctx, left, headH + 260, dW, 64, 32);
+      ctx.fillStyle = info.color;
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(c.detail, left + 24, headH + 293);
+    }
+    if (info.since) {
+      ctx.font = `500 34px ${SANS}`;
+      ctx.fillStyle = '#8d8da8';
+      ctx.fillText(`up since ${info.since}`, left, headH + 380);
+    }
+    centred(c.footer, h - footH + 50, 34, TERM.done, 600);
+  } else {
+    ctx.fillStyle = '#e63946';
+    ctx.fillRect(0, midY - 120, w, 130);
+    ctx.font = `700 44px ${SANS}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(fitText(ctx, `⚠ ${c.detail}`, w - 100), 50, midY - 55);
+    centred(c.title, midY + 90, 56, '#ffffff');
+    centred(c.footer, h - footH + 50, 32, '#ffb4ba', 600);
+  }
 }

@@ -9,7 +9,8 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Billboards } from './Billboards';
 import { Bridge } from './Bridge';
-import { carPose, carRoutes, CITY, CORRIDOR_HALF, GROUND, theCity, type CityBox, type CityBuilding } from './cityLayout';
+import { carRoutes, CITY, CORRIDOR_HALF, GROUND, STREET_Y, theCity, type CityBox, type CityBuilding } from './cityLayout';
+import { trafficPose } from './events/streetTraffic';
 import { CITY_HAZE, hazed, hazedToon } from './haze';
 import { outdoor } from './sky/outdoor';
 
@@ -168,7 +169,7 @@ function plazaTrees(): { trunks: CityBox[]; crowns: CityBox[] } {
   return { trunks, crowns };
 }
 
-/** The dozen cars and buses on the nearer streets, driving their lanes. */
+/** The dozen cars and buses on the nearer streets, driving their lanes and giving way to the street events (events/streetTraffic.ts). */
 function Cars() {
   const cars = useMemo(() => carRoutes(), []);
   const bodies = useRef<THREE.InstancedMesh>(null);
@@ -184,7 +185,7 @@ function Cars() {
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     cars.forEach((car, i) => {
-      carPose(car, t, tmp.pose);
+      trafficPose(car, i, t, tmp.pose);
       tmp.q.setFromAxisAngle(tmp.up, tmp.pose.yaw);
       const bodyH = car.h * (car.bus ? 0.75 : 0.5);
       tmp.m.compose(tmp.p.set(tmp.pose.x, 0.25, tmp.pose.z), tmp.q, tmp.s.set(car.w, bodyH, car.len));
@@ -204,9 +205,6 @@ function Cars() {
     </group>
   );
 }
-
-/** How far the streets sit below the plaza, whose top is just under the lobby's floor (so neither flickers through it). */
-const STREET_Y = -0.16;
 
 export function City({ elevation }: { elevation: number }) {
   const city = useMemo(() => theCity(), []);

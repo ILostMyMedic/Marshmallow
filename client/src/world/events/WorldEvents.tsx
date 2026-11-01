@@ -1,7 +1,8 @@
 // Adapted from cubefarm client/src/world/events/WorldEvents.tsx (MIT): the elevation comes from Game.tsx.
 
 // World events outside (the office picks them, server/db/world.ts; eventsState.ts follows what's on): each running
-// event's scene, loaded lazily the first time it's needed and torn down when it ends, in a group at street level.
+// event's scene, in the sky or down on the street, loaded lazily the first time it's needed and torn down when it
+// ends, in a group at street level.
 // Nothing is drawn while no event runs. Each frame moves the runs to the wall clock, so every tab shows the same moment
 // of them. While any runs, their sounds (ui/eventSfx.ts) follow you: through the glass indoors, quiet behind a panel and
 // while the elevator carries you.
@@ -26,6 +27,11 @@ const SCENES: Record<EventId, LazyExoticComponent<ComponentType<SceneProps>>> = 
   rainbow: lazy(() => import('./scenes/Rainbow')),
   duck: lazy(() => import('./scenes/Duck')),
   whale: lazy(() => import('./scenes/Whale')),
+  rockbus: lazy(() => import('./scenes/RockBus')),
+  icecream: lazy(() => import('./scenes/IceCream')),
+  firetruck: lazy(() => import('./scenes/FireTruck')),
+  foodtruck: lazy(() => import('./scenes/FoodTruck')),
+  parade: lazy(() => import('./scenes/Parade')),
 };
 
 /** The events outside, at street level: `elevation` is how high the floor you're on stands (the city's, City.tsx). */

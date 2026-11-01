@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { HAIR_STYLES, OUTFITS } from './looks';
 import { ACCENTS, BUILD_SHAPE, TALL_HAIR, seededAppearance, type Appearance } from './appearance';
-import { PARTS } from './characterParts';
+import { hairUnder, HATS, PARTS } from './characterParts';
 import { EYES, MORPHS, MORPH_AT, MOUTH } from './face';
 
 const seeds = Array.from({ length: 800 }, (_, i) => (i * 2654435761) % 2 ** 31);
@@ -152,6 +152,32 @@ describe('character parts', () => {
       }
     }
     expect(mouthVerts).toBe(30);
+  });
+
+  it('tucks the hair under a hat instead of through it', () => {
+    const v = new THREE.Vector3();
+    /** How many of g's vertices sit under the hat's crown but stand out through it (closer than `gap` to it, or past it). */
+    const through = (g: THREE.BufferGeometry, hat: keyof typeof HATS, gap: number) => {
+      const { r, t, at, tip } = HATS[hat];
+      const toHat = new THREE.Matrix4().makeRotationX(-tip).multiply(new THREE.Matrix4().makeTranslation(-at[0], -at[1], -at[2]));
+      const p = g.attributes.position;
+      let n = 0;
+      for (let i = 0; i < p.count; i++) {
+        v.fromBufferAttribute(p, i).applyMatrix4(toHat);
+        if (Math.acos(v.y / v.length()) < t && v.length() > r - gap) n++;
+      }
+      return n;
+    };
+    // the side part's swoop stood out through a cap before it was tucked
+    expect(through(PARTS.hair.sidePart!, 'cap', 0)).toBeGreaterThan(0);
+    for (const hat of ['beanie', 'cap'] as const) {
+      for (const style of HAIR_STYLES.filter((s) => !TALL_HAIR.includes(s))) {
+        const g = hairUnder(hat, style);
+        expect(hairUnder(hat, style)).toBe(g); // made once and shared
+        if (g) expect(through(g, hat, 0.01)).toBe(0);
+      }
+    }
+    for (const style of HAIR_STYLES) expect(hairUnder('none', style)).toBe(PARTS.hair[style]);
   });
 
   it('leaves the mouth uncovered by beards and stubble', () => {

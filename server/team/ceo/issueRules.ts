@@ -3,6 +3,7 @@
 // Adapted from cubefarm server/ceo.ts (MIT): IssueCap, planDependencies, checkCloseIssue.
 import { blockers, holdUps, setDependsOn } from '../../../shared/issues.ts';
 import { HttpError } from '../../httpError.ts';
+import { issuesResolvedBy } from '../../pipeline/rules/issueClaims.ts';
 
 /** At most `max` issues per job; also notes the floors that got issues, to sync when the job ends. */
 export class IssueCap {
@@ -80,11 +81,12 @@ export function planDependencies(r: DependsRequest): DependsPlan {
 
 /**
  * Whether close_issue may close an issue: only one open on that floor (`state` is its state in the floor's repo;
- * null when unknown), and never one an open pull request closes.
+ * null when unknown), and never one an open pull request closes: one that links it, or the office's mm/issue- branch
+ * for it (GitHub links nothing for a PR into a work branch like dev).
  */
-export function checkCloseIssue(r: { floor: number; number: number; state: 'OPEN' | 'CLOSED' | null; pulls: { number: number; state: string; closesIssues: number[] }[] }) {
+export function checkCloseIssue(r: { floor: number; number: number; state: 'OPEN' | 'CLOSED' | null; pulls: { number: number; state: string; closesIssues: number[]; headRefName?: string }[] }) {
   if (r.state === 'CLOSED') throw new HttpError(404, `#${r.number} on floor ${r.floor} is already closed.`);
   if (r.state !== 'OPEN') throw new HttpError(404, `There is no open issue #${r.number} on floor ${r.floor}.`);
-  const pr = r.pulls.find((p) => p.state === 'OPEN' && p.closesIssues.includes(r.number));
+  const pr = r.pulls.find((p) => p.state === 'OPEN' && issuesResolvedBy({ headRefName: p.headRefName ?? '', closesIssues: p.closesIssues }).includes(r.number));
   if (pr) throw new HttpError(409, `PR #${pr.number} closes #${r.number}. Close or finish that pull request first.`);
 }

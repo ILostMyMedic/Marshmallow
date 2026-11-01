@@ -18,6 +18,7 @@ const pull = (n: number, state: PullInfo['state'] = 'OPEN'): PullInfo => ({
   title: `Feature ${n}`,
   url: `https://github.com/${REPO}/pull/${n}`,
   headRefName: `mm/issue-${n}-ada`,
+  baseRefName: 'main',
   state,
   isDraft: false,
   mergeable: 'MERGEABLE',

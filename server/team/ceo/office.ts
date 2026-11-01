@@ -1,11 +1,14 @@
 // The office's side of the CEO's tools: what each one reads or changes. Floors are named by number, as the CEO sees
-// them; workers by id or name. Discussions and project cards go on the desk (server/db/desk.ts).
+// them; workers by id or name. Discussions and project cards go on the desk (server/db/desk.ts), proposed playbook
+// changes into the playbook (server/playbook/), each a card in its thread.
 // Adapted from cubefarm server/swarm.ts (MIT): the office tools section and companyStatus.
+import { workBranchOf } from '../../../shared/branches.ts';
 import { effectiveModel } from '../../../shared/models.ts';
 import { isBusy, type Floor, type Worker } from '../../../shared/types.ts';
 import type { Desk } from '../../db/desk.ts';
 import { repoOwners } from '../../desk/projects.ts';
 import { proposalFrom, repoName } from '../../desk/proposals.ts';
+import { changeLabel, playbookDraftFrom } from '../../playbook/proposals.ts';
 import type { Ctx } from '../../pipeline/context.ts';
 import { readyIssues } from '../../pipeline/scheduler.ts';
 import { floorCapacity } from '../autoscale.ts';
@@ -87,6 +90,8 @@ export function officeHandlers(ctx: Ctx, job: CeoJob, cap: IssueCap, ceoName: st
             floor: f.floor,
             repo: f.fullName,
             clone: f.cloneStatus === 'ready' ? backend.mainDir(f.fullName) : `not ready (${f.cloneStatus})`,
+            // Where the floor's work starts and its PRs merge (the clone is checked out on the default branch)
+            workBranch: workBranchOf(f),
             brief: f.mission || null,
             summary: f.summary || null,
             qaBrief: f.qaBrief || null,
@@ -106,6 +111,15 @@ export function officeHandlers(ctx: Ctx, job: CeoJob, cap: IssueCap, ceoName: st
           .filter((d) => d.status === 'open')
           .map((d) => ({ title: d.title, floor: floorOf(d.floorId)?.floor ?? null, waitingFor: d.messages.at(-1)?.from === 'manager' ? 'you' : 'the manager' })),
         newRepositoriesCanGoUnder: ctx.desk?.get().owners ?? [],
+        // what every worker session gets; change it with propose_playbook_change
+        playbook: (ctx.playbook?.get().docs ?? []).map((d) => ({
+          scope: d.scope === 'office' ? 'office' : `floor ${floorOf(d.floorId)?.floor ?? `${d.floorId} (gone)`}`,
+          kind: d.kind,
+          name: d.name,
+          ...(d.description && { description: d.description }),
+          ...(!d.enabled && { enabled: false }),
+          body: d.body.length > 2000 ? `${d.body.slice(0, 2000)}…` : d.body,
+        })),
       });
     },
 
@@ -190,6 +204,19 @@ export function officeHandlers(ctx: Ctx, job: CeoJob, cap: IssueCap, ceoName: st
       made.proposalId = p.id;
       const where = draft.repo.kind === 'new' ? `a new ${draft.repo.private ? 'private' : 'public'} repository, ${repoName(draft.repo)}` : `the existing ${draft.repo.fullName}`;
       return `Proposed ${where}, a team of ${draft.teamSize} and ${draft.tasks.length} starting task${draft.tasks.length === 1 ? '' : 's'}. The manager sees it as a card in this chat and approves or declines it there; nothing is created until then. Tell them about it briefly in your final message.`;
+    },
+
+    async proposePlaybookChange(a) {
+      const thread = job.kind === 'chat' && job.chatId !== null ? { kind: 'chat' as const, id: job.chatId } : job.kind === 'discussion' && job.discussionId !== null ? { kind: 'discussion' as const, id: job.discussionId } : null;
+      if (!thread) throw new Error('Playbook changes are proposed in a chat or a discussion with the manager, and this job is neither. Suggest it in your final message.');
+      if (!ctx.playbook) throw new Error("The office database isn't open, so there's no playbook to change.");
+      const draft = playbookDraftFrom(a, (n) => {
+        const floor = n !== undefined ? floorNo(n) : floorOf(job.floorId ?? (thread.kind === 'discussion' ? (ctx.desk?.thread('discussion', thread.id)?.floorId ?? null) : null));
+        if (!floor) throw new Error("Say which floor: a floor's change needs floor.");
+        return floor.id;
+      });
+      const p = await ctx.playbook.propose(thread, draft, a.why);
+      return `Proposed ${p.docId !== null ? 'a change to' : 'new'} ${changeLabel(p.draft)}. The manager sees it as a card in this ${thread.kind} and approves, edits or declines it there; nothing changes until then. Mention it briefly in your final message.`;
     },
   };
 }

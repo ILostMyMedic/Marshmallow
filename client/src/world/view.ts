@@ -8,7 +8,7 @@ import type { End } from './pongPhysics';
 import type { Seat } from './seats';
 
 /** The manager's console's tabs (ui/ManagerConsole.tsx). */
-export type ConsoleTab = 'floors' | 'team' | 'issues' | 'shop' | 'settings';
+export type ConsoleTab = 'floors' | 'team' | 'issues' | 'shop' | 'playbook' | 'settings';
 
 /** The desktop's apps (ui/desktop/Desktop.tsx). */
 export type DesktopApp = 'chat' | 'discussions' | 'notices';

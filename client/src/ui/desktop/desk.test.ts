@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { lineDiff, type PlaybookProposal } from '../../../../shared/playbook';
 import type { ChatView, DeskMessage, DiscussionView, OfficeMessage, ProjectProposal, Question } from '../../../../shared/types';
 import {
   approveBody,
@@ -22,6 +23,9 @@ import {
   unreadChats,
   unreadNotices,
   waitingCount,
+  foldDiff,
+  playbookApproveBody,
+  withPlaybookCards,
 } from './desk';
 
 const q = (id: number, floorId: string, issueNumber: number, askedAt: number, answer: string | null = null, answeredAt: number | null = null): Question => ({
@@ -249,5 +253,37 @@ describe('a project card, edited', () => {
   it("names the repository owner/name", () => {
     expect(repoFullName(proposal().repo)).toBe('me/recipe-box');
     expect(repoFullName({ kind: 'existing', fullName: 'acme/app' })).toBe('acme/app');
+  });
+});
+
+describe("the CEO's playbook cards", () => {
+  const card = (id: number, at: number, thread: PlaybookProposal['thread'] = { kind: 'chat', id: 1 }): PlaybookProposal => ({
+    id,
+    thread,
+    at,
+    status: 'pending',
+    draft: { scope: 'office', floorId: null, kind: 'rules', name: 'tests-first', description: '', body: '- Run the tests', tools: '', model: '' },
+    docId: null,
+    before: null,
+    why: 'x',
+    decidedAt: null,
+  });
+
+  it("puts each card in its thread where it was proposed, before the CEO's reply", () => {
+    const messages = [dm(1, 'manager', 10), dm(2, 'ceo', 30), dm(3, 'manager', 40)];
+    const entries = withPlaybookCards(messages, [card(1, 20), card(2, 50), card(3, 25, { kind: 'discussion', id: 1 }), card(4, 5, { kind: 'chat', id: 2 })], { kind: 'chat', id: 1 });
+    expect(entries.map((e) => (e.kind === 'message' ? `m${e.message.id}` : `c${e.proposal.id}`))).toEqual(['m1', 'c1', 'm2', 'm3', 'c2']);
+  });
+
+  it('folds long unchanged stretches of a diff, keeping two lines round each change', () => {
+    const before = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].join('\n');
+    const after = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'H'].join('\n');
+    expect(foldDiff(lineDiff(before, after))).toEqual([{ op: 'skip', count: 5 }, { op: 'same', text: 'f' }, { op: 'same', text: 'g' }, { op: 'del', text: 'h' }, { op: 'add', text: 'H' }]);
+  });
+
+  it("sends only the manager's edits", () => {
+    const p = card(1, 0);
+    expect(playbookApproveBody(p, { description: '', body: '- Run the tests\r\n' })).toEqual({});
+    expect(playbookApproveBody(p, { description: ' Tests ', body: '- Run all the tests' })).toEqual({ description: ' Tests ', body: '- Run all the tests' });
   });
 });

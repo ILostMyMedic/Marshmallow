@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Floor, ServerEvent } from '../../shared/types.ts';
 import { Store } from '../store.ts';
 import { busiestDay, hatTricks, nightMerges } from './awards.ts';
@@ -23,6 +23,8 @@ const newStore = () => {
   return s;
 };
 beforeEach(() => {
+  // Midday on the office's clock: a merge after 22:00 would win the night-owl award too.
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 9, 1, 12, 0), shouldAdvanceTime: true });
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marshmallow-awards-'));
   events = [];
   store = newStore();
@@ -32,6 +34,7 @@ afterEach(async () => {
   await office?.close();
   await store.flush();
   fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+  vi.useRealTimers();
 });
 const of = <T extends ServerEvent['type']>(type: T) => events.filter((e): e is Extract<ServerEvent, { type: T }> => e.type === type);
 const trophies = () => office!.records.get().trophies.map((t) => t.id);

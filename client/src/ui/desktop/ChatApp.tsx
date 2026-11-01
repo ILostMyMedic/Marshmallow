@@ -1,6 +1,7 @@
 // The desktop's Chat app: a conversation with the CEO per idea, each with its own context. The sidebar lists them,
 // the most recent first; "New chat" starts one with your first message. The CEO helps shape the idea, and when the plan
-// is ready it puts a project card in the chat (ProjectCard.tsx). Adapted from cubefarm client/src/ui/Phone.tsx's chat
+// is ready it puts a project card in the chat (ProjectCard.tsx); a playbook change it proposes is a card too
+// (PlaybookCard.tsx). Adapted from cubefarm client/src/ui/Phone.tsx's chat
 // (MIT): one chat became many, and the quick questions became idea starters.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ChatView } from '../../../../shared/types';
@@ -9,7 +10,8 @@ import { useStore } from '../../store';
 import { useView } from '../../world/view';
 import { ConfirmButton } from '../console/fields';
 import { useCommand } from '../useCommand';
-import { chatLaunched, chatUnread, lastCeoAt, lastLine, proposalOf, sortChats } from './desk';
+import { chatLaunched, chatUnread, lastCeoAt, lastLine, proposalOf, sortChats, withPlaybookCards } from './desk';
+import { PlaybookCard, playbookCardKey } from './PlaybookCard';
 import { ProjectCard, proposalKey } from './ProjectCard';
 import { Avatar, Bubble, Composer, Empty, HireCeo, presence, shortWhen, TypingDots, useCeo, useNarrow } from './parts';
 import { useDeskSeen } from './seen';
@@ -70,6 +72,7 @@ function Title({ chat }: { chat: ChatView }) {
 function Conversation({ chat, onBack, onDeleted }: { chat: ChatView; onBack: () => void; onDeleted: () => void }) {
   const ceo = useCeo();
   const proposals = useStore((s) => s.desk.proposals);
+  const playbookCards = useStore((s) => s.playbook.proposals);
   const open = useView((s) => s.openOverlay);
   const markChat = useDeskSeen((s) => s.markChat);
   const del = useCommand();
@@ -116,7 +119,14 @@ function Conversation({ chat, onBack, onDeleted }: { chat: ChatView; onBack: () 
       )}
       <div className="dt-log" ref={scroller} tabIndex={0} aria-label={`Messages in ${chat.title}`}>
         {chat.messages.length === 0 && <p className="dt-log-empty">Nothing here yet. Tell {name} what you have in mind.</p>}
-        {chat.messages.map((m) => {
+        {withPlaybookCards(chat.messages, playbookCards, { kind: 'chat', id: chat.id }).map((e) => {
+          if (e.kind === 'playbook')
+            return (
+              <Bubble key={playbookCardKey(e.proposal)} from="ceo" who={name} text="" at={e.proposal.at}>
+                <PlaybookCard p={e.proposal} />
+              </Bubble>
+            );
+          const m = e.message;
           const p = proposalOf(m, proposals);
           return (
             <Bubble key={m.id} from={m.from} who={m.from === 'ceo' ? name : 'You'} text={m.text} at={m.at}>

@@ -199,6 +199,10 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 
 ## 11. Manager UI (HTML over the 3D view)
 
+- [x] **The playbook**: the office's and each floor's agent docs (rules, skills, subagents, commands), edited in the console with templates, handed to every session without touching the repo; the CEO proposes changes · L (new)
+- [x] **A work branch per floor**: work starts from and merges into it (dev, say) instead of the default branch · M (new)
+- [x] **Sign-ins at a glance**: GitHub, Claude, local models and Upstash in the console's Settings · S (new)
+
 - [x] **Debug list view** of floors, workers and the queue: the first UI we build · S → `client/src/ui/FloorList.tsx`
 - [x] **Setup wizard**: your name, company, CEO · S
 - [x] **Manager console**: floors, team, issues, settings · L → `client/src/ui/ManagerConsole.tsx`

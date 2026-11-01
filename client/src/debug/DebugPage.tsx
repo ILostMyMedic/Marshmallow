@@ -7,6 +7,7 @@ import { BODY_STYLES, DAY_MODES, isBusy, type BodyStyle, type DayMode, type Floo
 import { STYLE_NAMES } from '../world/bodyStyle';
 import { BOX_SIZE_INFO, BOX_SIZES } from '../../../shared/cloud';
 import { CLAUDE_MODELS } from '../../../shared/models';
+import { playbookFor } from '../../../shared/playbook';
 import { officeDay, SEASON_SETTING_NAMES, SEASON_SETTINGS, seasonFor, parseSeasonSetting, type SeasonSetting } from '../../../shared/seasons';
 import { EVENTS, type EventId, type EventSide } from '../../../shared/worldEvents';
 import { command, floorPath, query } from '../api';
@@ -60,6 +61,7 @@ export function DebugPage() {
         <SeasonPicker run={run} />
         <BodyStylePicker run={run} />
         <InkToggle run={run} />
+        <OwnSetupToggle run={run} />
         <ModelField label="default model" value={settings.defaultModel} placeholder="claude-opus-5-5" onCommit={(v) => v && run('PATCH', '/api/settings', { defaultModel: v })} />
         <ConnectRepo run={run} />
         {demo && (
@@ -158,6 +160,43 @@ function InkToggle({ run }: { run: Run }) {
     <label className="connect" title="Ink outlines round the furniture and the people. Off draws none at all, for fewer draw calls. The same in every tab.">
       <input type="checkbox" checked={on} onChange={(e) => run('PATCH', '/api/settings', { inkOutlines: e.target.checked })} /> ink outlines
     </label>
+  );
+}
+
+/** Whether sessions load the manager's own Claude Code setup, an office setting (off: the repo's and the playbook's only). */
+function OwnSetupToggle({ run }: { run: Run }) {
+  const on = useStore((s) => s.settings.workersUseMySetup);
+  return (
+    <label className="connect" title="Sessions load your own Claude Code settings, CLAUDE.md, skills, plugins and memory. Off: --setting-sources project,local and auto memory off; your sign-in is used either way.">
+      <input type="checkbox" checked={on} onChange={(e) => run('PATCH', '/api/settings', { workersUseMySetup: e.target.checked })} /> workers use my setup
+    </label>
+  );
+}
+
+/**
+ * What a session on this floor gets from the playbook, as the office composes it at launch (shared/playbook.ts): the
+ * rules after its instructions, and the plugin's files. The console's Playbook tab edits it.
+ */
+function FloorPlaybook({ floor }: { floor: Floor }) {
+  const docs = useStore((s) => s.playbook.docs);
+  const own = useStore((s) => s.settings.workersUseMySetup);
+  const pb = playbookFor(docs, floor);
+  return (
+    <details className="debug-playbook">
+      <summary>
+        📘 What a session here gets: {pb.rulesDocs.length ? `${plural(pb.rulesDocs.length, 'rules doc')} (${pb.size.lines} lines, ~${pb.size.tokens} tokens a turn)` : 'no rules'}
+        {pb.entries.length > 0 && ` · plugin: ${pb.entries.map((e) => `${e.kind} ${e.name}`).join(', ')}`} · {own ? 'your own setup too' : 'not your own setup'}
+      </summary>
+      {pb.rules && <pre className="qa-brief">{pb.rules}</pre>}
+      {pb.files.map((f) => (
+        <details key={f.path}>
+          <summary>
+            <code>plugin/{f.path}</code>
+          </summary>
+          <pre className="qa-brief">{f.content}</pre>
+        </details>
+      ))}
+    </details>
   );
 }
 
@@ -372,6 +411,29 @@ function checksText(p: PullInfo): string {
   return { pending: '⏳ running', passing: '✅ passing', failing: '❌ failing', none: '' }[p.checks];
 }
 
+/** The floor's work branch, plainly: a name (empty: the default branch), made from the default branch first when GitHub lacks it and "create" is ticked. */
+function WorkBranchField({ floor, run }: { floor: Floor; run: Run }) {
+  const [name, setName] = useState(floor.workBranch ?? '');
+  const [create, setCreate] = useState(false);
+  useEffect(() => setName(floor.workBranch ?? ''), [floor.workBranch]);
+  return (
+    <form
+      className="connect"
+      title="Where the floor's work starts from and its PRs merge into"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run('PATCH', `/api/floors/${floorPath(floor.id)}`, { workBranch: name.trim() || null, createBranch: create });
+      }}
+    >
+      work branch <input value={name} placeholder={floor.defaultBranch} size={10} aria-label="Work branch" onChange={(e) => setName(e.target.value)} />
+      <label>
+        <input type="checkbox" checked={create} onChange={(e) => setCreate(e.target.checked)} /> create
+      </label>
+      <button disabled={(name.trim() || null) === floor.workBranch}>Set</button>
+    </form>
+  );
+}
+
 function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
   const workers = useStore((s) => s.workers);
   const logs = useStore((s) => s.logs);
@@ -398,6 +460,7 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
         <label className="connect">
           <input type="checkbox" checked={floor.autoAssign} onChange={(e) => run('PATCH', `/api/floors/${fp}`, { autoAssign: e.target.checked })} /> auto-assign
         </label>
+        <WorkBranchField floor={floor} run={run} />
         {floor.teamSize === null ? (
           <span className="pill">sized by the rules</span>
         ) : (
@@ -430,6 +493,7 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
       </p>
       {floor.syncError && <p className="error">Sync failed: {floor.syncError}</p>}
       <FloorBrief floor={floor} run={run} />
+      <FloorPlaybook floor={floor} />
 
       <h3>Workers</h3>
       {team.length === 0 ? (
@@ -540,7 +604,7 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
               <tr>
                 <th scope="col">PR</th>
                 <th scope="col">Title</th>
-                <th scope="col">Branch</th>
+                <th scope="col">Branch → base</th>
                 <th scope="col">Checks</th>
                 <th scope="col">QA</th>
                 <th scope="col">Author</th>
@@ -557,7 +621,9 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
                     <tr key={p.number}>
                       <th scope="row">#{p.number}</th>
                       <td>{p.title}</td>
-                      <td className="last-line">{p.headRefName}</td>
+                      <td className="last-line">
+                        {p.headRefName} → {p.baseRefName}
+                      </td>
                       <td>{checksText(p)}</td>
                       <td>
                         {p.state === 'MERGED' ? (

@@ -1,7 +1,7 @@
-// The demo's GitHub: repositories with issues, pull requests and checks, kept in memory and saved to
+// The demo's GitHub: repositories with branches, issues, pull requests and checks, kept in memory and saved to
 // demo-github.json in the office's home, so a restart picks up where it left off. Checks run for a while after every
 // push and now and then fail, and a merge now and then leaves another open PR conflicting, so the pipeline's fix
-// paths show.
+// paths show. As on GitHub, "Closes #N" links (and closes) issues only for PRs into the default branch.
 // Adapted from cubefarm server/demo.ts (MIT).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -20,6 +20,7 @@ interface FakeRepo {
   nextNumber: number; // issues and PRs share one sequence, as on GitHub
   closed: number[]; // closed issues
   comments?: Record<number, IssueComment[]>; // by issue number (absent in files saved before comments)
+  branches?: Record<string, string>; // branch -> its head commit (absent in files saved before branches: main only)
 }
 
 export interface FakeGitHubOptions {
@@ -68,6 +69,8 @@ const SEED: { fullName: string; description: string; issues: [string, string][] 
 ];
 
 const CHECKS = ['CI / build', 'Vercel'];
+/** Every demo repository's default branch. */
+export const DEMO_DEFAULT_BRANCH = 'main';
 
 // The kinds of codebase the demo's repositories are made of: each repository gets one, by its name.
 const LANGUAGE_MIXES: readonly string[][] = [
@@ -149,7 +152,25 @@ export class FakeGitHub implements GitHubApi {
 
   async repoMeta(fullName: string): Promise<RepoMeta> {
     const r = this.repo(fullName);
-    return { nameWithOwner: r.fullName, description: r.description, url: `https://github.com/${r.fullName}`, defaultBranch: 'main', empty: false, languages: fakeLanguages(r.fullName) };
+    return { nameWithOwner: r.fullName, description: r.description, url: `https://github.com/${r.fullName}`, defaultBranch: DEMO_DEFAULT_BRANCH, empty: false, languages: fakeLanguages(r.fullName) };
+  }
+
+  async listBranches(fullName: string) {
+    return Object.keys(this.branchesOf(this.repo(fullName)));
+  }
+
+  /** What each branch points at: a new commit with every merge into it (tests). */
+  branchHeads(fullName: string): Record<string, string> {
+    return { ...this.branchesOf(this.repo(fullName)) };
+  }
+
+  // Like POST repos/{repo}/git/refs at the head of `from`.
+  async createBranch(fullName: string, name: string, from: string) {
+    const branches = this.branchesOf(this.repo(fullName));
+    if (!(from in branches)) throw new Error(`gh: Not Found (HTTP 404): there is no branch ${from}`);
+    if (name in branches) throw new Error('gh: Reference already exists (HTTP 422)');
+    branches[name] = branches[from];
+    this.save();
   }
 
   // Like gh repo create --add-readme: a README's commit on main, and no issues yet.
@@ -228,8 +249,9 @@ export class FakeGitHub implements GitHubApi {
     if (headSha && pr.headSha !== headSha) throw new Error('Head branch was modified. Review and try the merge again.');
     if (pr.mergeable === 'CONFLICTING') throw new Error('Pull request is not mergeable: the merge commit cannot be cleanly created.');
     Object.assign(pr, { state: 'MERGED', mergedAt: iso() });
-    // Now and then a merge leaves another open PR conflicting, so conflict fixes can be seen.
-    for (const other of r.pulls) if (other.state === 'OPEN' && this.opts.rand() < 0.25) Object.assign(other, { mergeable: 'CONFLICTING', mergeState: 'DIRTY' });
+    this.branchesOf(r)[pr.baseRefName] = fakeSha(); // the merge commit, on the PR's base
+    // Now and then a merge leaves another open PR into the same branch conflicting, so conflict fixes can be seen.
+    for (const other of r.pulls) if (other.state === 'OPEN' && other.baseRefName === pr.baseRefName && this.opts.rand() < 0.25) Object.assign(other, { mergeable: 'CONFLICTING', mergeState: 'DIRTY' });
     this.later(this.opts.closeAfterMergeMs, () => {
       this.closeIssues(r, pr.closesIssues);
       this.save();
@@ -242,6 +264,14 @@ export class FakeGitHub implements GitHubApi {
     if (pr.mergeable === 'CONFLICTING') throw new Error('merge conflict between base and head');
     Object.assign(pr, { headSha: fakeSha(), mergeState: 'CLEAN' });
     this.runChecks(pr, false);
+    this.save();
+  }
+
+  async setPullBase(fullName: string, number: number, base: string) {
+    const r = this.repo(fullName);
+    if (!(base in this.branchesOf(r))) throw new Error(`could not change the base: there is no branch ${base}`);
+    const pr = this.pull(r, number);
+    Object.assign(pr, { baseRefName: base, closesIssues: this.linked(base, this.closes(pr)) });
     this.save();
   }
 
@@ -278,9 +308,10 @@ export class FakeGitHub implements GitHubApi {
     return {
       number,
       title: pr.title,
-      body: `Implements the change.\n\nCloses #${pr.closesIssues[0] ?? '?'}`,
+      body: `Implements the change.\n\nCloses #${this.closes(pr) ?? '?'}`,
       url: pr.url,
       headRefName: pr.headRefName,
+      baseRefName: pr.baseRefName,
       headSha: pr.headSha,
       isCrossRepository: false,
       closesIssues: [...pr.closesIssues],
@@ -309,20 +340,22 @@ export class FakeGitHub implements GitHubApi {
 
   // ---------- what the fake sessions do ----------
 
-  /** A worker's build opened a PR from `branch`; its checks start. */
-  openPull(fullName: string, pr: { title: string; branch: string; closes: number | null }): PullInfo {
+  /** A worker's build opened a PR from `branch` into `base` (the default branch unless said), saying "Closes #<closes>"; its checks start. */
+  openPull(fullName: string, pr: { title: string; branch: string; closes: number | null; base?: string }): PullInfo {
     const r = this.repo(fullName);
     const number = r.nextNumber++;
+    const base = pr.base ?? DEMO_DEFAULT_BRANCH;
     const pull: PullInfo = {
       number,
       title: pr.title,
       url: `https://github.com/${fullName}/pull/${number}`,
       headRefName: pr.branch,
+      baseRefName: base,
       state: 'OPEN',
       isDraft: false,
       mergeable: 'MERGEABLE',
       reviewDecision: null,
-      closesIssues: pr.closes ? [pr.closes] : [],
+      closesIssues: this.linked(base, pr.closes),
       createdAt: iso(),
       mergedAt: null,
       additions: 40 + ((number * 13) % 200),
@@ -354,6 +387,7 @@ export class FakeGitHub implements GitHubApi {
       if (this.opts.file) {
         const saved = JSON.parse(fs.readFileSync(this.opts.file, 'utf8')) as { repos: FakeRepo[] };
         for (const r of saved.repos) this.repos.set(r.fullName, r);
+        for (const r of this.repos.values()) for (const p of r.pulls) p.baseRefName ??= DEMO_DEFAULT_BRANCH; // saved before branches
         // Checks that were running when the office stopped have finished by now.
         for (const r of this.repos.values()) for (const p of r.pulls) if (p.checks === 'pending') this.settleChecks(p, false);
       }
@@ -396,6 +430,21 @@ export class FakeGitHub implements GitHubApi {
     const pr = r.pulls.find((p) => p.number === number);
     if (!pr) throw new Error(`no pull requests found for #${number} in ${r.fullName}`);
     return pr;
+  }
+
+  private branchesOf(r: FakeRepo): Record<string, string> {
+    return (r.branches ??= { [DEMO_DEFAULT_BRANCH]: fakeSha() });
+  }
+
+  /** The issue a PR's body says it closes: the one it links, else its mm/issue-<n>- branch's. */
+  private closes(pr: PullInfo): number | null {
+    const n = pr.closesIssues[0] ?? Number(/^mm\/issue-(\d+)-/.exec(pr.headRefName)?.[1]);
+    return Number.isInteger(n) ? n : null;
+  }
+
+  /** What "Closes #n" links: on GitHub, only a PR into the default branch links (and so closes) its issues. */
+  private linked(base: string, closes: number | null): number[] {
+    return closes && base === DEMO_DEFAULT_BRANCH ? [closes] : [];
   }
 
   private issue(r: FakeRepo, title: string, body: string, labels: string[] = []): IssueInfo {

@@ -7,6 +7,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { workBranchOf } from '../../../shared/branches';
 import type { Floor } from '../../../shared/types';
 import { monitorCaption, stoppedPreview, type MonitorTone } from '../preview';
 import { useStore } from '../store';
@@ -112,7 +113,7 @@ function LiveLook({ url, name }: { url: string; name: string }) {
 
 export const AppMonitor = memo(function AppMonitor({ floor }: { floor: Floor }) {
   const p = useStore((s) => s.previews[floor.id]) ?? stoppedPreview(floor.id);
-  const cap = monitorCaption(p, floor.defaultBranch);
+  const cap = monitorCaption(p, workBranchOf(floor));
   const name = floor.fullName.split('/')[1] ?? floor.fullName;
   const since = p.startedAt ? new Date(p.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
   const tex = useCanvasTexture(PX.w, PX.h, (ctx) => drawAppScreen(ctx, PX.w, PX.h, { floor: floor.floor, name, color: floor.color, caption: cap, since }), [floor.floor, name, floor.color, cap.badge, cap.title, cap.detail, cap.footer, cap.step, since]);

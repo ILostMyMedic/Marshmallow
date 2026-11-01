@@ -93,6 +93,8 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `💬 start_discussion "${clip(String(input.title ?? ''), 70)}"${floor}`;
     case 'resolve_discussion':
       return `✅ resolve_discussion${why('outcome')}`;
+    case 'propose_playbook_change':
+      return `📘 propose_playbook_change ${String(input.kind ?? '?')} "${clip(String(input.name ?? ''), 50)}"${input.scope === 'floor' ? floor || ' → a floor' : ' → the office'}${why('why')}`;
     case 'propose_project': {
       const repo = input.existing_repo || [input.new_repo_owner, input.new_repo_name].filter(Boolean).join('/');
       const tasks = Array.isArray(input.tasks) ? input.tasks.length : 0;

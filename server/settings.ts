@@ -44,9 +44,10 @@ export function settingsPatch(body: unknown, now?: Settings): Partial<Settings> 
     if (!SEASON_SETTINGS.includes(b.season as SeasonSetting)) throw new HttpError(400, `season must be one of ${SEASON_SETTINGS.join(', ')}`);
     patch.season = b.season as SeasonSetting;
   }
-  if (b.inkOutlines !== undefined) {
-    if (typeof b.inkOutlines !== 'boolean') throw new HttpError(400, 'inkOutlines must be true or false');
-    patch.inkOutlines = b.inkOutlines;
+  for (const key of ['inkOutlines', 'workersUseMySetup'] as const) {
+    if (b[key] === undefined) continue;
+    if (typeof b[key] !== 'boolean') throw new HttpError(400, `${key} must be true or false`);
+    patch[key] = b[key] as boolean;
   }
   if (b.setupDone !== undefined) patch.setupDone = b.setupDone === true;
   if (b.autoscale !== undefined) patch.autoscale = b.autoscale === true;

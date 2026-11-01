@@ -5,6 +5,7 @@ import { devBranch, devSystemPrompt, failedLogLines, noPushNudge, ONE_TURN, ownP
 const repo = (o: Partial<PromptFloor> = {}): PromptFloor => ({
   fullName: 'acme/shop',
   defaultBranch: 'main',
+  workBranch: 'main',
   browserTesting: true,
   summary: 'A shop',
   mission: 'Sell socks',
@@ -135,6 +136,24 @@ ${ONE_TURN}`);
       `${BEFORE.qaFull.replace('mm/qa-42-margaret.\n', `mm/qa-42-margaret.\n${depsLine}\n`)}\n${ONE_TURN}`,
     );
     expect(devSystemPrompt({ ...dev, worker: worker(), repo: repo(), depsLine: '' })).toBe(`${BEFORE.devFull}\n${ONE_TURN}`);
+  });
+
+  it("send the work to the floor's work branch when it has one", () => {
+    const onDev = repo({ workBranch: 'dev' });
+    const line = 'Repository: acme/shop (work branch: dev, where all work starts and every PR merges; default branch: main)';
+    const build = devSystemPrompt({ ...dev, worker: worker(), repo: onDev });
+    expect(build).toContain(line);
+    expect(build).toContain('created from origin/dev)');
+    expect(build).toContain('gh pr create --base dev --head mm/issue-7-margaret');
+    expect(build).toContain('or it conflicts with dev, you will get the details');
+    expect(build).toContain('Rules: never push to dev or main,');
+    expect(build).toContain('gh pr create --draft --base dev');
+    expect(build).not.toMatch(/--base main|origin\/main|the default branch/);
+    const test = qaSystemPrompt({ ...qa, worker: worker(), repo: onDev });
+    expect(test).toContain(line);
+    expect(test).toContain('git diff origin/dev...HEAD');
+    expect(test).toContain('A merge conflict with dev is not a fail');
+    expect(test).not.toMatch(/origin\/main|the default branch/);
   });
 
   it("put a PR's own test step in the QA prompt", () => {

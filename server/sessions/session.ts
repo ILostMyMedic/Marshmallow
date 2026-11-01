@@ -2,6 +2,7 @@
 // through Backend.startSession and only ever sees these types, so it can't tell the real CLI from the demo's fakes.
 // Adapted from cubefarm server/agentRunner.ts (MIT).
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { SessionPlaybook } from '../../shared/playbook.ts';
 import type { CeoJobKind, EffortLevel, LogEntry, TaskKind } from '../../shared/types.ts';
 import type { UsageWarning } from '../pipeline/pacing.ts';
 import type { BoxTarget } from './boxCli.ts';
@@ -51,6 +52,13 @@ export interface SessionOptions {
   box?: BoxTarget;
   /** Pick up the worker's CLI that kept working while the office restarted, instead of starting one. */
   reattach?: boolean;
+  /**
+   * The playbook for this session (server/playbook/session.ts): its rules go after `systemAppend`, its skills,
+   * subagents and commands into a plugin in the session's folder.
+   */
+  playbook?: SessionPlaybook;
+  /** Load the manager's own Claude Code setup (Settings.workersUseMySetup); otherwise only the repo's and the office's. */
+  ownSetup?: boolean;
 }
 
 /** The office's tools for the CEO. */

@@ -4,9 +4,9 @@
 // rename moves nothing.
 // Adapted from cubefarm server/machines.ts (MIT).
 
-/** What a desk starts from: the default branch, or a pull request's head (testing it, fixing it). */
+/** What a desk starts from: the floor's work branch (shared/branches.ts), or a pull request's head (testing it, fixing it). */
 export interface DeskBase {
-  defaultBranch: string;
+  workBranch: string;
   pr?: number;
 }
 

@@ -2,6 +2,7 @@
 // The game reads the same stream later, so workers carry what it needs from day one: status, activity, idleSince, seed.
 // Adapted from cubefarm shared/types.ts (MIT).
 import type { AwardStats } from './awards.ts';
+import type { PlaybookView } from './playbook.ts';
 import type { SeasonSetting } from './seasons.ts';
 import type { WorldView } from './worldEvents.ts';
 
@@ -133,6 +134,7 @@ export interface PullInfo {
   title: string;
   url: string;
   headRefName: string;
+  baseRefName: string; // the branch it merges into
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   isDraft: boolean;
   mergeable: string; // MERGEABLE | CONFLICTING | UNKNOWN
@@ -170,6 +172,7 @@ export interface Floor {
   description: string;
   url: string;
   defaultBranch: string;
+  workBranch: string | null; // where the floor's work starts from and merges into (shared/branches.ts); null = the default branch
   floor: number; // its number in the building, from 1
   color: string; // the floor's accent colour
   autoAssign: boolean; // free workers take the next ready issue on their own
@@ -239,6 +242,7 @@ export interface Settings {
   bodyStyle: BodyStyle; // how everyone in the office is drawn, in every tab
   season: SeasonSetting; // the season outside (shared/seasons.ts): the office's date, or one shown now, in every tab
   inkOutlines: boolean; // ink outlines round the furniture and the people, in every tab; off saves their draw calls
+  workersUseMySetup: boolean; // sessions load the manager's own Claude Code setup (user settings, CLAUDE.md, skills, memory); off: the repo's and the playbook's only
 }
 
 export const DAY_MODES = ['cycle', 'clock', 'day'] as const;
@@ -264,6 +268,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bodyStyle: 'human',
   season: 'auto',
   inkOutlines: true,
+  workersUseMySetup: false,
 };
 
 /** The last usage warning Claude gave: which limit ("weekly limit"), how full it was (0-100), when it resets, and when it came. */
@@ -509,6 +514,7 @@ export interface Snapshot {
   world: WorldView; // the world events on now (shared/worldEvents.ts)
   previews: Record<string, PreviewView>; // by floor id
   desk: DeskView;
+  playbook: PlaybookView; // the office's and each floor's agent docs, and the CEO's proposed changes (shared/playbook.ts)
 }
 
 /** Changes to the state: the snapshot with these folded in is what the server has. */
@@ -534,7 +540,8 @@ export type StateEvent =
   | { type: 'awards'; awards: AwardStats }
   | { type: 'world'; world: WorldView } // a world event started or ended, or the next one moved
   | { type: 'preview'; preview: PreviewView }
-  | { type: 'desk'; desk: DeskView }; // the whole desk, after any change to it
+  | { type: 'desk'; desk: DeskView } // the whole desk, after any change to it
+  | { type: 'playbook'; playbook: PlaybookView }; // the whole playbook, after any change to it
 
 /**
  * Things that happened, for the game's moments (arrivals, celebrations) and the debug page's feed. They change no

@@ -21,10 +21,10 @@ import type { LogEntry } from '../../shared/types.ts';
 import { BOX_ENV } from '../cloud.ts';
 import { HOME_DIR } from '../config.ts';
 import type { BoxApi } from '../machines/box/box.ts';
-import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from '../machines/box/boxScripts.ts';
+import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, sq, tmuxKill } from '../machines/box/boxScripts.ts';
 import { BOX_CDP, boxHooksReady, BoxPty, holdBoxHooks, finishedTurn, lookAtBoxCli, readFrom, type BoxCliRecord, type BoxTarget } from './boxCli.ts';
 import { browserProblem, playwrightMcp } from './browser.ts';
-import { claudeCommand, interruptions, launchArgs, modelEnv, STATUSLINE_SOURCE, trustKey } from './clis.ts';
+import { claudeCommand, interruptions, launchArgs, modelEnv, playbookFiles, STATUSLINE_SOURCE, trustKey } from './clis.ts';
 import { clip, describeTool, resultText, screenshotFile, summariseResult, tidyPaths, todoLines } from './format.ts';
 import type { OfficeTools, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from './session.ts';
 import type { WorkerTerminal } from './terminal.ts';
@@ -429,6 +429,16 @@ export function resumableSession(b: Record<string, unknown>, exists: (file: stri
 /** Claude Code was told to resume a conversation that isn't on disk (it says so and exits 1). */
 export const lostConversation = (screen: string) => /No conversation found with session ID/i.test(screen);
 
+/** The folders under a Box session's folder that its files need (the playbook's plugin), deepest last; posix paths. */
+export function nestedFolders(files: readonly string[], dir: string): string[] {
+  const out = new Set<string>();
+  for (const f of files) {
+    const parent = path.posix.dirname(f);
+    if (parent !== dir && parent.startsWith(`${dir}/`)) out.add(parent);
+  }
+  return [...out].sort();
+}
+
 export function startCliSession(opts: SessionOptions, callbacks: SessionCallbacks): SessionHandle {
   const term = opts.terminal;
   if (!term) throw new Error('A real session needs its worker\'s terminal');
@@ -687,9 +697,13 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   if (opts.outputSchema) {
     prompt += `\n\nWhen you are done, end your final message with your report as one JSON object in a \`\`\`json block, matching this JSON schema:\n${JSON.stringify(opts.outputSchema)}`;
   }
-  let files: { settings: string; mcp: string | null; system: string };
+  let files: { settings: string; mcp: string | null; system: string; plugin: string | null };
   const boxFiles: [string, string][] = []; // written into the Box when the CLI starts
-  const put = (file: string, text: string) => (box ? boxFiles.push([file, text]) : fs.writeFileSync(file, text));
+  const put = (file: string, text: string) => {
+    if (box) return void boxFiles.push([file, text]);
+    fs.mkdirSync(path.dirname(file), { recursive: true }); // the plugin's folders
+    fs.writeFileSync(file, text);
+  };
   try {
     if (!box) {
       writeHelpers();
@@ -704,11 +718,15 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     };
     // The CEO's office tools are served by the office, which a Box can't reach: the CEO stays on this computer.
     const servers = { ...(browser && { playwright: browser }), ...(opts.office && !box && { office: { type: 'http', url: `${officeUrl}/api/mcp/${token}` } }) };
-    files = { settings: p.join(dir, 'settings.json'), mcp: Object.keys(servers).length ? p.join(dir, 'mcp.json') : null, system: p.join(dir, 'instructions.md') };
+    // The playbook: its rules after the office's instructions (paid every turn; a resumed conversation keeps the system
+    // prompt it started with, Claude Code's --system-prompt-snapshot), its skills, subagents and commands as a plugin.
+    const playbook = playbookFiles(dir, opts.systemAppend, opts.playbook, p);
+    files = { settings: p.join(dir, 'settings.json'), mcp: Object.keys(servers).length ? p.join(dir, 'mcp.json') : null, system: playbook.system[0], plugin: playbook.pluginDir };
     put(files.settings, JSON.stringify(settings, null, 2));
     if (files.mcp) put(files.mcp, JSON.stringify({ mcpServers: servers }, null, 2));
     if (opts.office && !box) offices.set(token, opts.office);
-    put(files.system, opts.systemAppend);
+    put(...playbook.system);
+    for (const [file, text] of playbook.plugin) put(file, text);
     if (prompt.length > INLINE_PROMPT_MAX) {
       const file = p.join(dir, 'task.md');
       put(file, prompt);
@@ -720,7 +738,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   }
   officePrompts.push(prompt.trim());
 
-  const launch = launchArgs({ prompt, model: opts.model, effort: opts.effort, resumeId: opts.resumeSessionId, sessionId, name: opts.label ?? 'Marshmallow', role: opts.role, files, addDirs: opts.addDirs });
+  const launch = launchArgs({ prompt, model: opts.model, effort: opts.effort, resumeId: opts.resumeSessionId, sessionId, name: opts.label ?? 'Marshmallow', role: opts.role, files, addDirs: opts.addDirs, ownSetup: opts.ownSetup });
 
   // Each worker is a clean instance on the account Claude Code is logged into: no API keys (they would switch its
   // billing to the API) and nothing inherited from a Claude Code session the server itself was started from. A local
@@ -778,6 +796,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const beginInBox = async (b: BoxTarget) => {
     try {
       boxFiles.push([`${dir}/launch.json`, JSON.stringify({ file: cmd.file, args: [...cmd.args, ...launch.args], cwd: opts.cwd, events })]);
+      // The plugin's folders first: a file write in a Box isn't known to make more than its own folder.
+      const folders = nestedFolders(boxFiles.map(([file]) => file), dir);
+      if (folders.length) await b.api.run(b.boxId, `mkdir -p ${[dir, ...folders].map(sq).join(' ')}`, { timeoutMs: 60_000 });
       for (const [file, text] of boxFiles) await b.api.write(b.boxId, file, text);
       if (done) return;
       const boxed = boxPty(l, b, term.cols, term.rows, 0, env);

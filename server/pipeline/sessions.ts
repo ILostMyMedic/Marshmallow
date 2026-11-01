@@ -67,6 +67,9 @@ export class Sessions {
   /** Heard when a Box's Claude Code turned out not to be signed in (the worker then waits for the manager). */
   onSignedOut: ((workerId: string) => void) | null = null;
 
+  /** What the office adds to every session's options: the playbook, and the manager's own setup or not (createPipeline sets it). */
+  prepare: ((workerId: string, opts: SessionOptions) => SessionOptions) | null = null;
+
   /** The worker's terminal, made when first needed (null in tests without terminals). */
   terminal(workerId: string) {
     return this.terminals?.for(workerId) ?? null;
@@ -94,7 +97,7 @@ export class Sessions {
     this.store.patchWorker(workerId, { status: 'working', activity: this.signOf(working, rt) });
     try {
       rt.handle = this.backend.startSession(
-        { ...opts, workerId, terminal: this.terminals?.for(workerId) },
+        { ...(this.prepare?.(workerId, opts) ?? opts), workerId, terminal: this.terminals?.for(workerId) },
         {
           log: (entries) => {
             if (this.running.get(workerId) !== rt || !this.store.hasWorker(workerId)) return;

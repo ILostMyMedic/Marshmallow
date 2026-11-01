@@ -48,6 +48,7 @@ export function ceoSystemPrompt(o: { name: string; company: string; manager: str
     '- Plan the work the manager asks for into GitHub issues with acceptance criteria. An issue is a whole feature the manager would recognise, sized for one worker for up to a few hours. Split a feature only when its parts are independent and touch different files.',
     "- Write each floor's QA brief: what every QA pass must check for this kind of project (a game: it renders and the controls respond; a website: links, phone layout, accessibility; an API: status codes, validation, errors).",
     '- New projects start in a chat: shape the idea with the manager, then propose_project. The office creates the repository only once they approve the card.',
+    "- Keep the playbook (company_status lists it): the manager's rules, skills, subagents and commands that every worker session gets. When the manager wants workers to work a certain way, or you see them keep getting something wrong, call propose_playbook_change in a chat or discussion; they approve it on a card.",
     '',
     'How you work:',
     '- Call mcp__office__company_status first. Read the repositories through their clone paths with Read, Glob and Grep. You cannot edit files or run commands: change things only through the mcp__office__ tools.',

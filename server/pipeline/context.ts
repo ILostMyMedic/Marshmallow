@@ -1,11 +1,13 @@
 // The pipeline's shared context: the office's parts each module works through, the modules themselves (a QA result
 // can send a PR back for a fix, a merge can requeue QA), and the small steps they all take.
 // Adapted from cubefarm server/swarm.ts (MIT): beginTask, clearTask, fail, stuck, jobDeskFailed, stopForClosure, dropTask.
+import { workBranchOf } from '../../shared/branches.ts';
 import { effectiveModel } from '../../shared/models.ts';
 import type { Floor, LogEntry, Task, Worker } from '../../shared/types.ts';
-import type { Backend } from '../backend/backend.ts';
+import type { Backend, PrDetails } from '../backend/backend.ts';
 import type { Desk } from '../db/desk.ts';
 import type { Floors } from '../floors.ts';
+import type { Playbook } from '../playbook/playbook.ts';
 import { devPort, machineName } from '../machines/machines.ts';
 import type { PromptFloor } from '../prompts/prompts.ts';
 import type { SessionOptions } from '../sessions/session.ts';
@@ -20,6 +22,7 @@ import type { Ceo } from '../team/ceo/jobs.ts';
 import type { CloudOffice } from '../team/cloud.ts';
 import type { Team } from '../team/workers.ts';
 import { prepFailure, type PrepStrikes } from './rules/handOut.ts';
+import { offWorkBranch } from './rules/workBranch.ts';
 import type { Sessions } from './sessions.ts';
 import type { Usage } from './usage.ts';
 
@@ -40,6 +43,8 @@ export interface Ctx {
   closures: Closures;
   /** The desktop's chats and discussions, which the CEO answers in (server/db/desk.ts); null in tests without the office database. */
   desk: Desk | null;
+  /** The playbook (server/playbook/playbook.ts), which the CEO proposes changes to; null in tests without the office database. */
+  playbook: Playbook | null;
   /** Failed desk preparations per PR and task (`${floorId}#${pr}:${task}`), in memory. */
   prepStrikes: Map<string, PrepStrikes>;
   /** Workers whose desk is being set up for a task right now: from beginTask until its session starts or it gives up. */
@@ -63,7 +68,28 @@ export const slugify = (name: string) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 40) || 'worker';
 
-export const promptFloor = (f: Floor): PromptFloor => ({ fullName: f.fullName, defaultBranch: f.defaultBranch, browserTesting: f.browserTesting, summary: f.summary, mission: f.mission, qaBrief: f.qaBrief });
+export const promptFloor = (f: Floor): PromptFloor => ({ fullName: f.fullName, defaultBranch: f.defaultBranch, workBranch: workBranchOf(f), browserTesting: f.browserTesting, summary: f.summary, mission: f.mission, qaBrief: f.qaBrief });
+
+/** Points office PR #n, opened against `from`, at the floor's work branch, and tells the manager. Throws when GitHub refuses. */
+export async function moveToWorkBranch(ctx: Ctx, floor: Floor, n: number, from: string) {
+  const base = workBranchOf(floor);
+  await ctx.backend.github.setPullBase(floor.fullName, n, base);
+  ctx.store.say(`↪ PR #${n} on ${floor.fullName} was aimed at ${from}; the office moved it onto ${base}, the floor's work branch.`, floor.id);
+}
+
+/**
+ * A PR about to be tested or fixed, on the floor's work branch (rules/workBranch.ts offWorkBranch): as GitHub has it
+ * now. Never throws: one GitHub wouldn't move stays as it is, and the merge gate won't merge it.
+ */
+export async function onWorkBranch(ctx: Ctx, floor: Floor, pr: PrDetails): Promise<PrDetails> {
+  if (!offWorkBranch(floor, pr)) return pr;
+  try {
+    await moveToWorkBranch(ctx, floor, pr.number, pr.baseRefName);
+    return await ctx.backend.github.prDetails(floor.fullName, pr.number);
+  } catch {
+    return pr;
+  }
+}
 
 /** The options every worker session shares; `task` and the rest come from the caller. */
 export function sessionOptions(ctx: Ctx, w: Worker, floor: Floor, o: Pick<SessionOptions, 'cwd' | 'prompt' | 'systemAppend'> & Partial<SessionOptions>): SessionOptions {

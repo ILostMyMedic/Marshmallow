@@ -119,3 +119,31 @@ describe('Floors', () => {
     expect(restarted.floor(REPO).languages).toEqual(fakeLanguages(REPO));
   });
 });
+
+describe('a floor’s work branch', () => {
+  it('starts on the default branch, lists the branches, and refuses one GitHub lacks unless asked to create it', async () => {
+    await floors.connect(REPO);
+    expect(store.floor(REPO).workBranch).toBeNull();
+    expect(await floors.branches(REPO)).toEqual({ branches: ['main'], defaultBranch: 'main', workBranch: null });
+    await expect(floors.setWorkBranch(REPO, 'dev')).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/has no dev branch/) });
+    expect(store.floor(REPO).workBranch).toBeNull();
+    expect(await floors.setWorkBranch(REPO, ' dev ', true)).toMatchObject({ workBranch: 'dev' });
+    expect(await backend.github.listBranches(REPO)).toEqual(['main', 'dev']);
+    // Saved with the floor, so a restart keeps it.
+    await store.flush();
+    const restarted = new Store(path.join(dir, 'state.json'), { version: '0', demo: true });
+    await restarted.load();
+    expect(restarted.floor(REPO).workBranch).toBe('dev');
+  });
+
+  it('takes an existing branch, hands back to the default branch on empty or its name, and refuses a bad name', async () => {
+    await floors.connect(REPO);
+    await backend.github.createBranch(REPO, 'release/1.0', 'main');
+    expect((await floors.setWorkBranch(REPO, 'release/1.0')).workBranch).toBe('release/1.0');
+    expect((await floors.setWorkBranch(REPO, 'main')).workBranch).toBeNull();
+    await floors.setWorkBranch(REPO, 'release/1.0');
+    expect((await floors.setWorkBranch(REPO, null)).workBranch).toBeNull();
+    await expect(floors.setWorkBranch(REPO, "dev'; rm -rf ~", true)).rejects.toMatchObject({ status: 400 });
+    expect(await backend.github.listBranches(REPO)).toEqual(['main', 'release/1.0']);
+  });
+});

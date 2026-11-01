@@ -9,7 +9,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     title: 'Anywhere',
     rows: [
       ['Tab', 'Walk the floor, or look down on it'],
-      ['O', "The manager's console: floors, team, issues, the shop, settings"],
+      ['O', "The manager's console: floors, team, issues, the shop, the playbook, settings"],
       ['P', 'Your desktop: chats with the CEO, discussions to settle, the office’s notices'],
       ['H', 'This help'],
       ['M', 'Mute or unmute the sounds'],
@@ -36,6 +36,14 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
       ['Right-drag or W A S D', 'Move'],
       ['Wheel', 'Zoom'],
       ['Click', 'Open what’s under the mouse: a person’s chip, the board, the app monitor'],
+    ],
+  },
+  {
+    title: 'The playbook',
+    rows: [
+      ['📘 Playbook tab', 'In the console (O): rules, skills, subagents and commands for the office and each floor, which every worker session gets without anything committed to the repo. Start from a template, switch docs on and off, and see what a worker on a floor gets'],
+      ['Rules', 'Go into every session’s system prompt, paid for on every turn: the tab shows their size, so keep them short'],
+      ['CEO’s cards', 'The CEO can propose a playbook change in a chat or discussion: approve it, edit it first, or decline it on the card'],
     ],
   },
   {

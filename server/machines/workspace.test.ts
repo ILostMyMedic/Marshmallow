@@ -76,7 +76,7 @@ describe("workers' machines", { timeout: 60_000 }, () => {
 
   it("works in a clone of its own, never a worktree of the floor's checkout", async () => {
     const r = await makeRepos();
-    const desk = await prepareMachineDesk('ada00001', r.fullName, { defaultBranch: 'main' }, 'mm/issue-1-ada');
+    const desk = await prepareMachineDesk('ada00001', r.fullName, { workBranch: 'main' }, 'mm/issue-1-ada');
     expect(desk).toBe(machineDesk('ada00001', r.fullName));
     expect(await branchOf(desk)).toBe('mm/issue-1-ada');
     expect(await head(desk)).toBe(await git(['rev-parse', 'origin/main'], { cwd: r.dir }));
@@ -92,13 +92,13 @@ describe("workers' machines", { timeout: 60_000 }, () => {
     const r = await makeRepos();
     await commitFile(r.upstream, '.gitignore', 'node_modules/\n');
     await git(['push', '-q', 'origin', 'main'], { cwd: r.upstream });
-    const desk = await prepareMachineDesk('ada00002', r.fullName, { defaultBranch: 'main' }, 'mm/issue-1-ada');
+    const desk = await prepareMachineDesk('ada00002', r.fullName, { workBranch: 'main' }, 'mm/issue-1-ada');
     await fs.mkdir(path.join(desk, 'node_modules'), { recursive: true });
     await fs.writeFile(path.join(desk, 'node_modules', 'kept.js'), 'warm');
     await fs.writeFile(path.join(desk, 'scratch.txt'), 'left over from the last task');
     await commitFile(r.upstream, 'notes.txt', 'new upstream work\n');
     await git(['push', '-q', 'origin', 'main'], { cwd: r.upstream });
-    expect(await prepareMachineDesk('ada00002', r.fullName, { defaultBranch: 'main' }, 'mm/issue-2-ada')).toBe(desk);
+    expect(await prepareMachineDesk('ada00002', r.fullName, { workBranch: 'main' }, 'mm/issue-2-ada')).toBe(desk);
     expect(await branchOf(desk)).toBe('mm/issue-2-ada');
     expect(await head(desk)).toBe(await git(['rev-parse', 'main'], { cwd: r.upstream }));
     expect(await fs.readFile(path.join(desk, 'node_modules', 'kept.js'), 'utf8')).toBe('warm');
@@ -107,12 +107,12 @@ describe("workers' machines", { timeout: 60_000 }, () => {
 
   it('checks out a PR its own machine never had: a teammate pushed it', async () => {
     const r = await makeRepos();
-    const ada = await prepareMachineDesk('ada00003', r.fullName, { defaultBranch: 'main' }, 'mm/issue-3-ada');
+    const ada = await prepareMachineDesk('ada00003', r.fullName, { workBranch: 'main' }, 'mm/issue-3-ada');
     await commitFile(ada, 'feature.txt', 'from ada\n');
     await git(['push', '-q', 'origin', 'mm/issue-3-ada'], { cwd: ada });
     await git(['push', '-q', 'origin', 'HEAD:refs/pull/9/head'], { cwd: ada }); // what GitHub keeps for PR #9
     const notes: string[] = [];
-    const bob = await prepareMachineDesk('bob00003', r.fullName, { defaultBranch: 'main', pr: 9 }, 'mm/issue-3-ada', (t) => notes.push(t));
+    const bob = await prepareMachineDesk('bob00003', r.fullName, { workBranch: 'main', pr: 9 }, 'mm/issue-3-ada', (t) => notes.push(t));
     expect(notes).toEqual([]);
     expect(await branchOf(bob)).toBe('mm/issue-3-ada');
     expect(await fs.readFile(path.join(bob, 'feature.txt'), 'utf8')).toMatch(/^from ada\r?\n$/);
@@ -121,7 +121,7 @@ describe("workers' machines", { timeout: 60_000 }, () => {
 
   it('clears a stale index.lock and reuses the desk in place', async () => {
     const r = await makeRepos();
-    const desk = await prepareMachineDesk('tim00004', r.fullName, { defaultBranch: 'main' }, 'mm/issue-1-tim');
+    const desk = await prepareMachineDesk('tim00004', r.fullName, { workBranch: 'main' }, 'mm/issue-1-tim');
     // A git that died mid-command left its lock in the worktree's gitdir, 20 minutes ago.
     const gitdir = path.resolve(desk, (await fs.readFile(path.join(desk, '.git'), 'utf8')).replace('gitdir:', '').trim());
     const lock = path.join(gitdir, 'index.lock');
@@ -129,22 +129,33 @@ describe("workers' machines", { timeout: 60_000 }, () => {
     const old = new Date(Date.now() - 20 * 60_000);
     await fs.utimes(lock, old, old);
     const notes: string[] = [];
-    expect(await prepareMachineDesk('tim00004', r.fullName, { defaultBranch: 'main' }, 'mm/issue-2-tim', (t) => notes.push(t))).toBe(desk);
+    expect(await prepareMachineDesk('tim00004', r.fullName, { workBranch: 'main' }, 'mm/issue-2-tim', (t) => notes.push(t))).toBe(desk);
     expect(await branchOf(desk)).toBe('mm/issue-2-tim');
     await expect(fs.access(lock)).rejects.toThrow();
     expect(notes).toEqual([expect.stringMatching(/^Removed a stale git lock/)]);
   });
 
+  it("starts a desk from the floor's work branch, not the default branch", async () => {
+    const r = await makeRepos();
+    await git(['checkout', '-q', '-b', 'dev'], { cwd: r.upstream });
+    await commitFile(r.upstream, 'dev-only.txt', 'on dev\n');
+    await git(['push', '-q', '-u', 'origin', 'dev'], { cwd: r.upstream });
+    const desk = await prepareMachineDesk('ada00008', r.fullName, { workBranch: 'dev' }, 'mm/issue-1-ada');
+    expect(await branchOf(desk)).toBe('mm/issue-1-ada');
+    expect(await head(desk)).toBe(await git(['rev-parse', 'dev'], { cwd: r.upstream }));
+    expect(await fs.readFile(path.join(desk, 'dev-only.txt'), 'utf8')).toMatch(/^on dev/);
+  });
+
   it('says why when the repository has no default branch yet', async () => {
     const r = await makeRepos();
-    await expect(prepareMachineDesk('ada00005', r.fullName, { defaultBranch: 'trunk' }, 'mm/issue-1-ada')).rejects.toThrow(/has no trunk branch yet/);
+    await expect(prepareMachineDesk('ada00005', r.fullName, { workBranch: 'trunk' }, 'mm/issue-1-ada')).rejects.toThrow(/has no trunk branch yet/);
   });
 
   it('deletes finished branches in its clone, never the one it has out or one still in use', async () => {
     const r = await makeRepos();
-    const desk = await prepareMachineDesk('ada00006', r.fullName, { defaultBranch: 'main' }, 'mm/issue-1-ada');
-    await prepareMachineDesk('ada00006', r.fullName, { defaultBranch: 'main' }, 'mm/qa-7-ada');
-    await prepareMachineDesk('ada00006', r.fullName, { defaultBranch: 'main' }, 'mm/issue-2-ada');
+    const desk = await prepareMachineDesk('ada00006', r.fullName, { workBranch: 'main' }, 'mm/issue-1-ada');
+    await prepareMachineDesk('ada00006', r.fullName, { workBranch: 'main' }, 'mm/qa-7-ada');
+    await prepareMachineDesk('ada00006', r.fullName, { workBranch: 'main' }, 'mm/issue-2-ada');
     const clone = path.dirname(await git(['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: desk }));
     expect(await sweepMachine('ada00006', r.fullName, ['mm/qa-7-ada'])).toBe(1);
     expect(await branches(clone)).toEqual(['main', 'mm/issue-2-ada', 'mm/qa-7-ada']);
@@ -153,7 +164,7 @@ describe("workers' machines", { timeout: 60_000 }, () => {
 
   it('saves work on no remote branch before it goes, and leaves a machine still in use', async () => {
     const r = await makeRepos();
-    const desk = await prepareMachineDesk('ada00007', r.fullName, { defaultBranch: 'main' }, 'mm/issue-5-ada');
+    const desk = await prepareMachineDesk('ada00007', r.fullName, { workBranch: 'main' }, 'mm/issue-5-ada');
     await commitFile(desk, 'unpushed.txt', 'not on GitHub\n');
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { cwd: desk, windowsHide: true, stdio: 'ignore' });
     const exited = new Promise((resolve) => child.once('exit', resolve));

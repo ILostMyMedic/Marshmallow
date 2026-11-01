@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerEvent, Worker } from '../../shared/types.ts';
 import { createDemoBackend, type DemoBackend } from '../backend/demo.ts';
 import { openDb, type Db } from '../db/db.ts';
@@ -123,6 +123,53 @@ describe('the pipeline on the demo', () => {
     pipeline.scheduler.start(20);
     await until(async () => (await backend.github.listPulls('demo-co/weather-api')).filter((p) => p.state === 'MERGED').length === 3);
     expect(events.some((e) => e.type === 'qaFailed')).toBe(false);
+  });
+
+  it("builds, tests and merges into the floor's work branch, and closes the issues GitHub leaves open", async () => {
+    office(0.9); // QA passes, checks pass, no conflicts
+    const API = 'demo-co/weather-api';
+    await floors.connect(API, { autoAssign: false });
+    await floors.setWorkBranch(API, 'dev', true);
+    const mainBefore = backend.github.branchHeads(API).main;
+    const desks = vi.spyOn(backend.machines, 'prepareDesk');
+    // The office's first close after a merge fails (a GitHub blip): a later sync closes it.
+    const close = vi.spyOn(backend.github, 'closeIssue').mockRejectedValueOnce(new Error('HTTP 502'));
+    hire('Ada', 0, API);
+    hire('Grace', 1, API);
+    store.patchFloor(API, { autoAssign: true });
+    pipeline.scheduler.start(20);
+
+    await until(async () => (await backend.github.listPulls(API)).filter((p) => p.state === 'MERGED').length === 3 && store.qaList().length === 0);
+    const merged = (await backend.github.listPulls(API)).filter((p) => p.state === 'MERGED');
+    expect(merged.map((p) => p.baseRefName)).toEqual(['dev', 'dev', 'dev']);
+    expect(merged.every((p) => p.closesIssues.length === 0)).toBe(true); // GitHub links no issues to PRs into dev
+    // Every desk started from dev (builds) or a PR's head (QA), and QA reviewed against dev.
+    expect(desks.mock.calls.map((c) => c[2].workBranch)).toEqual(desks.mock.calls.map(() => 'dev'));
+    expect(desks.mock.calls.some((c) => c[2].pr === undefined) && desks.mock.calls.some((c) => c[2].pr !== undefined)).toBe(true);
+    const logs = Object.values(store.snapshot().logs).flat().map((l) => l.text);
+    expect(logs.some((t) => t.includes('gh pr create --base dev'))).toBe(true);
+    expect(logs.some((t) => t.includes('git diff origin/dev...HEAD'))).toBe(true);
+    // The merges landed on dev, main is untouched, and every issue got closed: by the office, since GitHub won't.
+    expect(backend.github.branchHeads(API).main).toBe(mainBefore);
+    expect(backend.github.branchHeads(API).dev).not.toBe(mainBefore);
+    await until(async () => (await backend.github.listIssues(API)).length === 0);
+    expect(close.mock.calls.length).toBe(4); // three issues, one of them twice
+    expect(close.mock.calls.every((c) => /^Shipped in #\d+ \(merged into dev\)$/.test(c[2] ?? ''))).toBe(true);
+  });
+
+  it('moves an office PR opened against another branch onto the work branch before QA, and merges it there', async () => {
+    office(0.9);
+    const API = 'demo-co/weather-api';
+    await floors.connect(API, { autoAssign: false });
+    await floors.setWorkBranch(API, 'dev', true);
+    const pr = backend.github.openPull(API, { title: 'Add /forecast endpoint', branch: 'mm/issue-1-ada', closes: 1, base: 'main' });
+    hire('Grace', 0, API);
+    pipeline.scheduler.start(20);
+
+    await until(async () => (await backend.github.listPulls(API)).some((p) => p.number === pr.number && p.state === 'MERGED'));
+    expect((await backend.github.prDetails(API, pr.number)).baseRefName).toBe('dev');
+    expect(store.snapshot().messages.map((m) => m.text)).toContain(`↪ PR #${pr.number} on ${API} was aimed at main; the office moved it onto dev, the floor's work branch.`);
+    await until(async () => (await backend.github.issueState(API, 1)) === 'CLOSED');
   });
 
   it('starts nothing new while Claude is at its limit, and paces new issues after a warning', async () => {

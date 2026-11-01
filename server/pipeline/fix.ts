@@ -1,13 +1,14 @@
 // Fixing a PR that failed QA, failed its checks or conflicts: its author when they can (resuming their session), anyone
 // free otherwise. A fix that pushed nothing is asked once more before it counts, and may say nothing needs to change.
 // Adapted from cubefarm server/swarm.ts (MIT): runFix, onFixFinished.
+import { workBranchOf } from '../../shared/branches.ts';
 import type { Floor } from '../../shared/types.ts';
 import type { PrDetails } from '../backend/backend.ts';
 import { depsPromptLine, devPort, machineName } from '../machines/machines.ts';
 import { devSystemPrompt, failedLogLines, noPushNudge, ownPrLine } from '../prompts/prompts.ts';
 import type { SessionOptions } from '../sessions/session.ts';
 import type { QaState } from '../store.ts';
-import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, prepared, promptFloor, releaseDesk, sessionOptions, stillPreparing, stuck, type Ctx } from './context.ts';
+import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, onWorkBranch, prepared, promptFloor, releaseDesk, sessionOptions, stillPreparing, stuck, type Ctx } from './context.ts';
 import { prepareDesk, resumeBox } from './desk.ts';
 import { fixOutcome, MAX_FIX_FAILURES } from './rules/fixOutcome.ts';
 import { failedRunId, logTail, noChangeReason, unpushedFix } from './rules/prOwnership.ts';
@@ -48,7 +49,8 @@ export class Fix {
     const floor = store.floor(floorId);
     let pr: PrDetails;
     try {
-      pr = await this.ctx.backend.github.prDetails(floor.fullName, n);
+      // Fixed against the branch it will merge into: the floor's work branch.
+      pr = await onWorkBranch(this.ctx, floor, await this.ctx.backend.github.prDetails(floor.fullName, n));
     } catch (err) {
       if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, `Couldn't read PR #${n}: ${oneLine(err)}`);
       return this.giveBack(floorId, n, author, workerId);
@@ -95,7 +97,7 @@ export class Fix {
   /** What the fixer is told: merge the base for a conflict, the failed run's log for checks, QA's findings otherwise. */
   private async prompt(floor: Floor, rec: QaState, pr: PrDetails, headRef: string, original: boolean): Promise<string> {
     const { store } = this.ctx;
-    const base = floor.defaultBranch;
+    const base = workBranchOf(floor);
     const push = `git push origin HEAD:${headRef}`;
     const close = 'Then reply with a short summary of what you changed. Do not open a new pull request.';
     if (rec.fixReason === 'conflict' && (rec.preQa || rec.passedSha)) {
@@ -220,7 +222,7 @@ export class Fix {
       }
       if (next.do === 'nudge' && end.sessionId) {
         this.nudged.add(key);
-        const text = noPushNudge(n, store.floor(floorId).defaultBranch);
+        const text = noPushNudge(n, workBranchOf(store.floor(floorId)));
         store.appendLog(workerId, [{ kind: 'manager', text: `▶ Office: ${text}` }]);
         try {
           const cwd = this.ctx.cloud.machinesFor(store.worker(workerId)).deskDir(machineName(workerId), store.floor(floorId).fullName);

@@ -327,7 +327,15 @@ Asked for after playing Phase 21.
 
 ## Phase 23: real projects
 
-To be planned with the manager: the office running from `main` on this computer, the office's own repo as a floor whose workers build on branches off `dev` and merge into `dev` under house rules the manager and the CEO write, with the real GitHub login and Upstash.
+Making the office work on real projects, then on itself. Decided with the manager: workers act as the manager's `gh` login; local workers and Upstash Boxes together; the flow proven on the sandbox repo before the office's own. New: cubefarm has no playbook or work branch.
+
+1. The playbook (`shared/playbook.ts`, `server/playbook/`, the console's Playbook tab): the office's and each floor's agent docs, the rules (markdown: how branches and PRs work here, when a task is done, what not to touch), skills, subagents and commands, kept in the office database and edited in the console, with templates ("work happens on dev: you're done once your PR is merged into dev", "main runs live on this computer", commits and PRs, tests). Every session on a floor gets them without anything committed to the repo: the rules in its appended system prompt (paid every turn, so the tab shows their size), the skills, subagents and commands as a generated plugin (`--plugin-dir`). Workers no longer load the manager's own Claude setup (`--setting-sources project,local`, auto memory off) unless a setting says so; the repo's own CLAUDE.md still applies. The CEO can propose a change, which the manager approves on the desktop.
+2. A work branch per floor (`Floor.workBranch`): the branch the floor's work starts from and merges into (dev, say), the repository's default branch when unset; desks, PRs, merges, fixes, QA and previews follow it. Set in the console's Floors tab.
+3. Real setup in one place (the console's Setup tab): the GitHub login `gh` uses, Claude's sign-in, the local model servers, the Upstash key (into `secrets.json`, never shown again), the default model and effort, and whether workers bring the manager's own Claude setup.
+4. The proving run, on the sandbox repo in real mode: a `dev` branch, the floor's work branch set to it, the playbook's dev-flow rules, a few small issues, a local worker and a Box worker on Claude; their PRs go into `dev`, QA passes them, they merge into `dev`, `main` is untouched, and the sessions show the playbook loaded and the manager's own setup left out.
+5. The office's own repo: a `dev` branch, `main` protected (only the manager's merge changes it), connected as a floor with its work branch on `dev` and rules for building Marshmallow itself next to the live office (its ports and home are off-limits; tests use their own home and ports).
+
+**Done when:** the proving run merges two PRs into the sandbox's `dev` (one from a local worker, one from a Box), with the playbook's rules and skills in their sessions; and the office's own repo is a floor whose first task merges into `dev`.
 
 ## Watch out for
 

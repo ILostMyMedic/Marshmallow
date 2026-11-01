@@ -2,6 +2,7 @@
 // the PR. A pass goes to the merge gate; a fail goes back to the developer (fix.ts); a conflict is sent back before a
 // tester spends a session on it.
 // Adapted from cubefarm server/swarm.ts (MIT): queueQa, runQa, onQaFinished, renderQaComment.
+import { workBranchOf } from '../../shared/branches.ts';
 import type { Floor } from '../../shared/types.ts';
 import type { PrDetails } from '../backend/backend.ts';
 import { depsPromptLine, devPort, machineName } from '../machines/machines.ts';
@@ -9,9 +10,10 @@ import { qaBranch, qaSystemPrompt } from '../prompts/prompts.ts';
 import { qaInstructions } from '../prompts/qaPrompt.ts';
 import type { SessionOptions } from '../sessions/session.ts';
 import type { QaState } from '../store.ts';
-import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, prepared, promptFloor, releaseDesk, sessionOptions, slugify, stillPreparing, stuck, type Ctx } from './context.ts';
+import { afterSession, beginTask, clearTask, failTask, jobDeskFailed, minutesSince, oneLine, onWorkBranch, prepared, promptFloor, releaseDesk, sessionOptions, slugify, stillPreparing, stuck, type Ctx } from './context.ts';
 import { prepareDesk } from './desk.ts';
 import { evidenceFiles, parseReport, QA_SCHEMA, renderQaComment, type QaReport } from './qaReport.ts';
+import { issuesResolvedBy } from './rules/issueClaims.ts';
 import { QA_STOPPED } from './rules/prOwnership.ts';
 import { conflictFixInstructions, qaGate, qaOutcome } from './rules/qaOutcome.ts';
 import { QA_RESUME_PROMPT, qaRetry } from './rules/qaRetry.ts';
@@ -101,13 +103,14 @@ export class Qa {
     const lastTestedSha = rec.testedSha;
     let pr: PrDetails;
     try {
-      pr = await gh.prDetails(floor.fullName, n);
+      // Tested as it will merge: into the floor's work branch.
+      pr = await onWorkBranch(this.ctx, floor, await gh.prDetails(floor.fullName, n));
     } catch (err) {
       if (stillPreparing(this.ctx, workerId)) failTask(this.ctx, workerId, `Couldn't read PR #${n}: ${oneLine(err)}`);
       this.requeue(floorId, n, workerId);
       return;
     }
-    const issueNumber = rec.issueNumber ?? pr.closesIssues[0] ?? null;
+    const issueNumber = rec.issueNumber ?? issuesResolvedBy(pr)[0] ?? null;
     const issue = issueNumber ? await gh.issueDetails(floor.fullName, issueNumber).catch(() => null) : null;
     if (!stillPreparing(this.ctx, workerId)) return this.requeue(floorId, n, workerId);
     if (pr.state !== 'OPEN') {
@@ -153,7 +156,7 @@ export class Qa {
       lastTestedSha: failedConflict ? null : lastTestedSha,
       summary: rec.summary,
       fixInstructions: rec.fixInstructions,
-      defaultBranch: floor.defaultBranch,
+      base: workBranchOf(floor),
     });
     const w = store.worker(workerId);
     const author = rec.devWorkerId === workerId ? 'you, in an earlier session' : rec.devWorkerId && store.hasWorker(rec.devWorkerId) ? store.worker(rec.devWorkerId).name : 'a teammate';
@@ -286,7 +289,7 @@ export class Qa {
     // stuck() moves it to needs-human itself, so the manager hears about it as it gets there.
     if (outcome === 'needs-human') return stuck(this.ctx, current, patch, `it failed QA ${rec.round - rec.retests} times`);
     const updated = store.patchQa(floorId, n, { ...patch, status: outcome === 'conflict' ? 'failed' : outcome });
-    if (outcome === 'conflict') this.ctx.merge.sendBack(updated, 'conflict', conflictFixInstructions(fixInstructions ?? '', floor.defaultBranch), false);
+    if (outcome === 'conflict') this.ctx.merge.sendBack(updated, 'conflict', conflictFixInstructions(fixInstructions ?? '', workBranchOf(floor)), false);
   }
 
   /** Posts the report on the PR, with the newest screenshots on the evidence branch; the comment's URL, or null. */

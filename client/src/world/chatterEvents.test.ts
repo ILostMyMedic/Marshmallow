@@ -34,6 +34,7 @@ const pull = (number: number, over: Partial<PullInfo> = {}): PullInfo => ({
   title: '',
   url: '',
   headRefName: `mm/issue-${number}`,
+  baseRefName: 'main',
   state: 'OPEN',
   isDraft: false,
   mergeable: 'MERGEABLE',

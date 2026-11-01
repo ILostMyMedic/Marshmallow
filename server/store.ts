@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import type { WebSocket } from 'ws';
 import { EMPTY_AWARD_STATS } from '../shared/awards.ts';
 import { cloudSettings, DEFAULT_CLOUD, EMPTY_CLOUD } from '../shared/cloud.ts';
+import { EMPTY_PLAYBOOK } from '../shared/playbook.ts';
 import { EMPTY_WORLD } from '../shared/worldEvents.ts';
 import type { BoxCliRecord } from './sessions/boxCli.ts';
 import {
@@ -72,8 +73,8 @@ export interface SavedState {
 }
 
 /** What the office database adds to a tab's snapshot (server/db/office.ts keeps it in memory). */
-export type DbView = Pick<Snapshot, 'records' | 'look' | 'floorPlans' | 'coins' | 'awards' | 'world' | 'desk'>;
-const NO_DB: DbView = { records: EMPTY_RECORDS, look: null, floorPlans: {}, coins: EMPTY_COINS, awards: EMPTY_AWARD_STATS, world: EMPTY_WORLD, desk: EMPTY_DESK };
+export type DbView = Pick<Snapshot, 'records' | 'look' | 'floorPlans' | 'coins' | 'awards' | 'world' | 'desk' | 'playbook'>;
+const NO_DB: DbView = { records: EMPTY_RECORDS, look: null, floorPlans: {}, coins: EMPTY_COINS, awards: EMPTY_AWARD_STATS, world: EMPTY_WORLD, desk: EMPTY_DESK, playbook: EMPTY_PLAYBOOK };
 
 /** Log lines per worker in state.json, and in a tab's snapshot (memory keeps LOG_BUFFER). */
 const LOG_SAVED = 200;
@@ -144,7 +145,7 @@ export class Store {
     }
     this.settings = { ...DEFAULT_SETTINGS, ...saved.settings, cloud: cloudSettings(DEFAULT_CLOUD, saved.settings?.cloud) };
     this.office = saved.officeId ?? '';
-    for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, teamSize: f.teamSize ?? null, held: f.held ?? [], languages: f.languages ?? [], cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
+    for (const f of saved.floors ?? []) this.floors.set(f.id, { ...f, teamSize: f.teamSize ?? null, held: f.held ?? [], languages: f.languages ?? [], workBranch: f.workBranch ?? null, cloneStatus: 'pending', cloneError: null, issues: [], pulls: [], lastSync: null, syncError: null });
     for (const w of saved.workers ?? []) this.workers.set(w.id, { ...w, activity: null, sessionId: w.sessionId ?? null, leaving: w.leaving ?? false });
     for (const q of saved.qa ?? []) this.qa.set(qaKey(q.floorId, q.prNumber), q);
     for (const [id, lines] of Object.entries(saved.logs ?? {})) {

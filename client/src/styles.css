@@ -2681,6 +2681,59 @@ a.console-btn {
   min-width: 0;
 }
 
+/* a floor's work branch on its card (console/FloorsTab.tsx WorkBranch), and its branch picker */
+.console-branch {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #eef6ea;
+}
+
+.console-branch .console-row {
+  margin: 4px 0;
+}
+
+.console-branch code {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: #fffdf5;
+  font: 600 0.85rem ui-monospace, Consolas, monospace;
+}
+
+.console-branches {
+  max-height: 180px;
+  margin: 6px 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 2px solid #d6e6cf;
+  border-radius: 10px;
+  background: #fffdf5;
+}
+
+.console-branches li {
+  padding: 2px 10px;
+  font: 0.85rem ui-monospace, Consolas, monospace;
+}
+
+/* the sign-ins on the Settings tab (console/SignIns.tsx) */
+.console-signin {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 2px 10px;
+  margin: 8px 0;
+  align-items: baseline;
+}
+
+.console-signin + .console-signin {
+  padding-top: 8px;
+  border-top: 1px solid #ece4d4;
+}
+
+.console-signin .console-hint {
+  grid-column: 2;
+}
+
 /* the app monitor's live look (world/AppMonitor.tsx): behind the canvas, seen through the hole it punches */
 .app-look {
   z-index: -1;

@@ -1,6 +1,7 @@
 // The console's Settings tab: your name and company, the session limit and pacing, team sizes and autoscale, the
-// default model and effort, and cloud workers. One Save sends whatever changed (forms.ts settingsPatch); keys and tokens
-// save on their own, since the server keeps them and never sends them back. Adapted from cubefarm
+// default model and effort, whether workers bring your own Claude setup, and cloud workers. One Save sends whatever
+// changed (forms.ts settingsPatch); keys and tokens save on their own, since the server keeps them and never sends them
+// back. Adapted from cubefarm
 // client/src/ui/ManagerConsole.tsx (SettingsTab) and CloudSettings.tsx (MIT). Cut: other coding agents and their keys,
 // the runtime choice, the CEO's scaling mode and reviews, the dog, the projects folder, idle-desk trimming, the tour,
 // and the profile, voice, outside, notification, theme and accessibility settings.
@@ -13,6 +14,7 @@ import { useStore } from '../../store';
 import { ConfirmButton, Field, ModelPick, SecretField } from './fields';
 import { EFFORTS, LIMITS, pruneEdits, settingsForm, settingsPatch, type FormEdits, type SettingsForm } from './forms';
 import { run, useBusy } from './run';
+import { CLOUD_CARD_ID, SignInsCard } from './SignIns';
 
 const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -61,7 +63,7 @@ function CloudCard({ form, set }: { form: SettingsForm; set: <K extends keyof Se
   const cloud = useStore((s) => s.cloud);
   const demo = useStore((s) => s.demo);
   return (
-    <section className="console-card console-span">
+    <section className="console-card console-span" id={CLOUD_CARD_ID}>
       <h3 className="console-h">☁️ Cloud workers</h3>
       <p className="console-hint">
         Workers can work in an Upstash Box each instead of on this computer. A Box worker keeps going when the office is closed, and the office catches up when it's back. Box workers run Claude: a model
@@ -204,6 +206,7 @@ export function SettingsTab() {
   return (
     <div className="console-settings">
       <div className="console-grid">
+        <SignInsCard />
         <section className="console-card">
           <h3 className="console-h">🏢 Company</h3>
           <Field label="Your name" problem={problems.managerName} hint="What the workers call you when they say hi.">
@@ -227,6 +230,12 @@ export function SettingsTab() {
               ))}
             </select>
           </Field>
+          <label className="console-toggle">
+            <input type="checkbox" checked={form.workersUseMySetup} onChange={(e) => set('workersUseMySetup', e.target.checked)} /> Workers bring my own Claude setup: my settings, CLAUDE.md, skills, plugins and memory
+          </label>
+          <p className="console-hint">
+            Off (the default), a session gets only the repo’s own CLAUDE.md and settings and the office’s playbook (📘 Playbook tab). Your sign-in is used either way. From the next session.
+          </p>
         </section>
         <section className="console-card">
           <h3 className="console-h">⏱ Sessions</h3>

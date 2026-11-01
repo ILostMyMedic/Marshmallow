@@ -127,13 +127,13 @@ async function clearDeskFolder(wt: string) {
 }
 
 /**
- * Puts the worktree `wt` of `clone` on `branch` at the default branch or a PR's head (fetched first), reusing it in
+ * Puts the worktree `wt` of `clone` on `branch` at the work branch or a PR's head (fetched first), reusing it in
  * place when it's there. Callers hold the clone's lock. `note` hears what the worker should know (a detached HEAD, a
  * rebuild).
  */
 async function setUpWorktree(clone: string, wt: string, fullName: string, base: DeskBase, branch: string, note?: (text: string) => void): Promise<string> {
   await git(['fetch', 'origin', '--prune'], { cwd: clone, timeoutMs: 180_000 });
-  let ref = `origin/${base.defaultBranch}`;
+  let ref = `origin/${base.workBranch}`;
   if (base.pr) {
     // refs/pull/N/head works for branches in this repo and for forks alike
     ref = `origin/pr/${base.pr}`;
@@ -143,7 +143,7 @@ async function setUpWorktree(clone: string, wt: string, fullName: string, base: 
     await git(['rev-parse', '--verify', ref], { cwd: clone });
   } catch {
     throw new Error(
-      base.pr ? `Could not fetch pull request #${base.pr} of ${fullName}.` : `${fullName} has no ${base.defaultBranch} branch yet. Push an initial commit before work is handed out.`,
+      base.pr ? `Could not fetch pull request #${base.pr} of ${fullName}.` : `${fullName} has no ${base.workBranch} branch yet. Push an initial commit (or create the branch) before work is handed out.`,
     );
   }
 
@@ -189,11 +189,11 @@ async function setUpWorktree(clone: string, wt: string, fullName: string, base: 
 
 /**
  * The floor's preview worktree, beside its checkout and out of the workers' way (they work in clones of their own), on
- * the default branch's latest commit (fetched first). Its ignored files (node_modules) stay between runs.
+ * the work branch's latest commit (fetched first). Its ignored files (node_modules) stay between runs.
  */
-export async function preparePreview(fullName: string, defaultBranch: string, note?: (text: string) => void): Promise<string> {
+export async function preparePreview(fullName: string, branch: string, note?: (text: string) => void): Promise<string> {
   if (!(await exists(path.join(mainDir(fullName), '.git')))) await ensureClone(fullName);
-  return withLock(fullName, () => setUpWorktree(mainDir(fullName), previewDir(fullName), fullName, { defaultBranch }, PREVIEW_BRANCH, note));
+  return withLock(fullName, () => setUpWorktree(mainDir(fullName), previewDir(fullName), fullName, { workBranch: branch }, PREVIEW_BRANCH, note));
 }
 
 // ---------- leftover processes ----------

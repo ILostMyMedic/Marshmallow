@@ -5,6 +5,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { EffortLevel } from '../../../shared/types.ts';
 import type { ProposeInput } from '../../desk/proposals.ts';
+import type { ProposePlaybookInput } from '../../playbook/proposals.ts';
 import type { OfficeTools } from '../../sessions/session.ts';
 
 /** What the tools do, implemented by the office (office.ts). */
@@ -21,6 +22,7 @@ export interface OfficeHandlers {
   startDiscussion(a: { title: string; message: string; floor?: number }): Promise<string>;
   resolveDiscussion(a: { outcome: string }): Promise<string>;
   proposeProject(a: ProposeInput): Promise<string>;
+  proposePlaybookChange(a: ProposePlaybookInput): Promise<string>;
 }
 
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
@@ -156,6 +158,20 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
           .describe('The starting tasks, filed as issues in this order: one per whole feature'),
       },
       (a) => run(() => h.proposeProject(a)),
+    ),
+    tool(
+      'propose_playbook_change',
+      "Propose a change to the playbook: the manager's rules, skills, subagents and commands that every worker session gets (company_status lists them). Only in a chat or a discussion: the manager approves, edits or declines it on a card there, and nothing changes before. An existing name changes that doc. Rules go into every session's system prompt, so keep them short.",
+      {
+        scope: z.enum(['office', 'floor']).describe('office: every floor; floor: one floor'),
+        floor: z.number().int().optional().describe('The floor, for scope floor'),
+        kind: z.enum(['rules', 'skill', 'agent', 'command']).describe('rules: always in the system prompt; skill: loaded when its description fits the task; agent: a subagent; command: a slash command'),
+        name: z.string().min(1).max(64).describe('Lowercase letters, digits and hyphens, e.g. "work-branch-flow"'),
+        description: z.string().max(1024).optional().describe('When Claude should use it: needed for a skill, agent or command'),
+        body: z.string().min(1).max(20000).describe('The whole text, in markdown. {workBranch}, {defaultBranch} and {repo} are filled in for each floor'),
+        why: z.string().min(1).max(600).describe('Why, in a sentence: the manager reads it on the card'),
+      },
+      (a) => run(() => h.proposePlaybookChange(a)),
     ),
   ];
   return {

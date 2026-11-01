@@ -67,7 +67,7 @@ const options = (cwd: string): SessionOptions => ({
 
 describe('Sessions', () => {
   it("shows a session's lines and signs on the worker as it runs, then adds up what it cost", async () => {
-    const cwd = await backend.machines.prepareDesk('w1', REPO, { defaultBranch: 'main' }, 'mm/issue-3-ada');
+    const cwd = await backend.machines.prepareDesk('w1', REPO, { workBranch: 'main' }, 'mm/issue-3-ada');
     const signs: (Activity | null)[] = [];
     const tab = { OPEN: 1, readyState: 1, on: () => undefined, send: (t: string) => {
       const ev = JSON.parse(t) as ServerEvent;

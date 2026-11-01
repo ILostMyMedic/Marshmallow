@@ -1,15 +1,20 @@
 // Auto-merge: after every floor sync, each PR QA passed takes its next step toward merging (rules/mergeGate.ts):
 // wait for checks, re-run a failed one once, send it back for failing checks or a conflict, bring it up to date, or
-// merge exactly the commit QA passed. Only the office's own mm/issue- branches merge themselves.
+// merge exactly the commit QA passed. Only the office's own mm/issue- branches merge themselves, and only into the
+// floor's work branch (rules/workBranch.ts): one aimed elsewhere is moved first. A merge closes the issues it resolved;
+// GitHub never closes them after a merge into another branch than the default one, so later syncs make sure.
 // Adapted from cubefarm server/swarm.ts (MIT): advanceMerges, advanceMerge, sendBack, closeResolvedIssues.
+import { workBranchOf } from '../../shared/branches.ts';
 import type { Floor, PullInfo } from '../../shared/types.ts';
 import type { QaState } from '../store.ts';
-import { clearTask, oneLine, stuck, type Ctx } from './context.ts';
+import { clearTask, moveToWorkBranch, oneLine, stuck, type Ctx } from './context.ts';
 import { issuesResolvedBy } from './rules/issueClaims.ts';
 import { MAX_MERGE_FIXES, MERGE_RETRY_MS, mergeStep, type MergePull } from './rules/mergeGate.ts';
+import { offWorkBranch, unclosedByMerge } from './rules/workBranch.ts';
 
 export class Merge {
   private merging = new Set<string>(); // floors whose merges are being advanced right now
+  private closedFor = new Map<string, Set<number>>(); // per floor: merged PRs whose issues the office closed, in memory
 
   constructor(private readonly ctx: Ctx) {}
 
@@ -28,11 +33,13 @@ export class Merge {
         // Decide only on a sync that began after the record last changed (a QA pass, a fix, a re-run).
         if ((floor.lastSync ?? 0) < rec.updatedAt) continue;
         try {
-          if (await this.step(floor, rec, pr)) merged = true;
+          if (offWorkBranch(floor, pr)) await this.retarget(floor, rec, pr);
+          else if (await this.step(floor, rec, pr)) merged = true;
         } catch (err) {
           this.note(rec, `auto-merge hit a problem: ${oneLine(err)}`);
         }
       }
+      if (store.hasFloor(floorId)) await this.closeShipped(store.floor(floorId));
     } finally {
       this.merging.delete(floorId);
     }
@@ -42,11 +49,51 @@ export class Merge {
     }
   }
 
+  /**
+   * A QA-passed PR aimed at another branch than the floor's work branch is never merged there: it's moved onto the work
+   * branch, and the next sync (GitHub's mergeability against it) decides; one GitHub won't move goes to the manager.
+   */
+  private async retarget(floor: Floor, rec: QaState, pr: PullInfo) {
+    const base = workBranchOf(floor);
+    try {
+      await moveToWorkBranch(this.ctx, floor, pr.number, pr.baseRefName);
+    } catch (err) {
+      stuck(this.ctx, rec, { mergeNote: null }, `it goes into ${pr.baseRefName}, not the floor's work branch ${base}, and GitHub wouldn't move it: ${oneLine(err)}`);
+      return;
+    }
+    // A real change: the gate waits for a sync that sees the PR on its new base.
+    this.ctx.store.patchQa(rec.floorId, rec.prNumber, { mergeNote: `moved onto ${base}`, pendingSince: null });
+  }
+
+  /** Issues a merge into a work branch left open (rules/workBranch.ts unclosedByMerge) are closed, once per PR. */
+  private async closeShipped(floor: Floor) {
+    for (const s of unclosedByMerge(floor, this.closedOf(floor.id), Date.now())) await this.closeResolved(floor, s.pr, s.issues, s.base);
+  }
+
+  /** Closes the issues PR #n resolved that are still open; the PR counts as seen to once none is left open. */
+  private async closeResolved(floor: Floor, n: number, issues: number[], base: string) {
+    const gh = this.ctx.backend.github;
+    const into = base === floor.defaultBranch ? '' : ` (merged into ${base})`;
+    let done = true;
+    for (const issue of issues) {
+      const state = await gh.issueState(floor.fullName, issue).catch(() => null);
+      if (state === 'OPEN') done = (await gh.closeIssue(floor.fullName, issue, `Shipped in #${n}${into}`).then(() => true, () => false)) && done;
+      else if (state === null) done = false; // GitHub couldn't say: the next sync asks again
+    }
+    if (done) this.closedOf(floor.id).add(n);
+  }
+
+  private closedOf(floorId: string): Set<number> {
+    let s = this.closedFor.get(floorId);
+    if (!s) this.closedFor.set(floorId, (s = new Set()));
+    return s;
+  }
+
   /** Sends a QA-passed PR back to a developer for failing checks or a conflict; to the manager once the fixes run out. */
   sendBack(rec: QaState, reason: 'checks' | 'conflict', instructions: string, needsHuman: boolean) {
     const { store } = this.ctx;
     if (needsHuman) {
-      const base = store.hasFloor(rec.floorId) ? store.floor(rec.floorId).defaultBranch : 'the default branch';
+      const base = store.hasFloor(rec.floorId) ? workBranchOf(store.floor(rec.floorId)) : 'its base branch';
       stuck(this.ctx, rec, { mergeNote: null }, `it still ${reason === 'conflict' ? `conflicts with ${base}` : 'fails its checks'} after ${MAX_MERGE_FIXES} fixes`);
       return;
     }
@@ -60,7 +107,7 @@ export class Merge {
     const { store } = this.ctx;
     const gh = this.ctx.backend.github;
     const now = Date.now();
-    const base = floor.defaultBranch;
+    const base = workBranchOf(floor);
     let pr: MergePull = pull;
     let step = mergeStep(pr, rec, now, { base });
     if (step.do === 'details') {
@@ -153,11 +200,9 @@ export class Merge {
       clearTask(this.ctx, w.id);
     }
     store.moment({ type: 'merged', at: Date.now(), floorId: floor.id, prNumber: n, devWorkerId: rec.devWorkerId, qaWorkerId: rec.qaWorkerId });
-    // GitHub closes what "Closes #N" links; the office closes the rest (and anything GitHub missed).
-    for (const issue of resolved) {
-      const state = await this.ctx.backend.github.issueState(floor.fullName, issue).catch(() => null);
-      if (state === 'OPEN') await this.ctx.backend.github.closeIssue(floor.fullName, issue, `Shipped in #${n}`).catch(() => undefined);
-    }
+    // GitHub closes what "Closes #N" links, and only into the default branch; the office closes the rest (and anything
+    // GitHub missed). One it couldn't close now, after a merge into a work branch, is closed on a later sync.
+    await this.closeResolved(floor, n, resolved, pull.baseRefName || workBranchOf(floor));
   }
 
   /** Where auto-merge stands, on the PR's QA card. Bookkeeping: it doesn't count as a change to the record. */

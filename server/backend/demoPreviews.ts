@@ -20,7 +20,7 @@ const DEFAULT_PACKAGE = { scripts: { dev: 'vite' } };
 /** Programs the demo pretends to have, so a manager's command naming another fails the way it would for real. */
 const PROGRAMS = ['npm', 'npx', 'node', 'pnpm', 'yarn', 'bun', 'deno', 'vite', 'next', 'serve', 'http-server', 'python', 'python3', 'py', 'php', 'ruby', 'go', 'cargo', 'dotnet'];
 
-/** The pretend commit on the default branch: a new one with every merge. */
+/** The pretend head of the branch a preview runs: a new one with every merge into it. */
 export const demoCommit = (fullName: string, latest: PullInfo | undefined) => crypto.createHash('sha1').update(`${fullName}#${latest?.number ?? 0}`).digest('hex');
 
 /** The demo's previews; `stepMs` paces the pretend steps (the tests make them instant). */
@@ -56,11 +56,11 @@ export function demoPreviews(github: FakeGitHub, stepMs: number): PreviewBackend
 
       const run = async () => {
         cb.status('preparing');
-        cb.log([`Fetching ${job.defaultBranch} into the preview worktree… (demo)`]);
+        cb.log([`Fetching ${job.branch} into the preview worktree… (demo)`]);
         await later(stepMs);
         if (stopped) return;
         const [meta, pulls] = await Promise.all([github.repoMeta(job.fullName), github.listPulls(job.fullName)]);
-        const shipped = pulls.filter((p) => p.state === 'MERGED').sort((a, b) => (b.mergedAt ?? '').localeCompare(a.mergedAt ?? ''));
+        const shipped = pulls.filter((p) => p.state === 'MERGED' && p.baseRefName === job.branch).sort((a, b) => (b.mergedAt ?? '').localeCompare(a.mergedAt ?? ''));
         const sha = demoCommit(job.fullName, shipped[0]);
         cb.sha(sha);
         cb.log([`HEAD is now at ${sha.slice(0, 7)} ${shipped[0] ? `${shipped[0].title} (#${shipped[0].number})` : 'Initial commit'}`]);
@@ -86,7 +86,7 @@ export function demoPreviews(github: FakeGitHub, stepMs: number): PreviewBackend
           cb.log([`'${program}' is not recognized as an internal or external command,`, 'operable program or batch file.']);
           return fail(`The app exited (code 1) before it answered on ${LOOPBACK}:${job.port}.`);
         }
-        const page = appPage({ fullName: job.fullName, description: meta.description, branch: job.defaultBranch, sha, shipped: shipped.slice(0, 5), port: job.port });
+        const page = appPage({ fullName: job.fullName, description: meta.description, branch: job.branch, sha, shipped: shipped.slice(0, 5), port: job.port });
         const s = http.createServer((req, res) => {
           const at = new URL(req.url ?? '/', 'http://localhost').pathname;
           if (at.includes('.')) return void res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');

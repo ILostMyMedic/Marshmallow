@@ -1,11 +1,12 @@
 // Floor previews: each floor's app, running, so the manager can check what the team shipped. One per floor, run from a
-// worktree of its own on the floor's default branch (refreshed on every start), on the manager's port or the one kept
+// worktree of its own on the floor's work branch (refreshed on every start), on the manager's port or the one kept
 // for the floor, 127.0.0.1 only. Started by hand only; restarted after a merge on its floor; stopped on demand, when its
 // floor goes and when the office closes. The manager's settings are kept in the office database, the running state
 // isn't: after a restart every preview reads stopped. The backend runs the app (server/previewRunner.ts, or the demo's
 // fake in server/backend/demoPreviews.ts).
 // Adapted from cubefarm server/previews.ts (MIT). Cut: the PR theatre (PR previews, slot worktrees, viewers, sync
 // proxies), the floor's environment variables and the "unconfigured" state.
+import { workBranchOf } from '../shared/branches.ts';
 import type { PreviewConfig, PreviewState, PreviewView } from '../shared/types.ts';
 import type { Backend } from './backend/backend.ts';
 import { CLIENT_PORT, PORT, PREVIEW_PORT } from './config.ts';
@@ -257,7 +258,7 @@ export class Previews {
     if (gen !== r.gen) return this.view(floorId);
     const live = () => gen === r.gen;
     r.handle = this.backend.previews.start(
-      { fullName: floor.fullName, defaultBranch: floor.defaultBranch, port, command: config.command ? fillPort(config.command, port) : null },
+      { fullName: floor.fullName, branch: workBranchOf(floor), port, command: config.command ? fillPort(config.command, port) : null },
       {
         status: (state) => {
           if (!live()) return;

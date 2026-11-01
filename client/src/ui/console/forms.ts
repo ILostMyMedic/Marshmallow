@@ -21,6 +21,7 @@ export interface SettingsForm {
   dayMode: DayMode;
   bodyStyle: BodyStyle;
   inkOutlines: boolean;
+  workersUseMySetup: boolean;
   season: SeasonSetting;
   machineKind: MachineHost;
   boxSize: BoxSize;
@@ -44,6 +45,7 @@ export function settingsForm(s: Settings): SettingsForm {
     dayMode: s.dayMode,
     bodyStyle: s.bodyStyle,
     inkOutlines: s.inkOutlines,
+    workersUseMySetup: s.workersUseMySetup,
     season: s.season,
     machineKind: s.cloud.machineKind,
     boxSize: s.cloud.boxSize,
@@ -94,6 +96,7 @@ export function settingsPatch(form: SettingsForm, now: Settings): { patch: Parti
   if (form.dayMode !== now.dayMode) patch.dayMode = form.dayMode;
   if (form.bodyStyle !== now.bodyStyle) patch.bodyStyle = form.bodyStyle;
   if (form.inkOutlines !== now.inkOutlines) patch.inkOutlines = form.inkOutlines;
+  if (form.workersUseMySetup !== now.workersUseMySetup) patch.workersUseMySetup = form.workersUseMySetup;
   if (form.season !== now.season) patch.season = form.season;
   const boxLimit = whole(form.boxLimit, LIMITS.boxLimit);
   if (typeof boxLimit === 'string') problems.boxLimit = boxLimit;

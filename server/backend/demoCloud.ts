@@ -7,8 +7,8 @@ import type { BoxSignIn } from '../sessions/cliRunner.ts';
 import type { WorkerTerminal } from '../sessions/terminal.ts';
 import type { CloudBackend } from './backend.ts';
 
-/** Where a demo Box's desk is: its repo and branch, for the fake sessions' pull requests. */
-export type DemoBoxDesk = { fullName: string; branch: string };
+/** Where a demo desk is: its repo and branch, and the branch it started from (none on a PR's head), for the fake sessions' pull requests. */
+export type DemoBoxDesk = { fullName: string; branch: string; base?: string };
 
 /**
  * A fake Upstash account. `logins`: the Boxes whose Claude Code is signed in. `onDesk` hears each desk a Box sets up.
@@ -59,7 +59,8 @@ export function demoBoxes(logins: Set<string>, onDesk: (boxId: string, desk: Dem
         await wait(0.9);
         const desk = script.match(/^W='\/workspace\/home\/work\/([^']+)'$/m)?.[1];
         const branch = script.match(/^B='([^']+)'$/m)?.[1];
-        if (desk && branch) onDesk(id, { fullName: desk.replace('__', '/'), branch });
+        const base = script.match(/^REF='origin\/(?!pr\/)([^']+)'$/m)?.[1];
+        if (desk && branch) onDesk(id, { fullName: desk.replace('__', '/'), branch, ...(base && { base }) });
         return { code: 0, output: desk ? `/workspace/home/work/${desk}` : '' };
       }
       if (script.includes('DEPS_')) {

@@ -28,6 +28,11 @@ describe('settingsPatch', () => {
     expect(patch).toEqual({ managerName: 'Alex', sessionLimit: 6, autoscale: false, defaultEffort: 'high', dayMode: 'clock', bodyStyle: 'chibi', inkOutlines: false });
   });
 
+  it("sends whether workers bring your own Claude setup, off unless you turn it on", () => {
+    expect(settingsForm(now).workersUseMySetup).toBe(false);
+    expect(settingsPatch(form({ workersUseMySetup: true }), now).patch).toEqual({ workersUseMySetup: true });
+  });
+
   it('turns an emptied session limit into no limit', () => {
     expect(settingsPatch(form({ sessionLimit: ' ' }), { ...now, sessionLimit: 3 }).patch).toEqual({ sessionLimit: 0 });
   });

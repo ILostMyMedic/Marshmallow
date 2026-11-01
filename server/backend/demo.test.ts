@@ -86,6 +86,32 @@ describe('the fake GitHub', () => {
     expect(await github.issueState(REPO, 1)).toBe('CLOSED');
   });
 
+  it('has branches: dev made from main, PRs into it link no issues, and a merge into it moves only dev and closes nothing', async () => {
+    const { github } = demo();
+    expect(await github.listBranches(REPO)).toEqual(['main']);
+    await expect(github.createBranch(REPO, 'dev', 'nope')).rejects.toThrow(/Not Found/);
+    await github.createBranch(REPO, 'dev', 'main');
+    await expect(github.createBranch(REPO, 'dev', 'main')).rejects.toThrow(/already exists/);
+    const before = github.branchHeads(REPO);
+    expect(before.dev).toBe(before.main);
+    const pr = github.openPull(REPO, { title: 'Dark mode', branch: 'mm/issue-1-ada', closes: 1, base: 'dev' });
+    expect(pr).toMatchObject({ baseRefName: 'dev', closesIssues: [] });
+    expect(await github.prDetails(REPO, pr.number)).toMatchObject({ baseRefName: 'dev', body: expect.stringContaining('Closes #1') });
+    await github.mergePull(REPO, pr.number, 'squash', pr.headSha);
+    await wait(20);
+    expect(github.branchHeads(REPO)).toEqual({ main: before.main, dev: expect.not.stringMatching(before.dev) });
+    expect(await github.issueState(REPO, 1)).toBe('OPEN'); // GitHub only closes linked issues on merges into the default branch
+  });
+
+  it('moves a PR onto another base, linking its issue once it goes into the default branch', async () => {
+    const { github } = demo();
+    await github.createBranch(REPO, 'dev', 'main');
+    const pr = github.openPull(REPO, { title: 'Dark mode', branch: 'mm/issue-1-ada', closes: 1, base: 'dev' });
+    await expect(github.setPullBase(REPO, pr.number, 'nope')).rejects.toThrow(/no branch nope/);
+    await github.setPullBase(REPO, pr.number, 'main');
+    expect(await github.prDetails(REPO, pr.number)).toMatchObject({ baseRefName: 'main', closesIssues: [1] });
+  });
+
   it('fails checks now and then, and a re-run of the failed job passes', async () => {
     const { github } = demo(0.1);
     const pr = github.openPull(REPO, { title: 'Due dates', branch: 'mm/issue-2-ken', closes: 2 });
@@ -119,7 +145,7 @@ describe('the fake GitHub', () => {
 describe('the fake sessions', () => {
   it('builds an issue: tool calls, a screenshot, and a PR from the desk branch', async () => {
     const b = demo();
-    const cwd = await b.machines.prepareDesk('ada12345', REPO, { defaultBranch: 'main' }, 'mm/issue-3-ada');
+    const cwd = await b.machines.prepareDesk('ada12345', REPO, { workBranch: 'main' }, 'mm/issue-3-ada');
     const s = runSession(b, options(cwd, { task: 'issue', subject: { issueNumber: 3, prNumber: null, title: 'Drag and drop to reorder' } }));
     const result = await s.done;
     expect(result.ok).toBe(true);
@@ -128,6 +154,17 @@ describe('the fake sessions', () => {
     const pr = await b.github.prForBranch(REPO, 'mm/issue-3-ada');
     expect(pr).not.toBeNull();
     expect(result.text).toContain(pr!.url);
+  });
+
+  it('opens its PR into the work branch its desk started from', async () => {
+    const b = demo();
+    await b.github.createBranch(REPO, 'dev', 'main');
+    const cwd = await b.machines.prepareDesk('ada12345', REPO, { workBranch: 'dev' }, 'mm/issue-3-ada');
+    const s = runSession(b, options(cwd, { task: 'issue', subject: { issueNumber: 3, prNumber: null, title: 'Drag and drop to reorder' } }));
+    await s.done;
+    const pr = await b.github.prForBranch(REPO, 'mm/issue-3-ada');
+    expect((await b.github.prDetails(REPO, pr!.number)).baseRefName).toBe('dev');
+    expect(s.logs.map((l) => l.text)).toContain('⏺ $ gh pr create --base dev --title "Drag and drop to reorder" --body "Closes #3"');
   });
 
   it('gives QA a structured verdict, failing some first rounds', async () => {
@@ -140,7 +177,7 @@ describe('the fake sessions', () => {
   it('pushes a fix to the PR, so its head moves on', async () => {
     const b = demo();
     const pr = b.github.openPull(REPO, { title: 'Dark mode', branch: 'mm/issue-1-ada', closes: 1 });
-    const cwd = await b.machines.prepareDesk('ada12345', REPO, { defaultBranch: 'main', pr: pr.number }, 'mm/issue-1-ada');
+    const cwd = await b.machines.prepareDesk('ada12345', REPO, { workBranch: 'main', pr: pr.number }, 'mm/issue-1-ada');
     await runSession(b, options(cwd, { task: 'fix', resumeSessionId: 'demo-earlier', subject: { issueNumber: 1, prNumber: pr.number, title: 'Dark mode' } })).done;
     expect((await b.github.prDetails(REPO, pr.number)).headSha).not.toBe(pr.headSha);
   });
@@ -173,7 +210,7 @@ describe('the fake sessions', () => {
 describe('the fake machines', () => {
   it('install dependencies on the first task at a desk and skip them after', async () => {
     const b = demo();
-    await b.machines.prepareDesk('ada12345', REPO, { defaultBranch: 'main' }, 'mm/issue-1-ada');
+    await b.machines.prepareDesk('ada12345', REPO, { workBranch: 'main' }, 'mm/issue-1-ada');
     const cb = { log: () => undefined, installing: () => undefined };
     expect(await b.machines.installDeps('ada12345', REPO, cb)).toBe('installed');
     expect(await b.machines.installDeps('ada12345', REPO, cb)).toBe('skipped');

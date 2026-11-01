@@ -22,6 +22,7 @@ const floor = (over: Partial<Floor> = {}): Floor => ({
   description: '',
   url: 'https://github.com/demo/app',
   defaultBranch: 'main',
+  workBranch: null,
   floor: 1,
   color: '#ff8a5b',
   autoAssign: true,
@@ -109,6 +110,15 @@ describe('Store', () => {
     const store = new Store(file, about);
     await store.load();
     expect(store.floor('demo/app').languages).toEqual([]);
+  });
+
+  it('loads a floor saved before work branches on its default branch, and keeps one it was given', async () => {
+    const { workBranch: _w, cloneStatus: _c, cloneError: _e, issues: _i, pulls: _p, lastSync: _s, syncError: _y, ...old } = floor();
+    fs.writeFileSync(file, JSON.stringify({ floors: [old, { ...old, id: 'demo/web', fullName: 'demo/web', workBranch: 'dev' }] }));
+    const store = new Store(file, about);
+    await store.load();
+    expect(store.floor('demo/app').workBranch).toBeNull();
+    expect(store.floor('demo/web').workBranch).toBe('dev');
   });
 
   it("keeps a state file that isn't JSON aside and starts afresh", async () => {

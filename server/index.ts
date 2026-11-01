@@ -17,11 +17,13 @@ import { deskRoutes } from './deskRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
 import { createPipeline } from './pipeline/pipeline.ts';
+import { playbookRoutes } from './playbookRoutes.ts';
 import { Previews } from './previews.ts';
 import { handleHook, handleMcp, hooksReady, releaseClis, setOfficeUrl } from './sessions/cliRunner.ts';
 import { Terminals } from './sessions/terminals.ts';
 import { route } from './route.ts';
 import { EFFORTS, settingsPatch } from './settings.ts';
+import { demoSetupStatus, realSetupDeps, setupStatus } from './setup.ts';
 import { shopRoutes } from './shopRoutes.ts';
 import { Store } from './store.ts';
 import { worldRoutes } from './worldRoutes.ts';
@@ -42,7 +44,7 @@ const terminals = new Terminals(path.join(HOME_DIR, 'terminals'));
 // open before the pipeline, whose CEO answers on the desk, and before the restart and the first sync, so merges
 // finishing now are recorded and the floors' merged PRs are backfilled.
 const office = await openOffice(DB_DIR, store);
-const pipeline = createPipeline(store, backend, floors, terminals, { desk: office.desk });
+const pipeline = createPipeline(store, backend, floors, terminals, { desk: office.desk, playbook: office.playbook });
 // Projects the manager approves on the CEO's cards; where new repositories can go is asked of GitHub once, now
 const projects = new Projects(pipeline.ctx, office.desk);
 void repoOwners(pipeline.ctx);
@@ -106,6 +108,8 @@ app.post('/api/ceo', route((req) => pipeline.ctx.ceo.hire(str(req.body?.model).t
 app.delete('/api/ceo', route(() => pipeline.ctx.ceo.letGo()));
 app.post('/api/ceo/message', route((req) => pipeline.ctx.ceo.message(str(req.body?.text))));
 app.use('/api', deskRoutes(pipeline.ctx, office.desk, projects));
+// The playbook: the office's and each floor's agent docs every session gets, its templates, and the CEO's proposed changes
+app.use('/api', playbookRoutes(pipeline.ctx, office.playbook));
 // The shop: buying for a floor and moving what it bought (each answers the floor's coins and/or plan); the demo grants coins
 app.use('/api', shopRoutes(store, office.shop, office.ledger, DEMO));
 app.post('/api/floors/:floor/sync', route((req) => floors.sync(String(req.params.floor))));
@@ -129,10 +133,19 @@ app.post(
 // An issue held after its PR was closed goes back in line
 app.delete('/api/floors/:floor/held/:n', route((req) => pipeline.ctx.closures.release(String(req.params.floor), num(req.params.n))));
 app.post('/api/questions/:id/answer', route((req) => pipeline.ctx.questions.answer(num(req.params.id), str(req.body?.text))));
+// A floor's branches on GitHub, for the work branch picker
+app.get('/api/floors/:floor/branches', route((req) => floors.branches(String(req.params.floor))));
 app.patch(
   '/api/floors/:floor',
-  route((req) => {
+  route(async (req) => {
     const floorId = String(req.params.floor);
+    // workBranch: a branch GitHub has (createBranch: true makes it from the default branch first); null or '' hands the
+    // floor back to its default branch. First, so a refusal changes nothing else.
+    const branch = req.body?.workBranch;
+    if (branch !== undefined) {
+      if (branch !== null && typeof branch !== 'string') throw new HttpError(400, 'workBranch must be a branch name, or null for the default branch');
+      await floors.setWorkBranch(floorId, branch, req.body?.createBranch === true);
+    }
     const patch: { autoAssign?: boolean; browserTesting?: boolean; teamSize?: null } = {};
     for (const key of ['autoAssign', 'browserTesting'] as const) {
       if (req.body?.[key] === undefined) continue;
@@ -201,6 +214,13 @@ app.put(
   }),
 );
 app.post('/api/cloud/test', route(() => pipeline.ctx.cloud.account.test()));
+// The sign-ins the office runs on (gh, Claude Code, local model servers, the Upstash key), checked when the Settings tab
+// opens or refreshes; who and whether only, never a key or a token
+const upstashKey = () => {
+  const { keySet, keyError } = pipeline.ctx.cloud.account.view();
+  return { keySet, keyError };
+};
+app.get('/api/setup/status', route(() => (demo ? demoSetupStatus(upstashKey) : setupStatus(realSetupDeps(upstashKey)))));
 app.post('/api/cloud/orphans', route(() => pipeline.ctx.cloud.account.deleteOrphans()));
 app.post(
   '/api/workers/:id/move',

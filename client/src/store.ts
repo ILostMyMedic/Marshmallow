@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { EMPTY_CLOUD } from '../../shared/cloud';
 import { EMPTY_WORLD, type WorldView } from '../../shared/worldEvents';
 import { EMPTY_AWARD_STATS, type AwardStats } from '../../shared/awards';
+import { EMPTY_PLAYBOOK, type PlaybookView } from '../../shared/playbook';
 import { DEFAULT_SETTINGS, EMPTY_COINS, EMPTY_DESK, EMPTY_RECORDS, isMoment, type CloudView, type CoinsView, type DeskView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type PreviewView, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
@@ -34,6 +35,7 @@ export interface Office {
   previews: Record<string, PreviewView>; // by floor id (server/previews.ts)
   world: WorldView; // the world events on now
   desk: DeskView; // the desktop's chats with the CEO, its project proposals and discussions
+  playbook: PlaybookView; // the office's and each floor's agent docs, and the CEO's proposed changes
 }
 
 export const EMPTY_OFFICE: Office = {
@@ -58,6 +60,7 @@ export const EMPTY_OFFICE: Office = {
   previews: {},
   world: EMPTY_WORLD,
   desk: EMPTY_DESK,
+  playbook: EMPTY_PLAYBOOK,
 };
 
 /** Office messages a tab keeps. */
@@ -95,6 +98,7 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         previews: d.previews ?? {},
         world: d.world ?? EMPTY_WORLD,
         desk: d.desk ?? EMPTY_DESK,
+        playbook: d.playbook ?? EMPTY_PLAYBOOK,
       };
     }
     case 'settings':
@@ -142,6 +146,8 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
       return { ...o, world: ev.world };
     case 'desk':
       return { ...o, desk: ev.desk };
+    case 'playbook':
+      return { ...o, playbook: ev.playbook };
     case 'coins':
       return { ...o, coins: ev.coins };
     case 'awards':

@@ -25,6 +25,7 @@ const floor = (id: string, n: number): Floor => ({
   description: '',
   url: `https://github.com/${id}`,
   defaultBranch: 'main',
+  workBranch: null,
   floor: n,
   color: '#fff',
   autoAssign: false,

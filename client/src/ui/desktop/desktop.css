@@ -1520,6 +1520,89 @@
   background: #fbf7ee;
 }
 
+/* ---------- a playbook change (PlaybookCard.tsx): a project card's frame, with a diff ---------- */
+
+.pbc-card .proj-head {
+  background: #ece4ff;
+}
+
+.pbc-card.proj-started .proj-head {
+  background: #dff7e5;
+}
+
+.pbc-name {
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.pbc-why,
+.pbc-desc {
+  font-family: system-ui, sans-serif;
+}
+
+.pbc-diff {
+  max-height: 320px;
+  margin: 6px 0 0;
+  padding: 6px 0;
+  overflow: auto;
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  background: #fffdf5;
+  font: 0.8rem/1.5 ui-monospace, Consolas, monospace;
+}
+
+.pbc-diff > span {
+  display: block;
+  padding: 0 10px 0 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pbc-mark {
+  display: inline-block;
+  width: 1.4em;
+  color: var(--muted);
+  user-select: none;
+}
+
+.pbc-add {
+  background: #e3fbe7;
+  color: #14532d;
+}
+
+.pbc-add .pbc-mark {
+  color: #1f7a3a;
+}
+
+.pbc-del {
+  background: #ffe8ec;
+  color: #7a1f2b;
+  text-decoration: line-through;
+  text-decoration-color: rgba(122, 31, 43, 0.35);
+}
+
+.pbc-del .pbc-mark {
+  color: #a4133c;
+}
+
+.pbc-skip {
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+}
+
+.dt-monitor textarea.pbc-text {
+  width: 100%;
+  min-height: 160px;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 2px solid #c9c0ae;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 0.82rem/1.45 ui-monospace, Consolas, monospace;
+  resize: vertical;
+}
+
 /* ---------- narrow screens: one pane at a time (parts.tsx useNarrow has the same width) ---------- */
 
 @media (max-width: 760px) {

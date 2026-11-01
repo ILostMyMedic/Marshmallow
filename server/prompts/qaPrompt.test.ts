@@ -16,7 +16,7 @@ const input = (i: Partial<QaPromptInput> = {}): QaPromptInput => ({
   lastTestedSha: null,
   summary: null,
   fixInstructions: null,
-  defaultBranch: 'main',
+  base: 'main',
   ...i,
 });
 
@@ -98,7 +98,7 @@ describe('qaInstructions: re-tests', () => {
   });
 
   it('a conflict fix: a lighter re-check of the merge, CI and the feature', () => {
-    const retest = qaInstructions(input({ round: 3, fixReason: 'conflict', lastTestedSha: OLD, defaultBranch: 'develop' })).retest;
+    const retest = qaInstructions(input({ round: 3, fixReason: 'conflict', lastTestedSha: OLD, base: 'develop' })).retest;
     expect(retest).toContain('updated with develop to resolve merge conflicts');
     expect(retest).toContain(`git show --remerge-diff on the merge commit(s) (git log --merges ${OLD}..HEAD)`);
     expect(retest).toContain("confirm GitHub's checks are green on the new head");

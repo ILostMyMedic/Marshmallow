@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { boxVersions, claudeCommand, CROSS_TURN_TOOLS, interruptions, launchArgs, localUrl, modelEnv, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
+import { playbookFor, type PlaybookDoc } from '../../shared/playbook.ts';
+import { boxVersions, claudeCommand, CROSS_TURN_TOOLS, interruptions, launchArgs, localUrl, modelEnv, playbookFiles, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 
 const dir = path.join(os.tmpdir(), 'npm-global');
 
@@ -62,7 +63,23 @@ describe('launchArgs', () => {
     expect(args).toContain('--append-system-prompt-file');
     expect(args).not.toContain('--mcp-config');
     expect(args).toContain('--strict-mcp-config');
-    expect(env).toEqual({ DISABLE_AUTOUPDATER: '1' });
+    expect(args).not.toContain('--plugin-dir');
+    expect(env).toEqual({ DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+  });
+
+  it("leaves the manager's own setup and auto memory out unless the office says to bring them", () => {
+    const without = launchArgs(ctx());
+    expect(without.args.slice(without.args.indexOf('--setting-sources'), without.args.indexOf('--setting-sources') + 2)).toEqual(['--setting-sources', 'project,local']);
+    expect(without.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe('1');
+    const own = launchArgs(ctx({ ownSetup: true }));
+    expect(own.args).not.toContain('--setting-sources');
+    expect(own.env).toEqual({ DISABLE_AUTOUPDATER: '1' });
+  });
+
+  it("loads the playbook's plugin for the session when there is one", () => {
+    const { args } = launchArgs(ctx({ files: { settings: 's', mcp: null, system: 'i', plugin: '/sessions/t/plugin' } }));
+    expect(args.slice(args.indexOf('--plugin-dir'), args.indexOf('--plugin-dir') + 2)).toEqual(['--plugin-dir', '/sessions/t/plugin']);
+    expect(args.indexOf('--plugin-dir')).toBeLessThan(args.indexOf('--'));
   });
 
   it("resumes a session, and keeps the CEO's hands off the shell", () => {
@@ -80,6 +97,34 @@ describe('launchArgs', () => {
     const local = launchArgs(ctx({ model: 'ollama/gpt-oss:20b' })).args;
     expect(local.slice(local.indexOf('--model'), local.indexOf('--model') + 2)).toEqual(['--model', 'gpt-oss:20b']);
     expect(local).not.toContain('--effort');
+  });
+});
+
+describe('playbookFiles', () => {
+  const floor = { id: 'acme/app', fullName: 'acme/app', defaultBranch: 'main', workBranch: 'dev' };
+  const doc = (o: Partial<PlaybookDoc>): PlaybookDoc => ({ id: 1, scope: 'office', floorId: null, kind: 'rules', name: 'r', description: '', body: '', tools: '', model: '', enabled: true, updatedAt: 0, ...o });
+  const playbook = playbookFor(
+    [doc({ id: 1, name: 'flow', body: '- PRs into {workBranch}' }), doc({ id: 2, kind: 'skill', name: 'write-tests', description: 'Tests', body: 'Write them' }), doc({ id: 3, kind: 'command', name: 'ship', description: 'Ship', body: 'Ship it' })],
+    floor,
+  );
+
+  it("writes what the runner would: the instructions with the rules after them, and the plugin's files in its own folder", () => {
+    const dir = path.join(os.tmpdir(), 'sessions', 'tok');
+    const files = playbookFiles(dir, 'Build issue #3.', playbook);
+    expect(files.system).toEqual([path.join(dir, 'instructions.md'), "Build issue #3.\n\n# The manager's rules (Marshmallow's playbook)\n\n- PRs into dev\n"]);
+    expect(files.pluginDir).toBe(path.join(dir, 'plugin'));
+    expect(files.plugin.map(([f]) => f)).toEqual([
+      path.join(dir, 'plugin', '.claude-plugin', 'plugin.json'),
+      path.join(dir, 'plugin', 'skills', 'write-tests', 'SKILL.md'),
+      path.join(dir, 'plugin', 'commands', 'ship.md'),
+    ]);
+    expect(files.plugin[1][1]).toBe('---\nname: write-tests\ndescription: "Tests"\n---\n\nWrite them\n');
+  });
+
+  it("uses a Box's forward slashes, and has no plugin without skills, subagents or commands", () => {
+    expect(playbookFiles('/workspace/home/.marshmallow/sessions/tok', 'x', playbook, path.posix).plugin[0][0]).toBe('/workspace/home/.marshmallow/sessions/tok/plugin/.claude-plugin/plugin.json');
+    const bare = playbookFiles('/s', 'Do it.', undefined, path.posix);
+    expect(bare).toEqual({ system: ['/s/instructions.md', 'Do it.'], pluginDir: null, plugin: [] });
   });
 });
 

@@ -27,6 +27,8 @@ export interface PrDetails {
   body: string;
   url: string;
   headRefName: string;
+  /** The branch it merges into. */
+  baseRefName: string;
   headSha: string;
   isCrossRepository: boolean;
   closesIssues: number[];
@@ -54,6 +56,10 @@ export interface GitHubApi {
   owners(): Promise<string[]>;
   listMyRepos(owner?: string): Promise<GhRepoSummary[]>;
   repoMeta(fullName: string): Promise<RepoMeta>;
+  /** The repository's branches, by name. */
+  listBranches(fullName: string): Promise<string[]>;
+  /** Creates branch `name` at the head of branch `from` (a floor's work branch, made from its default branch). */
+  createBranch(fullName: string, name: string, from: string): Promise<void>;
   /** Creates `owner/name` with a README, so it has a first commit and a default branch; returns its owner/name. */
   createRepo(owner: string, name: string, o: { description: string; private: boolean }): Promise<string>;
   /** Open issues. */
@@ -74,6 +80,8 @@ export interface GitHubApi {
   mergePull(fullName: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Promise<void>;
   /** Bring a PR's branch up to date with its base. */
   updateBranch(fullName: string, number: number): Promise<void>;
+  /** Point a PR at another base branch (the floor's work branch, when it was opened against another). */
+  setPullBase(fullName: string, number: number, base: string): Promise<void>;
   /** The failed steps' log of a GitHub Actions run, for a checks fix. */
   failedRunLog(fullName: string, runId: string): Promise<string>;
   /** Re-run the failed jobs of these GitHub Actions runs. */

@@ -4,6 +4,7 @@
 // client/src/ui/AppViewer.tsx (MIT): the PR theatre (channels, compare, QA), the run settings (the command and port are
 // on the console's Floors tab), the environment and the sync proxy are cut; the address line and the tablet width are new.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { workBranchOf } from '../../../shared/branches';
 import type { Floor, PreviewState, PreviewView } from '../../../shared/types';
 import { command, floorPath } from '../api';
 import { atPath, FRAME_WIDTHS, isOn, loadWidth, pathFrom, saveWidth, shortSha, shortUrl, STATE_WORDS, stepOf, STEPS, stoppedPreview, widthPx, type FrameWidth } from '../preview';
@@ -74,7 +75,7 @@ function runs(floor: Floor, p: PreviewView) {
   const what = p.command ? <code>{p.command}</code> : "the package.json's dev, start or preview script";
   return (
     <>
-      It runs {what} from {floor.defaultBranch}'s latest commit, in a checkout of its own{p.port ? ` on port ${p.port}` : ''}, on this computer only.
+      It runs {what} from {workBranchOf(floor)}'s latest commit, in a checkout of its own{p.port ? ` on port ${p.port}` : ''}, on this computer only.
     </>
   );
 }
@@ -242,7 +243,7 @@ export function AppViewer({ floorId }: { floorId: string }) {
           🖥 {name} <PreviewPill state={p.state} />
           {running && (
             <span className="panel-sub">
-              {floor.defaultBranch}
+              {workBranchOf(floor)}
               {sha && ` · ${sha}`}
               {p.startedAt && ` · up since ${new Date(p.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
             </span>

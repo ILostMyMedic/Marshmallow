@@ -12,7 +12,8 @@ export interface QaPromptInput extends Pick<PrDetails, 'headSha' | 'checks' | 'c
   lastTestedSha: string | null;
   summary: string | null; // last round's findings
   fixInstructions: string | null;
-  defaultBranch: string;
+  /** The branch the PR merges into: the floor's work branch. */
+  base: string;
 }
 
 export interface QaInstructions {
@@ -56,7 +57,7 @@ function retest(i: QaPromptInput): string {
   // A conflict fix only merged the base: the resolution, CI and the places where the two meet are what can break.
   if (i.fixReason === 'conflict') {
     const merges = since ? ` (git log --merges ${since}..HEAD)` : '';
-    return `\nQA passed it before, but since then the branch was updated with ${i.defaultBranch} to resolve merge conflicts. Review the resolution with git show --remerge-diff on the merge commit(s)${merges}, confirm GitHub's checks are green on the new head, and smoke-test this PR's feature plus whatever the conflicting files touch. Don't repeat the full test plan.`;
+    return `\nQA passed it before, but since then the branch was updated with ${i.base} to resolve merge conflicts. Review the resolution with git show --remerge-diff on the merge commit(s)${merges}, confirm GitHub's checks are green on the new head, and smoke-test this PR's feature plus whatever the conflicting files touch. Don't repeat the full test plan.`;
   }
   if (i.fixReason === 'checks') {
     return `\nQA passed it before, but since then the developer changed the code to fix failing GitHub checks. ${diff ? `Test what changed since QA passed it ${diff}` : 'Re-check everything.'}`;

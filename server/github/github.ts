@@ -60,6 +60,18 @@ export async function repoMeta(fullName: string): Promise<RepoMeta> {
   return { nameWithOwner: raw.nameWithOwner, description: raw.description ?? '', url: raw.url, defaultBranch: raw.defaultBranchRef?.name || 'main', empty: !raw.defaultBranchRef, languages };
 }
 
+/** The repository's branches, by name (a floor's work branch is picked from them). */
+export async function listBranches(fullName: string): Promise<string[]> {
+  const out = await gh(['api', `repos/${fullName}/branches`, '--paginate', '--jq', '.[].name']);
+  return out.split(/\r?\n/).map((b) => b.trim()).filter(Boolean);
+}
+
+/** Creates branch `name` at the head of `from` (a floor's work branch, made from its default branch). */
+export async function createBranch(fullName: string, name: string, from: string): Promise<void> {
+  const sha = await gh(['api', `repos/${fullName}/git/ref/heads/${from}`, '--jq', '.object.sha']);
+  await gh(['api', '-X', 'POST', `repos/${fullName}/git/refs`, '-f', `ref=refs/heads/${name}`, '-f', `sha=${sha.trim()}`]);
+}
+
 export async function listIssues(fullName: string): Promise<IssueInfo[]> {
   const raw = await readTwice(() =>
     ghJson<{ number: number; title: string; body: string; url: string; labels: { name: string }[]; createdAt: string }[]>(
@@ -75,6 +87,7 @@ interface RawPull {
   title: string;
   url: string;
   headRefName: string;
+  baseRefName: string;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   isDraft: boolean;
   mergeable: string;
@@ -90,7 +103,7 @@ interface RawPull {
   statusCheckRollup: { name?: string; context?: string; status?: string; conclusion?: string; state?: string; detailsUrl?: string; targetUrl?: string }[] | null;
 }
 
-const PR_FIELDS = 'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,mergedAt,additions,deletions,statusCheckRollup';
+const PR_FIELDS = 'number,title,url,headRefName,baseRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,mergedAt,additions,deletions,statusCheckRollup';
 
 type Check = NonNullable<RawPull['statusCheckRollup']>[number];
 const BAD = ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
@@ -112,6 +125,7 @@ function toPull(p: RawPull): PullInfo {
     title: p.title,
     url: p.url,
     headRefName: p.headRefName,
+    baseRefName: p.baseRefName,
     state: p.state,
     isDraft: p.isDraft,
     mergeable: p.mergeable,
@@ -217,6 +231,11 @@ export async function updateBranch(fullName: string, number: number): Promise<vo
   await gh(['pr', 'update-branch', String(number), '-R', fullName], { timeoutMs: 60_000 });
 }
 
+/** Points a PR at another base branch: the floor's work branch, when it was opened against another. */
+export async function setPullBase(fullName: string, number: number, base: string): Promise<void> {
+  await gh(['pr', 'edit', String(number), '-R', fullName, '--base', base], { timeoutMs: 60_000 });
+}
+
 /** The failed steps' log of a GitHub Actions run (gh run view --log-failed), for a checks fix. */
 export async function failedRunLog(fullName: string, runId: string): Promise<string> {
   return gh(['run', 'view', runId, '-R', fullName, '--log-failed'], { timeoutMs: 60_000 });
@@ -248,6 +267,7 @@ export async function prDetails(fullName: string, number: number): Promise<PrDet
     body: string;
     url: string;
     headRefName: string;
+    baseRefName: string;
     headRefOid: string;
     isCrossRepository: boolean;
     closingIssuesReferences: { number: number }[] | null;
@@ -255,7 +275,7 @@ export async function prDetails(fullName: string, number: number): Promise<PrDet
     mergeable: string;
     mergeStateStatus: string;
     statusCheckRollup: RawPull['statusCheckRollup'];
-  }>(['pr', 'view', String(number), '-R', fullName, '--json', 'number,title,body,url,headRefName,headRefOid,isCrossRepository,closingIssuesReferences,state,mergeable,mergeStateStatus,statusCheckRollup']);
+  }>(['pr', 'view', String(number), '-R', fullName, '--json', 'number,title,body,url,headRefName,baseRefName,headRefOid,isCrossRepository,closingIssuesReferences,state,mergeable,mergeStateStatus,statusCheckRollup']);
   const rollup = raw.statusCheckRollup ?? [];
   return {
     number: raw.number,
@@ -263,6 +283,7 @@ export async function prDetails(fullName: string, number: number): Promise<PrDet
     body: raw.body ?? '',
     url: raw.url,
     headRefName: raw.headRefName,
+    baseRefName: raw.baseRefName,
     headSha: raw.headRefOid,
     isCrossRepository: raw.isCrossRepository,
     closesIssues: (raw.closingIssuesReferences ?? []).map((r) => r.number),
@@ -319,6 +340,8 @@ export const realGithub: GitHubApi = {
   owners,
   listMyRepos,
   repoMeta,
+  listBranches,
+  createBranch,
   createRepo,
   listIssues,
   listPulls,
@@ -330,6 +353,7 @@ export const realGithub: GitHubApi = {
   commentIssue,
   mergePull,
   updateBranch,
+  setPullBase,
   failedRunLog,
   rerunFailedJobs,
   closePull,

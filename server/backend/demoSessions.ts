@@ -2,11 +2,12 @@
 // a (fake) pull request, giving a QA verdict or pushing a fix. A build takes about 20 seconds.
 // Adapted from cubefarm server/demo.ts (MIT).
 import crypto from 'node:crypto';
+import { PLUGIN_NAME, TEMPLATES } from '../../shared/playbook.ts';
 import type { LogEntry } from '../../shared/types.ts';
 import { ANSWER_LEAD } from '../pipeline/questions.ts';
 import { describeOfficeTool } from '../sessions/format.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
-import { DEMO_LOGIN, type FakeGitHub } from './demoGithub.ts';
+import { DEMO_DEFAULT_BRANCH, DEMO_LOGIN, type FakeGitHub } from './demoGithub.ts';
 
 /** The seeded issue (demoGithub.ts) that's too vague to build without asking. */
 export const VAGUE_ISSUE = 'Make it pop';
@@ -18,8 +19,8 @@ export interface DemoCeoMemory {
 
 export interface FakeSessionContext {
   github: FakeGitHub;
-  /** The repository and branch the session's desk has checked out; null for a desk the demo doesn't know. */
-  desk: { fullName: string; branch: string } | null;
+  /** The repository and branch the session's desk has checked out, and the branch it started from; null for a desk the demo doesn't know. */
+  desk: { fullName: string; branch: string; base?: string } | null;
   rand: () => number;
   stepMs: () => number;
   ceo: DemoCeoMemory;
@@ -37,7 +38,7 @@ function screenshotSvg(title: string, url: string, hue: number) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400"><rect width="640" height="400" fill="hsl(${hue} 60% 92%)"/><rect width="640" height="36" fill="hsl(${hue} 30% 80%)"/><text x="14" y="24" font-family="sans-serif" font-size="14" fill="#333">${url}</text><text x="40" y="200" font-family="sans-serif" font-size="26" fill="hsl(${hue} 50% 30%)">${safe}</text></svg>`;
 }
 
-function issueScript(cb: SessionCallbacks, n: number, title: string, branch: string): Step[] {
+function issueScript(cb: SessionCallbacks, n: number, title: string, branch: string, base: string): Step[] {
   const file = ['src/App.tsx', 'src/components/TodoList.tsx', 'src/api/routes.ts', 'src/styles.css'][n % 4];
   const port = 5200 + (n % 50);
   return [
@@ -58,16 +59,16 @@ function issueScript(cb: SessionCallbacks, n: number, title: string, branch: str
     tool('mcp__playwright__browser_take_screenshot', '🌐 take_screenshot', 'Took a screenshot of the current page'),
     tool('Bash', `$ git commit -am "feat: ${title.toLowerCase()}"`, `[${branch} 3f2a91c] feat: ${title.toLowerCase()}`),
     tool('Bash', '$ git push -u origin HEAD', 'branch set up to track origin'),
-    tool('Bash', `$ gh pr create --title "${title}" --body "Closes #${n}"`),
+    tool('Bash', `$ gh pr create --base ${base} --title "${title}" --body "Closes #${n}"`),
   ];
 }
 
-function qaScript(cb: SessionCallbacks, pr: number, title: string, round: number): Step[] {
+function qaScript(cb: SessionCallbacks, pr: number, title: string, round: number, base: string): Step[] {
   const port = 5600 + (pr % 50);
   const hue = (pr * 41) % 360;
   return [
     say(`Testing PR #${pr} "${title}" (round ${round}). First, the acceptance criteria from the issue.`),
-    tool('Bash', '$ git diff origin/main...HEAD --stat', ' 3 files changed, 82 insertions(+), 9 deletions(-)'),
+    tool('Bash', `$ git diff origin/${base}...HEAD --stat`, ' 3 files changed, 82 insertions(+), 9 deletions(-)'),
     tool('Bash', '$ npm ci && npm test -- --run', 'Tests  41 passed (41)'),
     tool('Bash', `$ npm run preview -- --port ${port} &`, `Local: http://localhost:${port}/`),
     () => cb.browserUrl(`http://localhost:${port}/`),
@@ -105,17 +106,20 @@ export function fakeSession(opts: SessionOptions, cb: SessionCallbacks, ctx: Fak
   const header: Step = [
     { kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort` },
     { kind: 'system', text: `  cwd ${opts.cwd}` },
+    ...playbookLines(opts),
   ];
   // The seeded vague issue: without the manager's answer in the prompt, its worker asks instead of guessing.
   const vague = kind === 'issue' && subject.title === VAGUE_ISSUE && !opts.prompt.includes(ANSWER_LEAD);
+  // Where the work goes: the branch the desk started from, as the worker's instructions say.
+  const base = ctx.desk?.base ?? opts.systemAppend.match(/origin\/([\w./-]+)\.\.\.HEAD/)?.[1] ?? DEMO_DEFAULT_BRANCH;
   const body =
     kind === 'qa'
-      ? qaScript(cb, subject.prNumber ?? 0, subject.title, round)
+      ? qaScript(cb, subject.prNumber ?? 0, subject.title, round, base)
       : kind === 'fix'
         ? fixScript(subject.prNumber ?? 0, pushes)
         : vague
           ? [say(`Reading "${subject.title}".`), tool('Read', 'Read src/App.tsx', 'Read 184 lines'), [{ kind: 'thinking', text: '✻ Thinking…' }] as LogEntry[]]
-          : issueScript(cb, subject.issueNumber ?? 0, subject.title, ctx.desk?.branch ?? 'HEAD');
+          : issueScript(cb, subject.issueNumber ?? 0, subject.title, ctx.desk?.branch ?? 'HEAD', base);
   const script = [header, ...body];
 
   const finish = () => {
@@ -165,7 +169,7 @@ export function fakeSession(opts: SessionOptions, cb: SessionCallbacks, ctx: Fak
     }
     let url = '';
     if (ctx.desk && subject.issueNumber) {
-      url = ctx.github.openPull(ctx.desk.fullName, { title: subject.title, branch: ctx.desk.branch, closes: subject.issueNumber }).url;
+      url = ctx.github.openPull(ctx.desk.fullName, { title: subject.title, branch: ctx.desk.branch, closes: subject.issueNumber, base }).url;
       cb.log([{ kind: 'result', text: `  ⎿ ${url}` }]);
     }
     const text = `Opened ${url || 'the pull request'}. It closes #${subject.issueNumber} and includes tests.`;
@@ -206,7 +210,24 @@ export function fakeSession(opts: SessionOptions, cb: SessionCallbacks, ctx: Fak
 
 interface DemoStatus {
   floors: { floor: number; repo: string; brief: string | null; issues: unknown[]; team: unknown[] }[];
+  playbook?: { scope: string; kind: string; name: string; body: string }[];
 }
+
+/**
+ * What a session got from the playbook and the manager's own setup, for the demo's header: the real CLI writes the
+ * rules into its instructions and the rest into a plugin (cliRunner.ts, clis.ts playbookFiles).
+ */
+export function playbookLines(opts: Pick<SessionOptions, 'playbook' | 'ownSetup'>): LogEntry[] {
+  const pb = opts.playbook;
+  const lines: LogEntry[] = [];
+  if (pb?.rules) lines.push({ kind: 'system', text: `  📘 playbook rules: ${pb.rulesDocs.map((d) => d.name).join(', ')} · ${pb.size.lines} lines, about ${pb.size.tokens} tokens a turn` });
+  if (pb?.entries.length) lines.push({ kind: 'system', text: `  📘 plugin ${PLUGIN_NAME}: ${pb.entries.map((e) => `${e.kind} ${e.name}`).join(', ')}` });
+  if (opts.ownSetup !== undefined) lines.push({ kind: 'system', text: opts.ownSetup ? '  your own Claude setup: loaded' : '  your own Claude setup: left out (--setting-sources project,local, auto memory off)' });
+  return lines;
+}
+
+/** A line the scripted CEO adds to the office's "tests-first" rules when they're there already, so its card shows a diff. */
+const PR_TESTS_LINE = '- Say in the pull request which tests you ran, and what they cover.';
 
 /** The manager's message, in a chat, that has the scripted CEO put its plan on a card (so does a third message). */
 export const GO_AHEAD = /\b(go ahead|go for it|sounds good|let'?s do it|do it|ship it|plan it|propose|yes)\b/i;
@@ -236,8 +257,9 @@ export function projectName(title: string) {
  * cards behave as in the real thing. Onboarding writes a profile and sizes the team (or keeps the size agreed on a
  * card); a floor's first plan opens a discussion about its scope, and once the manager answers there it settles it and
  * files three issues (later plans file them at once). A chat closes an issue ("close #4 on floor 1"), sizes a floor
- * ("floor 1 to 3"), sums the company up ("status"), or talks the idea over: a "go ahead" (or its third reply, or a
- * declined card's note) puts a plan on a card.
+ * ("floor 1 to 3"), proposes a playbook change ("rules", "playbook": the office's tests-first rules, or a line more for
+ * them), sums the company up ("status"), or talks the idea over: a "go ahead" (or its third reply, or a declined card's
+ * note) puts a plan on a card.
  * Adapted from cubefarm server/demo.ts (MIT): ceoSession.
  */
 function ceoSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSessionContext): SessionHandle {
@@ -294,7 +316,7 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSession
   };
 
   const script = async (): Promise<string> => {
-    cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · CEO` }]);
+    cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · CEO` }, ...playbookLines(opts)]);
     const status = JSON.parse(await use('company_status', {})) as DemoStatus;
     const floor = status.floors.find((f) => f.repo === job.floorId) ?? status.floors[0];
     if (job.kind === 'onboard' && floor) {
@@ -340,6 +362,28 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSession
     if (size) {
       await use('scale_team', { floor: Number(size[1]), size: Number(size[2]), reason: 'The manager asked for it.' });
       return `Floor ${size[1]} now has ${size[2]} workers, and holds that size.`;
+    }
+    if (/^declined the playbook change/m.test(text)) {
+      await wait();
+      return "Understood: I'll leave the playbook as it is. Tell me what you'd rather it said, and I'll put that on a card.";
+    }
+    if (job.thread && /\b(rules?|playbook)\b/.test(text)) {
+      // A rules change on a card: the office's "tests-first" rules, new, or with one more line when they're there.
+      const had = (status.playbook ?? []).find((d) => d.scope === 'office' && d.kind === 'rules' && d.name === 'tests-first');
+      if (had?.body.includes(PR_TESTS_LINE)) return "The office's \"tests-first\" rules already say what I had in mind. Tell me what else workers should do, and I'll put it on a card.";
+      const tests = TEMPLATES.find((t) => t.id === 'tests-first')!;
+      const out = await use('propose_playbook_change', {
+        scope: 'office',
+        kind: 'rules',
+        name: tests.name,
+        description: tests.description,
+        body: had ? `${had.body}\n${PR_TESTS_LINE}` : tests.body,
+        why: had ? 'Reviewers keep asking which tests a pull request ran.' : 'Pull requests have reached QA with failing tests: workers should run them first.',
+      });
+      if (refused(out)) return `I couldn't put that on a card: ${out.slice(9).trim()}`;
+      return had
+        ? "I proposed one more line for the office's \"tests-first\" rules: say in the PR which tests ran. It's on a card here: approve it, edit it first, or decline it."
+        : "I proposed office rules, \"tests-first\": run the tests before a pull request, and never weaken one. It's on a card here: approve it, edit it first, or decline it.";
     }
     if (/\bstatus\b|where things stand/.test(text) || !job.thread) {
       await wait();

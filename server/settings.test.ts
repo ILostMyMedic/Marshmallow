@@ -17,6 +17,8 @@ describe('settingsPatch', () => {
     expect(settingsPatch({ season: 'auto' })).toEqual({ season: 'auto' });
     expect(settingsPatch({ inkOutlines: false })).toEqual({ inkOutlines: false });
     expect(settingsPatch({ inkOutlines: true })).toEqual({ inkOutlines: true });
+    expect(settingsPatch({ workersUseMySetup: true })).toEqual({ workersUseMySetup: true });
+    expect(settingsPatch({ workersUseMySetup: false })).toEqual({ workersUseMySetup: false });
   });
 
   it('refuses what is out of shape', () => {
@@ -31,5 +33,6 @@ describe('settingsPatch', () => {
     expect(() => settingsPatch({ season: null })).toThrow(expect.objectContaining({ status: 400 }));
     expect(() => settingsPatch({ inkOutlines: 'no' })).toThrow(/inkOutlines must be true or false/);
     expect(() => settingsPatch({ inkOutlines: 0 })).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => settingsPatch({ workersUseMySetup: 'yes' })).toThrow(/workersUseMySetup must be true or false/);
   });
 });

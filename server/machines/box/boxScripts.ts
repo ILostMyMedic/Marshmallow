@@ -89,16 +89,16 @@ export function setupScript(o: { versions: BoxVersions; rev: number; gitName: st
 }
 
 /**
- * Put the worker's worktree on `branch` at the default branch or a PR's head, as on a local machine: the Box's own
+ * Put the worker's worktree on `branch` at the work branch or a PR's head, as on a local machine: the Box's own
  * clone is made the first time; the worktree is reused in place (node_modules stays warm) or rebuilt. A Box has one
  * worktree per clone, so no other checkout ever holds the branch. Prints the worktree on success.
  */
 export function prepareDeskScript(fullName: string, base: DeskBase, branch: string): string {
   checkRepo(fullName);
-  if (!BRANCH.test(branch) || !BRANCH.test(base.defaultBranch)) throw new Error(`Not a branch name: ${branch}`);
+  for (const b of [branch, base.workBranch]) if (!BRANCH.test(b)) throw new Error(`Not a branch name: ${b}`);
   const repo = boxRepoDir(fullName);
   const desk = boxDeskDir(fullName);
-  const ref = base.pr ? `origin/pr/${base.pr}` : `origin/${base.defaultBranch}`;
+  const ref = base.pr ? `origin/pr/${base.pr}` : `origin/${base.workBranch}`;
   return [
     'set -e',
     `R=${sq(repo)}`,
@@ -116,7 +116,7 @@ export function prepareDeskScript(fullName: string, base: DeskBase, branch: stri
       ? [`git fetch -q origin ${sq(`+refs/pull/${base.pr}/head:refs/remotes/origin/pr/${base.pr}`)} || { echo ${sq(`Could not fetch pull request #${base.pr} of ${fullName}.`)} >&2; exit 2; }`]
       : []),
     `git rev-parse --verify -q "$REF" >/dev/null || { echo ${sq(
-      base.pr ? `Could not fetch pull request #${base.pr} of ${fullName}.` : `${fullName} has no ${base.defaultBranch} branch yet. Push an initial commit (or create the repo with a README) before assigning work.`,
+      base.pr ? `Could not fetch pull request #${base.pr} of ${fullName}.` : `${fullName} has no ${base.workBranch} branch yet. Push an initial commit (or create the branch) before assigning work.`,
     )} >&2; exit 2; }`,
     'git worktree prune',
     'if [ -e "$W/.git" ]; then',

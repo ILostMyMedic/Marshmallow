@@ -3,6 +3,7 @@
 // closed on the way out.
 import { Ledger } from '../ledger.ts';
 import { Shop } from '../shop.ts';
+import { Playbook } from '../playbook/playbook.ts';
 import type { Store } from '../store.ts';
 import { Awards } from './awards.ts';
 import { openDb, type Db } from './db.ts';
@@ -28,6 +29,8 @@ export interface OfficeDb {
   shop: Shop;
   /** The awards: won as trophies, paid in coins. */
   awards: Awards;
+  /** The office's and each floor's agent docs, given to every session (server/playbook/), and the CEO's proposed changes. */
+  playbook: Playbook;
   /** A floor synced (Floors.onSynced): its merged PRs recorded and paid, its plan made if it has none. */
   synced(floorId: string): void;
   /** The demo's reset: what was shipped and won, coins and floor plans go too, since the reseeded fake GitHub hands out the same PR numbers again. */
@@ -49,11 +52,12 @@ export async function openOffice(dir: string | null, store: Store): Promise<Offi
   const ledger = new Ledger(db, store);
   const shop = new Shop(db, store, ledger, plans);
   const awards = new Awards(db, store, ledger, plans, desk, records);
-  await Promise.all([records.load(), player.load(), plans.load(), world.load(), previewSettings.load(), desk.load(), ledger.load()]);
+  const playbook = new Playbook(db, store);
+  await Promise.all([records.load(), player.load(), plans.load(), world.load(), previewSettings.load(), desk.load(), ledger.load(), playbook.load()]);
   // what the catalogue now sells for another kind of spot goes where it fits, or is paid back
   await ledger.serial(() => plans.resettle(ledger));
   await desk.importPhone(store.snapshot().messages);
-  store.attachDb(() => ({ records: records.get(), look: player.get(), floorPlans: plans.get(), coins: ledger.get(), awards: awards.get(), world: world.get(), desk: desk.get() }));
+  store.attachDb(() => ({ records: records.get(), look: player.get(), floorPlans: plans.get(), coins: ledger.get(), awards: awards.get(), world: world.get(), desk: desk.get(), playbook: playbook.get() }));
   const look = () => void awards.poke().catch(warn('look at the awards'));
   records.onRecorded = look;
   store.onMoment((m) => {
@@ -78,6 +82,7 @@ export async function openOffice(dir: string | null, store: Store): Promise<Offi
     ledger,
     shop,
     awards,
+    playbook,
     synced(floorId) {
       void records.synced(floorId).catch(warn(`record ${floorId}'s merges`));
       void ledger.synced(floorId).catch(warn(`count ${floorId}'s coins`));

@@ -1,5 +1,5 @@
 // A floor's app, run for the manager to check what the team shipped (server/previews.ts is the service): the floor's
-// preview worktree refreshed to the default branch's latest commit, dependencies installed when they're missing or
+// preview worktree refreshed to its work branch's latest commit, dependencies installed when they're missing or
 // changed, the app started on the floor's port (127.0.0.1 only) and watched until it answers there.
 // Adapted from cubefarm server/previewRunner.ts (MIT). Cut: PR previews and their slot worktrees (the PR theatre), the
 // floor's own environment variables and the {tmp} placeholder, and the "unconfigured" state (nothing to run is an error
@@ -17,7 +17,8 @@ import { preparePreview, previewDir, releasePreviews, type OfficeProcesses } fro
 
 export interface PreviewJob {
   fullName: string;
-  defaultBranch: string;
+  /** The branch it runs the latest commit of: the floor's work branch. */
+  branch: string;
   port: number;
   /** The manager's command, its {port} filled in (fillPort), or null: the package.json's script. */
   command: string | null;
@@ -212,8 +213,8 @@ class RealPreview implements PreviewHandle {
   private async run() {
     const { job, cb } = this;
     cb.status('preparing');
-    cb.log([`Fetching ${job.defaultBranch} into the preview worktree…`]);
-    const wt = await preparePreview(job.fullName, job.defaultBranch, (text) => cb.log([text]));
+    cb.log([`Fetching ${job.branch} into the preview worktree…`]);
+    const wt = await preparePreview(job.fullName, job.branch, (text) => cb.log([text]));
     this.check();
     const [sha = '', subject = ''] = (await git(['log', '-1', '--format=%H%n%s'], { cwd: wt })).split(/\r?\n/);
     cb.sha(sha);

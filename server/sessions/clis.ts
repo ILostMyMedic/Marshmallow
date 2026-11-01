@@ -1,11 +1,13 @@
 // Claude Code as the workers run it: which binary (the one the Agent SDK bundles, so the hook and settings formats are
 // the ones this code was written against), its command line, the environment for a Claude or a local Ollama model,
-// what its screens mean (folder trust, an interrupted turn), and the status-line script it runs.
+// the playbook's files in a session's folder, what its screens mean (folder trust, an interrupted turn), and the
+// status-line script it runs.
 // Adapted from cubefarm server/clis.ts (MIT): the Claude Code parts.
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { localModel, LOCAL_SERVERS } from '../../shared/models.ts';
+import { withRules, type SessionPlaybook } from '../../shared/playbook.ts';
 import type { EffortLevel } from '../../shared/types.ts';
 import type { BoxVersions } from '../machines/box/boxScripts.ts';
 
@@ -104,10 +106,12 @@ export interface LaunchContext {
   sessionId: string; // the id the office gives a new session
   name: string; // shown in Claude Code's prompt box and the terminal title
   role: 'worker' | 'ceo';
-  /** Files the office wrote for this session (settings, MCP config, instructions). */
-  files: { settings: string; mcp: string | null; system: string };
+  /** Files the office wrote for this session (settings, MCP config, instructions), and the playbook's plugin folder. */
+  files: { settings: string; mcp: string | null; system: string; plugin?: string | null };
   /** Folders it may read besides its working directory. */
   addDirs?: string[];
+  /** Load the manager's own Claude Code setup too (Settings.workersUseMySetup). */
+  ownSetup?: boolean;
 }
 
 export interface Launch {
@@ -156,10 +160,17 @@ export function launchArgs(ctx: LaunchContext): Launch {
     // The office's PreToolUse hook answers every permission question.
     '--permission-mode',
     'acceptEdits',
-    // On top of the manager's own setup: the office's hooks, status line and browser.
+    // The office's hooks, status line and browser (flag settings: they load whatever --setting-sources says).
     '--settings',
     ctx.files.settings,
+    // Without the manager's own setup: the repo's settings and CLAUDE.md (project, local) and the office's only, so a
+    // worker doesn't carry the manager's habits, hooks or plugins into someone else's repository. The login stays in
+    // CLAUDE_CONFIG_DIR, which isn't a setting source. The docs don't say that leaving out "user" also leaves out the
+    // user-level CLAUDE.md, skills, agents and commands (~/.claude): Phase 23's proving run checks it.
+    ...(ctx.ownSetup ? [] : ['--setting-sources', 'project,local']),
     ...(ctx.files.mcp ? ['--mcp-config', ctx.files.mcp] : []),
+    // The playbook's skills, subagents and commands, for this session only.
+    ...(ctx.files.plugin ? ['--plugin-dir', ctx.files.plugin] : []),
     // Only the office's MCP servers: a worker approves its own tool calls, so it mustn't reach the manager's servers or
     // claude.ai connectors (mail, drives, calendars).
     '--strict-mcp-config',
@@ -173,9 +184,32 @@ export function launchArgs(ctx: LaunchContext): Launch {
     '--',
     ctx.prompt,
   ];
-  // The office's own copy: workers mustn't each try to update it. The CEO's nine office tools load up front: behind a
-  // tool search, smaller models fumble finding them.
-  return { args, env: { DISABLE_AUTOUPDATER: '1', ...(ctx.role === 'ceo' && { ENABLE_TOOL_SEARCH: 'false' }) } };
+  // The office's own copy: workers mustn't each try to update it. The CEO's office tools load up front: behind a tool
+  // search, smaller models fumble finding them. Without the manager's setup, auto memory stays off too: its memory is
+  // per project on the manager's account, and workers would read and write it. (Set by the office after the
+  // environment's CLAUDE* variables are stripped, so it reaches the CLI.)
+  return { args, env: { DISABLE_AUTOUPDATER: '1', ...(ctx.role === 'ceo' && { ENABLE_TOOL_SEARCH: 'false' }), ...(!ctx.ownSetup && { CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' }) } };
+}
+
+/** The playbook's files in a session's folder: the instructions with its rules after them, and its plugin. */
+export interface PlaybookFiles {
+  system: [string, string];
+  /** The plugin's folder, for --plugin-dir; null when the session has no skills, subagents or commands. */
+  pluginDir: string | null;
+  plugin: [string, string][];
+}
+
+/**
+ * What a session's folder gets from the playbook: `instructions.md` (the office's instructions for the task, then the
+ * playbook's rules) and the plugin's files under `plugin/`. `p` is path.posix for a Box's folder.
+ */
+export function playbookFiles(dir: string, systemAppend: string, playbook: SessionPlaybook | undefined, p: Pick<typeof path, 'join'> = path): PlaybookFiles {
+  const pluginDir = playbook?.files.length ? p.join(dir, 'plugin') : null;
+  return {
+    system: [p.join(dir, 'instructions.md'), withRules(systemAppend, playbook?.rules ?? '')],
+    pluginDir,
+    plugin: pluginDir ? playbook!.files.map((f): [string, string] => [p.join(pluginDir, ...f.path.split('/')), f.content]) : [],
+  };
 }
 
 const TRUST_PROMPT = /Quick safety check|Do you trust the (files|contents) (in|of) this|trust this folder/i;

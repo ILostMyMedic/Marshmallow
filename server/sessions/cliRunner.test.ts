@@ -1,6 +1,6 @@
 // Adapted from cubefarm server/cliRunner.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { handleHook, lostConversation, resumableSession } from './cliRunner.ts';
+import { handleHook, lostConversation, nestedFolders, resumableSession } from './cliRunner.ts';
 
 describe('resumableSession', () => {
   const onDisk = (files: string[]) => (file: string) => files.includes(file);
@@ -27,6 +27,15 @@ describe('lostConversation', () => {
 
   it('ignores other screens', () => {
     expect(lostConversation('Claude Code v2.1.280\n❯ ')).toBe(false);
+  });
+});
+
+describe('nestedFolders', () => {
+  it("names the folders a Box session's plugin needs under its own folder, once each", () => {
+    const dir = '/workspace/home/.marshmallow/sessions/tok';
+    const files = [`${dir}/settings.json`, `${dir}/instructions.md`, `${dir}/plugin/.claude-plugin/plugin.json`, `${dir}/plugin/skills/a/SKILL.md`, `${dir}/plugin/skills/b/SKILL.md`, `${dir}/plugin/commands/c.md`];
+    expect(nestedFolders(files, dir)).toEqual([`${dir}/plugin/.claude-plugin`, `${dir}/plugin/commands`, `${dir}/plugin/skills/a`, `${dir}/plugin/skills/b`]);
+    expect(nestedFolders([`${dir}/settings.json`, `${dir}/launch.json`], dir)).toEqual([]);
   });
 });
 

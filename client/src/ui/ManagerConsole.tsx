@@ -1,6 +1,7 @@
-// The manager's console: the floors, the team, the issues, the shop and the office's settings, everything the debug
-// page does, over the game. O, the HUD's Office button or the front desk opens it; the tab and floor live in its overlay
-// (console/nav.ts), and a refused command shows at the top. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (MIT).
+// The manager's console: the floors, the team, the issues, the shop, the playbook and the office's settings, everything
+// the debug page does, over the game. O, the HUD's Office button or the front desk opens it; the tab and floor live in
+// its overlay (console/nav.ts), and a refused command shows at the top. Adapted from cubefarm
+// client/src/ui/ManagerConsole.tsx (MIT).
 // Cut: mission control, the CEO's own tab (the CEO is on Team, their chats on the desktop), the time-lapse and the
 // accessibility tab.
 import { useEffect } from 'react';
@@ -10,6 +11,7 @@ import { useView } from '../world/view';
 import { FloorsTab } from './console/FloorsTab';
 import { IssuesTab } from './console/IssuesTab';
 import { lastTab, rememberTab, showTab } from './console/nav';
+import { PlaybookTab } from './console/PlaybookTab';
 import { clearProblem, useProblem } from './console/run';
 import { SettingsTab } from './console/SettingsTab';
 import { ShopView } from './shop/ShopPanel';
@@ -21,6 +23,7 @@ const TABS: [ConsoleTab, string][] = [
   ['team', '👥 Team'],
   ['issues', '📋 Issues'],
   ['shop', '🪙 Shop'],
+  ['playbook', '📘 Playbook'],
   ['settings', '⚙️ Settings'],
 ];
 
@@ -65,6 +68,7 @@ export function ManagerConsole({ tab, floorId }: { tab?: ConsoleTab; floorId?: s
           {current === 'team' && <TeamTab floorId={floorId} />}
           {current === 'issues' && <IssuesTab floorId={floorId} />}
           {current === 'shop' && <ShopView floorId={floorId} onPick={(id) => showTab('shop', id)} />}
+          {current === 'playbook' && <PlaybookTab floorId={floorId} />}
           {current === 'settings' && <SettingsTab />}
         </div>
       </div>

@@ -38,6 +38,7 @@ describe('office tools', () => {
       startDiscussion: async () => '',
       resolveDiscussion: async () => '',
       proposeProject: async (a) => (calls.push(a), 'proposed'),
+      proposePlaybookChange: async (a) => (calls.push(a), 'proposed a change'),
     };
     const office = createOfficeTools(h);
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
@@ -56,6 +57,7 @@ describe('office tools', () => {
       'company_status',
       'configure_worker',
       'file_issue',
+      'propose_playbook_change',
       'propose_project',
       'resolve_discussion',
       'scale_team',
@@ -78,6 +80,18 @@ describe('office tools', () => {
     const project = { new_repo_name: 'todo', brief: 'A todo app', team_size: 2, tasks: [{ title: 'Skeleton', body: '' }, { title: 'Lists', body: 'x', depends_on: [0] }] };
     await client.callTool({ name: 'propose_project', arguments: project });
     expect(calls).toEqual([project]);
+  });
+
+  it("describes propose_playbook_change's scope and kind as plain enums, and passes a change through", async () => {
+    const { client, calls } = await connect();
+    const tool = (await client.listTools()).tools.find((t) => t.name === 'propose_playbook_change')!;
+    const props = tool.inputSchema.properties as Record<string, { type?: string; enum?: string[] }>;
+    expect(props.scope.enum).toEqual(['office', 'floor']);
+    expect(props.kind.enum).toEqual(['rules', 'skill', 'agent', 'command']);
+    expect(tool.inputSchema.required?.sort()).toEqual(['body', 'kind', 'name', 'scope', 'why']);
+    const change = { scope: 'floor', floor: 1, kind: 'rules', name: 'tests-first', body: '- Run the tests', why: 'PRs keep failing CI' };
+    await client.callTool({ name: 'propose_playbook_change', arguments: change });
+    expect(calls).toEqual([change]);
   });
 
   it('passes the arguments through, and turns a handler error into a refusal', async () => {
@@ -111,6 +125,11 @@ describe('checkCloseIssue (close_issue)', () => {
     expect(status('CLOSED')).toBe(404);
     expect(status(null)).toBe(404);
     expect(() => checkCloseIssue({ floor: 1, number: 4, state: 'OPEN', pulls })).toThrow('PR #20 closes #4. Close or finish that pull request first.');
+  });
+
+  it("refuses one the office's open PR into a work branch is for, which GitHub doesn't link", () => {
+    const onDev = [{ number: 22, state: 'OPEN', closesIssues: [], headRefName: 'mm/issue-7-ada' }];
+    expect(() => checkCloseIssue({ floor: 1, number: 7, state: 'OPEN', pulls: onDev })).toThrow('PR #22 closes #7.');
   });
 });
 
@@ -163,6 +182,7 @@ describe('the prompts', () => {
     expect(system).toContain('File at most 12 issues per job.');
     expect(system).toContain('start_discussion');
     expect(system).toContain('propose_project');
+    expect(system).toContain('propose_playbook_change');
     expect(askedFor(job('plan')) && askedFor(job('chat')) && askedFor(job('discussion')) && !askedFor(job('onboard'))).toBe(true);
   });
 

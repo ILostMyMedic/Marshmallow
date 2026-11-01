@@ -7,7 +7,7 @@ import type { LogEntry } from '../../shared/types.ts';
 import type { MachineProvider } from '../machines/machines.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
 import type { Backend } from './backend.ts';
-import { demoCloud } from './demoCloud.ts';
+import { demoCloud, type DemoBoxDesk } from './demoCloud.ts';
 import { FakeGitHub } from './demoGithub.ts';
 import { demoPreviews } from './demoPreviews.ts';
 import { fakeSession, type DemoCeoMemory } from './demoSessions.ts';
@@ -90,8 +90,8 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
   const timing = { ...DEFAULT_TIMING, ...opts.timing };
   const rand = opts.rand ?? Math.random;
   const github = new FakeGitHub({ file: opts.home ? path.join(opts.home, 'demo-github.json') : null, rand, checksMs: timing.checksMs, closeAfterMergeMs: timing.closeAfterMergeMs });
-  // What each desk has checked out. Desks are pretend, so a restart finds none.
-  const desks = new Map<string, { fullName: string; branch: string }>();
+  // What each desk has checked out, and the branch a new one started from. Desks are pretend, so a restart finds none.
+  const desks = new Map<string, DemoBoxDesk>();
   const installed = new Set<string>();
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const deskDir = (machine: string, fullName: string) => `/demo/machines/${machine}/work/${fullName}`;
@@ -100,10 +100,10 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
 
   const machines: MachineProvider = {
     deskDir,
-    prepareDesk: async (machine, fullName, _base, branch) => {
+    prepareDesk: async (machine, fullName, base, branch) => {
       await wait(timing.prepareMs);
       const dir = deskDir(machine, fullName);
-      desks.set(dir, { fullName, branch });
+      desks.set(dir, { fullName, branch, ...(!base.pr && { base: base.workBranch }) });
       return dir;
     },
     env: () => ({}),

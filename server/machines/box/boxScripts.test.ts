@@ -71,8 +71,8 @@ describe('setupScript', () => {
 });
 
 describe('prepareDeskScript', () => {
-  it("clones the repo the first time and puts the worktree on a new branch from the default branch's tip", () => {
-    const s = prepareDeskScript('acme/web', { defaultBranch: 'main' }, 'mm/issue-12-ada');
+  it("clones the repo the first time and puts the worktree on a new branch from the work branch's tip", () => {
+    const s = prepareDeskScript('acme/web', { workBranch: 'main' }, 'mm/issue-12-ada');
     expect(s).toContain(`git clone -q --no-checkout 'https://github.com/acme/web.git' "$R"`);
     expect(s).toContain(`REF='origin/main'`);
     expect(s).toContain(`B='mm/issue-12-ada'`);
@@ -80,16 +80,23 @@ describe('prepareDeskScript', () => {
     expect(s).not.toContain('refs/pull');
   });
 
+  it("starts from the floor's work branch when it has one", () => {
+    const s = prepareDeskScript('acme/web', { workBranch: 'dev' }, 'mm/issue-12-ada');
+    expect(s).toContain(`REF='origin/dev'`);
+    expect(s).toContain('acme/web has no dev branch yet.');
+  });
+
   it("fetches a PR's head for QA and fixes", () => {
-    const s = prepareDeskScript('acme/web', { defaultBranch: 'main', pr: 7 }, 'mm/qa-7-ada');
+    const s = prepareDeskScript('acme/web', { workBranch: 'main', pr: 7 }, 'mm/qa-7-ada');
     expect(s).toContain(`'+refs/pull/7/head:refs/remotes/origin/pr/7'`);
     expect(s).toContain(`REF='origin/pr/7'`);
     expect(s).toContain('Could not fetch pull request #7 of acme/web.');
   });
 
   it('refuses names that could break out of the script', () => {
-    expect(() => prepareDeskScript('acme/web; rm -rf ~', { defaultBranch: 'main' }, 'b')).toThrow(/repository/);
-    expect(() => prepareDeskScript('acme/web', { defaultBranch: 'main' }, "x'; rm -rf ~")).toThrow(/branch/);
+    expect(() => prepareDeskScript('acme/web; rm -rf ~', { workBranch: 'main' }, 'b')).toThrow(/repository/);
+    expect(() => prepareDeskScript('acme/web', { workBranch: 'main' }, "x'; rm -rf ~")).toThrow(/branch/);
+    expect(() => prepareDeskScript('acme/web', { workBranch: "dev'; rm -rf ~" }, 'b')).toThrow(/branch/);
   });
 });
 

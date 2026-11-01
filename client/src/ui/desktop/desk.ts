@@ -1,6 +1,7 @@
 // The desktop's rules, pure so the tests check them: the workers' questions grouped into one thread per issue, what's
-// waiting on you, the Discussions list's sections, what's unread, and the checks on a project card the manager edits
-// before approving it. New in Marshmallow (cubefarm has no desktop).
+// waiting on you, the Discussions list's sections, what's unread, the checks on a project card the manager edits
+// before approving it, and where the CEO's playbook cards go in a thread. New in Marshmallow (cubefarm has no desktop).
+import type { DiffLine, PlaybookProposal } from '../../../../shared/playbook';
 import type { ChatView, DeskMessage, DiscussionView, OfficeMessage, ProjectProposal, ProposalRepo, Question } from '../../../../shared/types';
 
 // ---------- the workers' questions, as threads ----------
@@ -228,3 +229,49 @@ export const repoFullName = (r: ProposalRepo) => (r.kind === 'new' ? `${r.owner}
 
 /** A message's proposal, if it carries one. */
 export const proposalOf = (m: DeskMessage, proposals: readonly ProjectProposal[]) => (m.proposalId === null ? null : (proposals.find((p) => p.id === m.proposalId) ?? null));
+
+// ---------- the CEO's playbook cards ----------
+
+export type ThreadEntry = { kind: 'message'; message: DeskMessage } | { kind: 'playbook'; proposal: PlaybookProposal };
+
+/**
+ * A thread's messages with the CEO's playbook cards among them: each card where it was proposed, so before the reply the
+ * CEO sent with it. Cards from before the thread's oldest message still in view come first.
+ */
+export function withPlaybookCards(messages: readonly DeskMessage[], proposals: readonly PlaybookProposal[], thread: PlaybookProposal['thread']): ThreadEntry[] {
+  const cards = proposals.filter((p) => p.thread.kind === thread.kind && p.thread.id === thread.id).sort((a, b) => a.at - b.at || a.id - b.id);
+  const out: ThreadEntry[] = [];
+  let i = 0;
+  for (const m of messages) {
+    while (i < cards.length && cards[i].at <= m.at) out.push({ kind: 'playbook', proposal: cards[i++] });
+    out.push({ kind: 'message', message: m });
+  }
+  while (i < cards.length) out.push({ kind: 'playbook', proposal: cards[i++] });
+  return out;
+}
+
+export type FoldedLine = DiffLine | { op: 'skip'; count: number };
+
+/** A diff with long unchanged stretches folded, `context` lines kept either side of each change. */
+export function foldDiff(lines: readonly DiffLine[], context = 2): FoldedLine[] {
+  const near = lines.map((_, i) => lines.slice(Math.max(0, i - context), i + context + 1).some((l) => l.op !== 'same'));
+  const out: FoldedLine[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (near[i]) {
+      out.push(lines[i]);
+      continue;
+    }
+    const last = out.at(-1);
+    if (last?.op === 'skip') last.count++;
+    else out.push({ op: 'skip', count: 1 });
+  }
+  return out;
+}
+
+/** What a card's Approve sends: the manager's edits, only where they changed the CEO's text. */
+export function playbookApproveBody(p: Pick<PlaybookProposal, 'draft'>, edit: { description: string; body: string }): { description?: string; body?: string } {
+  const out: { description?: string; body?: string } = {};
+  if (edit.body.replace(/\r\n?/g, '\n').replace(/\s+$/, '') !== p.draft.body) out.body = edit.body;
+  if (edit.description.replace(/\s+/g, ' ').trim() !== p.draft.description) out.description = edit.description;
+  return out;
+}

@@ -1,10 +1,11 @@
-// The console's Floors tab: every floor with its coins, its settings, its app (the preview: start, stop, restart, its
-// address, the command and port to run it with), a sync, the CEO's planning of its brief and the issues held for you,
-// and connecting a repository as a new floor. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (FloorsTab, FloorRow, FloorBrief),
+// The console's Floors tab: every floor with its coins, its settings, its work branch, its app (the preview: start,
+// stop, restart, its address, the command and port to run it with), a sync, the CEO's planning of its brief and the
+// issues held for you, and connecting a repository as a new floor. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (FloorsTab, FloorRow, FloorBrief),
 // AppViewer.tsx (PreviewSettings) and ProjectPicker.tsx's GitHub mode (MIT). Cut: folders on this computer and new
 // projects, disconnecting, floor colours, linked repos, auto-merge (always on here), the office's own update, and the
 // preview's environment.
 import { useEffect, useRef, useState } from 'react';
+import { branchProblem, workBranchOf } from '../../../../shared/branches';
 import type { Floor, GhRepoSummary } from '../../../../shared/types';
 import { floorPath, query } from '../../api';
 import { configPatch, firstLine, isOn, parsePort, shortUrl, stoppedPreview } from '../../preview';
@@ -128,7 +129,7 @@ function Preview({ floor }: { floor: Floor }) {
             </button>
           </>
         ) : (
-          <button className="console-btn small good" disabled={!!doing} title={`Run ${floor.defaultBranch}'s latest commit on this computer`} onClick={() => send('start')}>
+          <button className="console-btn small good" disabled={!!doing} title={`Run ${workBranchOf(floor)}'s latest commit on this computer`} onClick={() => send('start')}>
             {doing === 'start' ? 'Starting…' : p.state === 'error' ? '↻ Try again' : '▶ Start'}
           </button>
         )}
@@ -162,6 +163,88 @@ function Preview({ floor }: { floor: Floor }) {
         <p className="console-hint">
           Empty boxes are automatic: the package.json's dev, start or preview script, on a port kept for the floor.{isOn(p.state) && ' A change applies from the next start.'}
         </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Where the floor's work starts from and its PRs merge into (shared/branches.ts): the default branch, one of the
+ * repository's branches, or a new one made from the default branch. The branches are asked of GitHub on Change.
+ */
+function WorkBranch({ floor }: { floor: Floor }) {
+  const fp = floorPath(floor.id);
+  const current = workBranchOf(floor);
+  const [open, setOpen] = useState(false);
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const [listProblem, setListProblem] = useState('');
+  const [typed, setTyped] = useState('');
+  const [busy, go] = useBusy();
+  const load = () => {
+    setBranches(null);
+    setListProblem('');
+    query<{ branches: string[] }>(`/api/floors/${fp}/branches`).then(
+      (r) => setBranches(r.branches),
+      (err: Error) => {
+        setBranches([]);
+        setListProblem(err.message);
+      },
+    );
+  };
+  const pick = async (name: string | null, create = false) => {
+    if (!(await go(run('PATCH', `/api/floors/${fp}`, { workBranch: name, ...(create && { createBranch: true }) })))) return;
+    setTyped('');
+    if (create) load();
+  };
+  const fresh = typed.trim();
+  const problem = fresh ? branchProblem(fresh) : null;
+  const exists = !!branches?.includes(fresh);
+  return (
+    <div className="console-branch">
+      <div className="console-row wrap">
+        <strong>🌿 Work branch</strong>
+        <code>{current}</code>
+        <span className="console-hint console-grow">{floor.workBranch ? `desks start from it and PRs merge into it; ${floor.defaultBranch} is left to you` : "the repository's default branch"}</span>
+        <button
+          className="console-btn small"
+          aria-expanded={open}
+          onClick={() => {
+            if (!open) load();
+            setOpen(!open);
+          }}
+        >
+          {open ? 'Done' : 'Change'}
+        </button>
+      </div>
+      {open && (
+        <>
+          <ul className="console-branches" role="radiogroup" aria-label={`Work branch of ${floor.fullName}`}>
+            {branches === null && <li className="console-hint">Asking GitHub for the branches…</li>}
+            {listProblem && <li className="console-bad">{listProblem}</li>}
+            {branches?.map((b) => (
+              <li key={b}>
+                <label className="console-toggle">
+                  <input type="radio" name={`work-branch-${floor.id}`} checked={b === current} disabled={busy} onChange={() => void pick(b === floor.defaultBranch ? null : b)} /> {b}{' '}
+                  {b === floor.defaultBranch && <span className="console-chip">default</span>}
+                </label>
+              </li>
+            ))}
+          </ul>
+          <form
+            className="console-row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (fresh && !problem) void pick(fresh, !exists);
+            }}
+          >
+            <input className="console-grow" value={typed} placeholder="A new branch, e.g. dev" aria-label="New work branch" spellCheck={false} onChange={(e) => setTyped(e.target.value)} />
+            <button className="console-btn small good" disabled={!fresh || !!problem || busy || branches === null}>
+              {busy ? 'Saving…' : exists ? `Use ${fresh}` : `Create it from ${floor.defaultBranch}`}
+            </button>
+          </form>
+          {problem && <p className="console-bad">{problem}</p>}
+          <p className="console-hint">Desks start from the work branch, PRs go into it, QA tests against it, the office merges into it and the app runs it. Open PRs aimed elsewhere move onto it before they're tested or merged.</p>
+        </>
       )}
     </div>
   );
@@ -217,6 +300,7 @@ function FloorCard({ floor, focused }: { floor: Floor; focused: boolean }) {
           <input type="checkbox" checked={floor.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> 🌐 Browser testing in QA
         </label>
       </div>
+      <WorkBranch floor={floor} />
       <Preview floor={floor} />
       <Held floor={floor} />
       <Brief floor={floor} hasCeo={hasCeo} />

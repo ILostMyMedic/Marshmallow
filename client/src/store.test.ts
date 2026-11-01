@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_AWARD_STATS } from '../../shared/awards';
 import { EMPTY_CLOUD } from '../../shared/cloud';
+import { EMPTY_PLAYBOOK } from '../../shared/playbook';
 import { DEFAULT_SETTINGS, EMPTY_COINS, EMPTY_DESK, EMPTY_RECORDS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
 import { EMPTY_WORLD } from '../../shared/worldEvents';
 import { EMPTY_OFFICE, qaKey, reduce, type Office } from './store';
@@ -35,6 +36,7 @@ const floor = (id: string, n: number): Floor => ({
   description: '',
   url: '',
   defaultBranch: 'main',
+  workBranch: null,
   floor: n,
   color: '#fff',
   autoAssign: true,
@@ -73,6 +75,7 @@ const snapshot: Snapshot = {
   previews: {},
   world: EMPTY_WORLD,
   desk: EMPTY_DESK,
+  playbook: EMPTY_PLAYBOOK,
 };
 
 const fold = (events: ServerEvent[], from: Office = EMPTY_OFFICE) => events.reduce(reduce, from);
@@ -114,6 +117,15 @@ describe('reduce', () => {
     o = reduce(o, { type: 'coins', coins });
     expect(o.coins.floors['demo/a'].coins).toBe(15);
     expect(fold([{ type: 'snapshot', data: { ...snapshot, coins } }]).coins).toEqual(coins);
+  });
+
+  it('takes the playbook from the snapshot, then the whole of it after each change', () => {
+    const doc = { id: 1, scope: 'office' as const, floorId: null, kind: 'rules' as const, name: 'tests-first', description: '', body: '- Run the tests', tools: '', model: '', enabled: true, updatedAt: 1 };
+    let o = fold([{ type: 'snapshot', data: snapshot }]);
+    expect(o.playbook).toEqual(EMPTY_PLAYBOOK);
+    o = reduce(o, { type: 'playbook', playbook: { docs: [doc], proposals: [] } });
+    expect(o.playbook.docs.map((d) => d.name)).toEqual(['tests-first']);
+    expect(fold([{ type: 'snapshot', data: { ...snapshot, playbook: { docs: [doc], proposals: [] } } }]).playbook.docs).toHaveLength(1);
   });
 
   it('keeps moments for the feed without changing the state, and keeps them through a new snapshot', () => {

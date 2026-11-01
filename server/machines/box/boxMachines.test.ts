@@ -110,7 +110,7 @@ describe('BoxMachines', () => {
   it("prepares the desk with GitHub's token in that command's environment only", async () => {
     const { api, calls } = fakeAccount();
     const m = machines(api);
-    expect(await m.prepareDesk('a1b2c3d4', 'acme/web', { defaultBranch: 'main' }, 'mm/issue-1-ada')).toBe('/workspace/home/work/acme__web');
+    expect(await m.prepareDesk('a1b2c3d4', 'acme/web', { workBranch: 'main' }, 'mm/issue-1-ada')).toBe('/workspace/home/work/acme__web');
     const prep = calls.find((c) => c.script?.includes('git worktree add'))!;
     expect(prep.env).toEqual({ GH_TOKEN: 'gho_token' });
     const setup = calls.find((c) => c.script?.includes('MARSHMALLOW_SETUP_OK'))!;
@@ -119,7 +119,7 @@ describe('BoxMachines', () => {
 
   it("says why a desk couldn't be set up, with secrets scrubbed", async () => {
     const { api } = fakeAccount([], (s) => (s.includes('git worktree add') ? { code: 128, output: 'fatal: could not read from https://x:gho_token@github.com' } : { code: 0, output: '' }));
-    await expect(machines(api).prepareDesk('a1b2c3d4', 'acme/web', { defaultBranch: 'main' }, 'b')).rejects.toThrow(/Couldn't set up the desk.*x:•••@github/);
+    await expect(machines(api).prepareDesk('a1b2c3d4', 'acme/web', { workBranch: 'main' }, 'b')).rejects.toThrow(/Couldn't set up the desk.*x:•••@github/);
   });
 
   it('installs dependencies only when the lockfile changed, with no credentials', async () => {

@@ -7,6 +7,8 @@ import type { Backend } from '../backend/backend.ts';
 import type { Desk } from '../db/desk.ts';
 import type { Floors } from '../floors.ts';
 import { HttpError } from '../httpError.ts';
+import type { Playbook } from '../playbook/playbook.ts';
+import { withPlaybook } from '../playbook/session.ts';
 import type { ReconnectedCli } from '../sessions/cliRunner.ts';
 import type { RestartCounts } from '../recovery/reconcile.ts';
 import type { Terminals } from '../sessions/terminals.ts';
@@ -58,12 +60,14 @@ export interface Pipeline {
 
 /**
  * `terminals`: each worker's terminal, which their sessions run in (null in tests that don't watch them). `desk`: the
- * office database's chats and discussions, which the CEO answers in (none in tests that don't need them).
+ * office database's chats and discussions, which the CEO answers in (none in tests that don't need them). `playbook`:
+ * the agent docs every session gets (none in tests that don't need them).
  */
-export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null, o: { teamTiming?: TeamTiming; cloud?: ConstructorParameters<typeof CloudOffice>[1]; desk?: Desk } = {}): Pipeline {
+export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null, o: { teamTiming?: TeamTiming; cloud?: ConstructorParameters<typeof CloudOffice>[1]; desk?: Desk; playbook?: Playbook } = {}): Pipeline {
   const usage = new Usage(store);
   const sessions = new Sessions(store, backend, { limited: (at) => usage.limited(at), usageWarning: (info) => usage.warned(info) }, terminals);
-  const ctx = { store, backend, sessions, floors, usage, desk: o.desk ?? null, prepStrikes: new Map(), preparing: new Set(), dropping: new Map(), soon: (ms?: number) => scheduler.soon(ms) } as Ctx;
+  sessions.prepare = (workerId, opts) => withPlaybook(store, o.playbook ?? null, workerId, opts);
+  const ctx = { store, backend, sessions, floors, usage, desk: o.desk ?? null, playbook: o.playbook ?? null, prepStrikes: new Map(), preparing: new Set(), dropping: new Map(), soon: (ms?: number) => scheduler.soon(ms) } as Ctx;
   ctx.build = new Build(ctx);
   ctx.qa = new Qa(ctx);
   ctx.fix = new Fix(ctx);

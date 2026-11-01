@@ -203,4 +203,44 @@ export const MIGRATIONS: readonly Migration[] = [
       alter table trophies add column reward integer not null default 0;
     `,
   },
+  {
+    id: 7,
+    name: 'the playbook',
+    sql: `
+      -- the office's and each floor's agent docs (floor_id null: the office's): rules, skills, subagents and commands,
+      -- given to every session on a floor; a name is unique within its scope, floor and kind. Kept for a floor that
+      -- leaves, as its plan is. tools and model: a subagent's ('' for the session's)
+      create table playbook_docs (
+        id serial primary key,
+        scope text not null,
+        floor_id text,
+        kind text not null,
+        name text not null,
+        description text not null default '',
+        body text not null,
+        tools text not null default '',
+        model text not null default '',
+        enabled boolean not null default true,
+        created_at timestamptz not null,
+        updated_at timestamptz not null
+      );
+      create unique index playbook_docs_by_name on playbook_docs (scope, coalesce(floor_id, ''), kind, name);
+
+      -- changes the CEO proposed, each a card in the chat or discussion it came from: the doc as proposed (JSON, as
+      -- shared/playbook.ts has it), and the doc it changes as it was then, for the diff
+      create table playbook_proposals (
+        id serial primary key,
+        thread_kind text not null,
+        thread_id integer not null,
+        at timestamptz not null,
+        status text not null,
+        draft jsonb not null,
+        doc_id integer,
+        before jsonb,
+        why text not null default '',
+        decided_at timestamptz
+      );
+      create index playbook_proposals_by_thread on playbook_proposals (thread_kind, thread_id);
+    `,
+  },
 ];

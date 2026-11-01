@@ -1,14 +1,16 @@
 // The desktop's Discussions app: threads the CEO opens to settle something with you before it plans or acts, and the
 // workers' (and the CEO's) questions on GitHub issues, one thread per issue. The list puts what waits on you first;
 // a thread shows its messages and a reply box. You resolve the CEO's threads (with how it was settled), and a reply to
-// an issue thread answers its question on GitHub, as you. Adapted from cubefarm client/src/ui/Phone.tsx's questions
+// an issue thread answers its question on GitHub, as you; a playbook change the CEO proposes in a thread shows there as
+// a card (PlaybookCard.tsx). Adapted from cubefarm client/src/ui/Phone.tsx's questions
 // (MIT); the CEO's threads are new in Marshmallow.
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { DiscussionView } from '../../../../shared/types';
 import { command } from '../../api';
 import { useStore } from '../../store';
 import { useCommand } from '../useCommand';
-import { issueLines, issueThreads, itemWaiting, threadSections, type IssueThread, type ThreadItem } from './desk';
+import { issueLines, issueThreads, itemWaiting, threadSections, withPlaybookCards, type IssueThread, type ThreadItem } from './desk';
+import { PlaybookCard, playbookCardKey } from './PlaybookCard';
 import { Bubble, Composer, Empty, shortWhen, TypingDots, useCeo, useFloorLabel, useNarrow, when } from './parts';
 
 const oneLine = (s: string, n = 90) => {
@@ -134,6 +136,7 @@ function DiscussionThread({ d, onBack }: { d: DiscussionView; onBack: () => void
   const floorLabel = useFloorLabel();
   const name = ceo?.name ?? 'The CEO';
   const waiting = d.status === 'open' && d.messages.at(-1)?.from === 'ceo';
+  const playbookCards = useStore((s) => s.playbook.proposals);
   const log = useScrollToEnd([d.id, d.messages.length, d.replying, d.status]);
   return (
     <section className="dt-main" aria-label={d.title}>
@@ -152,9 +155,15 @@ function DiscussionThread({ d, onBack }: { d: DiscussionView; onBack: () => void
         {d.status === 'open' && <Resolve key={d.id} d={d} />}
       </header>
       <div className="dt-log" ref={log} tabIndex={0} aria-label={`Messages in ${d.title}`}>
-        {d.messages.map((m) => (
-          <Bubble key={m.id} from={m.from} who={m.from === 'ceo' ? name : 'You'} text={m.text} at={m.at} />
-        ))}
+        {withPlaybookCards(d.messages, playbookCards, { kind: 'discussion', id: d.id }).map((e) =>
+          e.kind === 'playbook' ? (
+            <Bubble key={playbookCardKey(e.proposal)} from="ceo" who={name} text="" at={e.proposal.at}>
+              <PlaybookCard p={e.proposal} />
+            </Bubble>
+          ) : (
+            <Bubble key={e.message.id} from={e.message.from} who={e.message.from === 'ceo' ? name : 'You'} text={e.message.text} at={e.message.at} />
+          ),
+        )}
         {d.replying && <TypingDots name={name} />}
         {d.status === 'resolved' && (
           <div className="dt-outcome" role="note">

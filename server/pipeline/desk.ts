@@ -2,6 +2,7 @@
 // the dependencies installed. A failed install never fails the task: the worker is told to install them. A Box worker's
 // Box is woken and checked first (signed in, credentials there), before any cloning.
 // Adapted from cubefarm server/swarm.ts (MIT): prepare and installDeps.
+import { workBranchOf } from '../../shared/branches.ts';
 import type { Floor, Worker } from '../../shared/types.ts';
 import { setUpDesk } from '../machines/deskSetup.ts';
 import { devPort, machineName, type DepsOutcome } from '../machines/machines.ts';
@@ -43,7 +44,7 @@ export async function prepareDesk(ctx: Ctx, workerId: string, floor: Floor, base
   if (floor.cloneStatus !== 'ready') await ctx.backend.ensureClone(floor.fullName);
   const cwd = await setUpDesk(ctx.sessions.terminalOf(workerId), {
     release: () => machines.release(machine, floor.fullName, devPort(workerId)),
-    prepare: () => machines.prepareDesk(machine, floor.fullName, { defaultBranch: floor.defaultBranch, ...base }, branch, (text) => log([text])),
+    prepare: () => machines.prepareDesk(machine, floor.fullName, { workBranch: workBranchOf(floor), ...base }, branch, (text) => log([text])),
   });
   if (!stillPreparing(ctx, workerId)) return null;
   const deps = await machines.installDeps(machine, floor.fullName, {

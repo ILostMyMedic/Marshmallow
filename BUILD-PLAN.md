@@ -5,9 +5,9 @@ The goal before any game work: a service that turns a GitHub issue into a merged
 Every phase ends in something you can run. Scope follows [FEATURES.md](FEATURES.md); the cubefarm files named here are in `D:\Projects\cubefarm-main`.
 
 **Repos:**
-- **The code:** Marshmallow's own code lives in [Mallowy-tv/TheMarshmallow](https://github.com/Mallowy-tv/TheMarshmallow) (private).
+- **The code:** Marshmallow's own code lives in [ILostMyMedic/Marshmallow](https://github.com/ILostMyMedic/Marshmallow) (public).
 - **Testing:** phases 4 and 5 test real work on a throwaway sandbox repo (for example `Mallowy-tv/marshmallow-sandbox`).
-- **Later:** TheMarshmallow becomes a floor (Marshmallow building itself) only once the pipeline has proven itself there.
+- **Later:** Marshmallow's own repo becomes a floor (Marshmallow building itself) only once the pipeline has proven itself there.
 
 ## Approach: a fresh repo, ported module by module
 

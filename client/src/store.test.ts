@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_CLOUD } from '../../shared/cloud';
-import { DEFAULT_SETTINGS, EMPTY_RECORDS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
+import { DEFAULT_SETTINGS, EMPTY_DESK, EMPTY_RECORDS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
 import { EMPTY_WORLD } from '../../shared/worldEvents';
 import { EMPTY_OFFICE, qaKey, reduce, type Office } from './store';
 
@@ -68,6 +68,7 @@ const snapshot: Snapshot = {
   floorPlans: {},
   previews: {},
   world: EMPTY_WORLD,
+  desk: EMPTY_DESK,
 };
 
 const fold = (events: ServerEvent[], from: Office = EMPTY_OFFICE) => events.reduce(reduce, from);

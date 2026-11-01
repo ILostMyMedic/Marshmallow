@@ -89,6 +89,15 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `🗂️ close_issue #${String(input.number ?? '?')}${floor}`;
     case 'ask_manager':
       return `❓ ask_manager #${String(input.number ?? '?')}${floor}${why('question')}`;
+    case 'start_discussion':
+      return `💬 start_discussion "${clip(String(input.title ?? ''), 70)}"${floor}`;
+    case 'resolve_discussion':
+      return `✅ resolve_discussion${why('outcome')}`;
+    case 'propose_project': {
+      const repo = input.existing_repo || [input.new_repo_owner, input.new_repo_name].filter(Boolean).join('/');
+      const tasks = Array.isArray(input.tasks) ? input.tasks.length : 0;
+      return `📋 propose_project ${clip(String(repo || '?'), 60)} · a team of ${String(input.team_size ?? '?')} · ${tasks} task${tasks === 1 ? '' : 's'}`;
+    }
   }
   return `🏢 ${action}(${clip(JSON.stringify(input), 120)})`;
 }

@@ -1,9 +1,9 @@
 // What the office's toasts say (Toasts.tsx shows them): a line for each moment the server sends (a merge, a PR opened,
 // QA's verdict, new issues, a hire or a leaver), a worker whose session failed, a question from a worker, and the CEO's
-// replies and the office's notices while the phone is shut. Pure, so the tests check every line. Adapted from cubefarm
+// words (in a chat, a discussion or a job report) and the office's notices while the desktop is shut. Pure, so the tests check every line. Adapted from cubefarm
 // server/swarm.ts's toasts and client/src/store.ts's pushToast (MIT): built in the browser from what the server already
 // sends, and the update, usage, alarm and coin toasts are cut.
-import type { Floor, Moment, OfficeMessage, Question, Worker } from '../../../shared/types';
+import type { DeskMessage, DeskView, Floor, Moment, OfficeMessage, Question, Worker } from '../../../shared/types';
 
 export type ToastLevel = 'info' | 'good' | 'warn' | 'error';
 
@@ -60,12 +60,39 @@ export function momentToast(m: Moment, floors: Floor[], workers: Record<string, 
 /** A worker's session failing: the status went to error. */
 export const errorToast = (w: Worker): ToastLine => ({ level: 'error', text: `⚠️ ${w.name} needs help: their session failed` });
 
-/** A new question from a worker, waiting for an answer on the phone. */
+/** A new question from a worker, waiting for an answer on the desktop. */
 export const questionToast = (q: Question): ToastLine => ({ level: 'warn', text: `❓ ${q.from} asks about #${q.issueNumber}: “${clip(q.text, 80)}” (P to answer)` });
 
-/** The CEO's reply or the office's notice, while the phone is shut; null for your own messages. */
+/** The CEO's job report or the office's notice, while the desktop is shut; null for your own messages. */
 export function messageToast(m: OfficeMessage, ceoName: string | null): ToastLine | null {
   if (m.from === 'manager') return null;
-  if (m.from === 'ceo') return { level: 'info', text: `📱 ${ceoName ?? 'The CEO'}: ${clip(m.text)}` };
+  if (m.from === 'ceo') return { level: 'info', text: `🧑‍💼 ${ceoName ?? 'The CEO'}: ${clip(m.text)}` };
   return { level: 'info', text: `📣 ${clip(m.text)}` };
+}
+
+/** A message in one of the desktop's chats or discussions, with where it was. */
+export interface DeskLine {
+  key: string; // unique across the desk: `c<chat>:<message>` or `d<discussion>:<message>`
+  kind: 'chat' | 'discussion';
+  title: string;
+  message: DeskMessage;
+}
+
+/** Every message on the desk, for telling the new ones from those already seen. */
+export function deskLines(desk: DeskView): DeskLine[] {
+  return [
+    ...desk.chats.flatMap((c) => c.messages.map((m): DeskLine => ({ key: `c${c.id}:${m.id}`, kind: 'chat', title: c.title, message: m }))),
+    ...desk.discussions.flatMap((d) => d.messages.map((m): DeskLine => ({ key: `d${d.id}:${m.id}`, kind: 'discussion', title: d.title, message: m }))),
+  ];
+}
+
+/** The CEO's new word in a chat (a reply, or a project to review) or a discussion (it wants you); null for the rest. */
+export function deskToast(l: DeskLine, ceoName: string | null): ToastLine | null {
+  const m = l.message;
+  if (m.from !== 'ceo') return null;
+  const who = ceoName ?? 'The CEO';
+  const where = `“${clip(l.title, 40)}”`;
+  if (l.kind === 'discussion') return { level: 'warn', text: `🗣 ${who} on ${where}: ${clip(m.text, 80)} (P to reply)` };
+  if (m.proposalId !== null) return { level: 'info', text: `🚀 ${who} proposes a project in ${where} (P to review it)` };
+  return { level: 'info', text: `💬 ${who} in ${where}: ${clip(m.text, 80)}` };
 }

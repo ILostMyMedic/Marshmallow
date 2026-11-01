@@ -6,10 +6,15 @@ import type { LogEntry } from '../../shared/types.ts';
 import { ANSWER_LEAD } from '../pipeline/questions.ts';
 import { describeOfficeTool } from '../sessions/format.ts';
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../sessions/session.ts';
-import type { FakeGitHub } from './demoGithub.ts';
+import { DEMO_LOGIN, type FakeGitHub } from './demoGithub.ts';
 
 /** The seeded issue (demoGithub.ts) that's too vague to build without asking. */
 export const VAGUE_ISSUE = 'Make it pop';
+
+/** What the scripted CEO remembers between its jobs: the floors whose brief it opened a discussion about. */
+export interface DemoCeoMemory {
+  discussed: Set<string>;
+}
 
 export interface FakeSessionContext {
   github: FakeGitHub;
@@ -17,6 +22,7 @@ export interface FakeSessionContext {
   desk: { fullName: string; branch: string } | null;
   rand: () => number;
   stepMs: () => number;
+  ceo: DemoCeoMemory;
 }
 
 /** A step of a script: log lines (the first tool among them is the one running), or something else that happens. */
@@ -202,10 +208,36 @@ interface DemoStatus {
   floors: { floor: number; repo: string; brief: string | null; issues: unknown[]; team: unknown[] }[];
 }
 
+/** The manager's message, in a chat, that has the scripted CEO put its plan on a card (so does a third message). */
+export const GO_AHEAD = /\b(go ahead|go for it|sounds good|let'?s do it|do it|ship it|plan it|propose|yes)\b/i;
+
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '') || 'new-project';
+
+/** A chat's idea as a short project name: its first few words, up to the first colon or comma ("Tiny recipe app"). */
+export function projectName(title: string) {
+  const words = title
+    .split(/[:,.;!?(—–]| - /)[0]
+    .trim()
+    .replace(/^(a|an|the)\s+/i, '')
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(' ');
+  return words ? words[0].toUpperCase() + words.slice(1) : 'New project';
+}
+
 /**
- * A scripted CEO that calls the real office tools, so profiles, team changes and filed issues behave as in the real
- * thing. Onboarding writes a profile and sizes the team; a plan files three issues; a chat closes an issue ("close #4
- * on floor 1"), sizes a floor ("floor 1 to 3") or sums the company up.
+ * A scripted CEO that calls the real office tools, so profiles, team changes, filed issues, discussions and project
+ * cards behave as in the real thing. Onboarding writes a profile and sizes the team (or keeps the size agreed on a
+ * card); a floor's first plan opens a discussion about its scope, and once the manager answers there it settles it and
+ * files three issues (later plans file them at once). A chat closes an issue ("close #4 on floor 1"), sizes a floor
+ * ("floor 1 to 3"), sums the company up ("status"), or talks the idea over: a "go ahead" (or its third reply, or a
+ * declined card's note) puts a plan on a card.
  * Adapted from cubefarm server/demo.ts (MIT): ceoSession.
  */
 function ceoSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSessionContext): SessionHandle {
@@ -226,6 +258,40 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSession
     return out;
   };
   const filed = (out: string) => Number(out.match(/Filed #(\d+)/)?.[1] ?? 0);
+  const refused = (out: string) => out.startsWith('Refused:');
+
+  /** A brief planned into three issues, the groundwork first. */
+  const planIssues = async (floor: DemoStatus['floors'][number], brief: string): Promise<string> => {
+    const base = filed(await use('file_issue', { floor: floor.floor, title: `Groundwork for: ${brief}`.slice(0, 120), body: `The shared pieces the rest of "${brief}" builds on.\n\nAcceptance: tests cover them.` }));
+    const a = filed(await use('file_issue', { floor: floor.floor, title: `${brief}: the main flow`.slice(0, 120), body: `Depends on #${base}\n\nThe main flow of "${brief}", end to end.` }));
+    const b = filed(await use('file_issue', { floor: floor.floor, title: `${brief}: settings and polish`.slice(0, 120), body: `Depends on #${base}\n\nSettings, empty states and phone layout for "${brief}".` }));
+    await use('scale_team', { floor: floor.floor, size: Math.max(2, floor.team.length), reason: 'Two of the new issues can be built side by side once the groundwork lands.' });
+    return `Planned "${brief}" as #${base}, #${a} and #${b}: #${base} first, then the other two side by side.`;
+  };
+
+  /** The chat's idea on a card: a new private repository named after the chat, a team of two and three tasks. */
+  const propose = async (title: string, note: string | null): Promise<string> => {
+    const short = projectName(title);
+    const base = slug(short);
+    let name = base;
+    for (let i = 2; ctx.github.has(`${DEMO_LOGIN}/${name}`); i++) name = `${base}-${i}`;
+    const tasks = [
+      { title: 'Project skeleton: app shell, tests and CI', body: 'Set up the app shell, a test runner and a CI workflow, and a README that says how to run it.\n\nAcceptance: the app starts, a first test passes, CI is green.' },
+      { title: `${short}: the main flow`, body: `The main flow of "${title}", end to end.\n\nAcceptance: it works on desktop and at 375px, with tests.`, depends_on: [0] },
+      { title: `${short}: settings and polish`, body: 'Empty states, settings and the phone layout.\n\nAcceptance: no console errors, and the tests pass.', depends_on: [0] },
+    ];
+    const out = await use('propose_project', {
+      new_repo_name: name,
+      description: title.slice(0, 120),
+      brief: `"${title}": a small first version people can try, with tests and a short README.${note ? ` Reworked after the manager's note: ${note}` : ''}`,
+      team_size: note ? 1 : 2,
+      tasks: note ? tasks.slice(0, 2) : tasks,
+    });
+    if (refused(out)) return `I couldn't put the plan on a card: ${out.slice(9).trim()}`;
+    return note
+      ? `Fair enough: I reworked the plan around your note, with a team of 1 and two tasks. It's on a card again.`
+      : `Here's the plan on a card: a new private repository, ${DEMO_LOGIN}/${name}, a team of 2 and three starting tasks (the skeleton first, then two side by side). Approve it when you're ready, or tell me what to change.`;
+  };
 
   const script = async (): Promise<string> => {
     cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · CEO` }]);
@@ -236,32 +302,56 @@ function ceoSession(opts: SessionOptions, cb: SessionCallbacks, ctx: FakeSession
       cb.log(tool('Read', `Read ${floor.repo}/README.md`, 'Read 42 lines'));
       const name = floor.repo.split('/')[1] ?? floor.repo;
       await use('set_floor_profile', { floor: floor.floor, summary: `${name} · demo project`, qa_brief: '- The app loads without console errors\n- The change works on desktop and at 375px\n- Tests and the build pass' });
+      if (job.agreedTeam) return `Floor ${floor.floor} (${floor.repo}) is set up: I wrote its QA brief, and its team stays at ${job.agreedTeam} as you agreed.`;
       const size = Math.min(3, Math.max(1, Math.ceil(floor.issues.length / 3)));
       await use('scale_team', { floor: floor.floor, size, reason: `${floor.issues.length} open issues: ${size} workers can take them side by side.` });
       return `Floor ${floor.floor} (${floor.repo}) is a small demo project with ${floor.issues.length} open issues. I wrote its QA brief and set its team to ${size}.`;
     }
     if (job.kind === 'plan' && floor) {
       const brief = floor.brief ?? 'the brief';
-      const base = filed(await use('file_issue', { floor: floor.floor, title: `Groundwork for: ${brief}`.slice(0, 120), body: `The shared pieces the rest of "${brief}" builds on.\n\nAcceptance: tests cover them.` }));
-      const a = filed(await use('file_issue', { floor: floor.floor, title: `${brief}: the main flow`.slice(0, 120), body: `Depends on #${base}\n\nThe main flow of "${brief}", end to end.` }));
-      const b = filed(await use('file_issue', { floor: floor.floor, title: `${brief}: settings and polish`.slice(0, 120), body: `Depends on #${base}\n\nSettings, empty states and phone layout for "${brief}".` }));
-      await use('scale_team', { floor: floor.floor, size: Math.max(2, floor.team.length), reason: 'Two of the new issues can be built side by side once the groundwork lands.' });
-      return `Planned "${brief}" as #${base}, #${a} and #${b}: #${base} first, then the other two side by side.`;
+      if (!ctx.ceo.discussed.has(floor.repo)) {
+        const out = await use('start_discussion', {
+          floor: floor.floor,
+          title: `Scope of "${brief}"`.slice(0, 80),
+          message: `Before I plan "${brief}": should the first milestone be a small slice you can try this week, or the whole thing at once? A slice ships sooner and shows what to fix next, so I'd start with one.`,
+        });
+        if (!refused(out)) {
+          ctx.ceo.discussed.add(floor.repo);
+          return `Before I plan floor ${floor.floor}'s brief I need one answer from you, so I opened a discussion about its scope.`;
+        }
+      }
+      return planIssues(floor, brief);
+    }
+    if (job.kind === 'discussion') {
+      const answer = job.text.split('\n').at(-1)?.trim() ?? '';
+      await wait();
+      await use('resolve_discussion', { outcome: `Going with the manager's answer: "${answer.slice(0, 160)}"` });
+      const about = status.floors.find((f) => f.repo === job.floorId);
+      return about?.brief ? `Thanks, that settles it. ${await planIssues(about, about.brief)}` : 'Thanks, that settles it.';
     }
     const text = job.text.toLowerCase();
     const onFloor = Number(text.match(/floor (\d+)/)?.[1] ?? floor?.floor ?? 1);
     const close = text.match(/close #(\d+)/);
     if (close) {
       const out = await use('close_issue', { floor: onFloor, number: Number(close[1]), reason: 'The manager asked to close it.' });
-      return out.startsWith('Refused:') ? `I couldn't close #${close[1]}: ${out.slice(9)}` : `Done: #${close[1]} on floor ${onFloor} is closed.`;
+      return refused(out) ? `I couldn't close #${close[1]}: ${out.slice(9)}` : `Done: #${close[1]} on floor ${onFloor} is closed.`;
     }
     const size = text.match(/floor (\d+) to (\d+)/);
     if (size) {
       await use('scale_team', { floor: Number(size[1]), size: Number(size[2]), reason: 'The manager asked for it.' });
       return `Floor ${size[1]} now has ${size[2]} workers, and holds that size.`;
     }
+    if (/\bstatus\b|where things stand/.test(text) || !job.thread) {
+      await wait();
+      return `Here's where things stand: ${status.floors.map((f) => `floor ${f.floor} (${f.repo}) has ${f.team.length} workers and ${f.issues.length} open issues`).join('; ') || 'no floors yet'}.`;
+    }
+    const { title, replies } = job.thread;
+    const declined = job.text.match(/^Declined the project: (.+)$/m)?.[1] ?? null;
+    if (declined || GO_AHEAD.test(text) || replies >= 2) return propose(title, declined);
     await wait();
-    return `Here's where things stand: ${status.floors.map((f) => `floor ${f.floor} (${f.repo}) has ${f.team.length} workers and ${f.issues.length} open issues`).join('; ') || 'no floors yet'}.`;
+    return replies === 0
+      ? `Nice idea! A couple of questions so I get "${title}" right: who is it for, and what's the one thing it must do on day one? Say "go ahead" when you'd like the plan on a card.`
+      : `Got it. Anything else it must have from the start? Say "go ahead" when you're happy, and I'll put the plan on a card.`;
   };
 
   cb.sessionId(opts.resumeSessionId ?? `demo-${crypto.randomUUID()}`);

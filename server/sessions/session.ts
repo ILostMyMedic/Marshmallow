@@ -38,7 +38,15 @@ export interface SessionOptions {
   /** Folders the session may read besides its own (the CEO reads the floors' clones). */
   addDirs?: string[];
   /** What the CEO's job is: the demo's scripted CEO acts on it. */
-  ceoJob?: { kind: CeoJobKind; floorId: string | null; text: string };
+  ceoJob?: {
+    kind: CeoJobKind;
+    floorId: string | null; // a discussion's: the floor it's about
+    text: string; // a chat's or discussion's: what the manager wrote since the CEO's last reply
+    /** A chat's or discussion's: which, its title, and how many times the CEO has replied in it. */
+    thread?: { id: number; title: string; replies: number };
+    /** onboard: the team size the manager agreed on the project's card. */
+    agreedTeam?: number;
+  };
   /** A Box worker's session: where its CLI runs (absent: on this computer). */
   box?: BoxTarget;
   /** Pick up the worker's CLI that kept working while the office restarted, instead of starting one. */

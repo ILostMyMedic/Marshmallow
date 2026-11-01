@@ -10,7 +10,7 @@ import type { Backend } from './backend.ts';
 import { demoCloud } from './demoCloud.ts';
 import { FakeGitHub } from './demoGithub.ts';
 import { demoPreviews } from './demoPreviews.ts';
-import { fakeSession } from './demoSessions.ts';
+import { fakeSession, type DemoCeoMemory } from './demoSessions.ts';
 
 /** How long the demo's pretend work takes, in ms (the tests make it all instant). */
 export interface DemoTiming {
@@ -96,6 +96,7 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const deskDir = (machine: string, fullName: string) => `/demo/machines/${machine}/work/${fullName}`;
   const previews = demoPreviews(github, timing.previewMs);
+  const ceo: DemoCeoMemory = { discussed: new Set() };
 
   const machines: MachineProvider = {
     deskDir,
@@ -141,7 +142,7 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
     mainDir: (fullName) => `/demo/${fullName}/main`,
     machines,
     // A Box worker's desk is known by their Box: every Box keeps a repo's worktree at the same path.
-    startSession: (o, cb) => typedInto(o, fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.box ? `box:${o.box.boxId}` : o.cwd) ?? null, rand, stepMs: timing.stepMs })),
+    startSession: (o, cb) => typedInto(o, fakeSession(o, inTerminal(o, cb), { github, desk: desks.get(o.box ? `box:${o.box.boxId}` : o.cwd) ?? null, rand, stepMs: timing.stepMs, ceo })),
     cloud: demoCloud((boxId, desk) => desks.set(`box:${boxId}`, desk), timing.boxMs),
     previews,
     reset: () => {
@@ -149,6 +150,7 @@ export function createDemoBackend(opts: { home: string | null; timing?: Partial<
       desks.clear();
       installed.clear();
       previews.reset();
+      ceo.discussed.clear();
     },
   };
 }

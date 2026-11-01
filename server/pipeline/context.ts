@@ -4,6 +4,7 @@
 import { effectiveModel } from '../../shared/models.ts';
 import type { Floor, LogEntry, Task, Worker } from '../../shared/types.ts';
 import type { Backend } from '../backend/backend.ts';
+import type { Desk } from '../db/desk.ts';
 import type { Floors } from '../floors.ts';
 import { devPort, machineName } from '../machines/machines.ts';
 import type { PromptFloor } from '../prompts/prompts.ts';
@@ -37,6 +38,8 @@ export interface Ctx {
   ceo: Ceo;
   cloud: CloudOffice;
   closures: Closures;
+  /** The desktop's chats and discussions, which the CEO answers in (server/db/desk.ts); null in tests without the office database. */
+  desk: Desk | null;
   /** Failed desk preparations per PR and task (`${floorId}#${pr}:${task}`), in memory. */
   prepStrikes: Map<string, PrepStrikes>;
   /** Workers whose desk is being set up for a task right now: from beginTask until its session starts or it gives up. */

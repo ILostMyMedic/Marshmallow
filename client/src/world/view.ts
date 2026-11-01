@@ -9,9 +9,12 @@ import type { End } from './pongPhysics';
 /** The manager's console's tabs (ui/ManagerConsole.tsx). */
 export type ConsoleTab = 'floors' | 'team' | 'issues' | 'settings';
 
+/** The desktop's apps (ui/desktop/Desktop.tsx). */
+export type DesktopApp = 'chat' | 'discussions' | 'notices';
+
 /**
  * A panel over the view: a worker's panel (their terminal), a floor's board, the elevator's buttons, your look, the
- * front desk, the manager's console, the phone, the help screen, the first-run setup, the trophies, or a floor's running app.
+ * front desk, the manager's console, the desktop, the help screen, the first-run setup, the trophies, or a floor's running app.
  */
 export type Overlay =
   | { kind: 'terminal'; workerId: string }
@@ -20,13 +23,13 @@ export type Overlay =
   | { kind: 'look' }
   | { kind: 'frontdesk' }
   | { kind: 'console'; tab?: ConsoleTab; floorId?: string }
-  | { kind: 'phone' }
+  | { kind: 'desktop'; app?: DesktopApp }
   | { kind: 'help' }
   | { kind: 'setup' }
   | { kind: 'trophies' }
   | { kind: 'app'; floorId: string };
 
-const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk', 'console', 'phone', 'help', 'setup', 'trophies', 'app'] satisfies Overlay['kind'][];
+const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk', 'console', 'desktop', 'help', 'setup', 'trophies', 'app'] satisfies Overlay['kind'][];
 
 /**
  * What E does with what's under the crosshair: open a panel, or do something in the room (actions.ts hands those to

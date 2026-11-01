@@ -1,5 +1,6 @@
 // The office database: Postgres built into the server (PGlite, compiled to WebAssembly: no install, no service), for
-// what keeps growing: shipped work, trophies, floor plans, the manager's look (migrations.ts has the tables). The live
+// what keeps growing: shipped work, trophies, floor plans, the manager's look, the desktop's chats with the CEO and its
+// discussions (migrations.ts has the tables). The live
 // office stays in the state file. Its folder is <home>/db (demo-db for the demo); tests open one in memory.
 import fs from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';

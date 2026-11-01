@@ -1,5 +1,5 @@
 // The panel open over the 3D view (view.ts overlay): a worker's panel, a floor's board, the elevator's buttons, your
-// look, the front desk, the manager's console, the phone, the help screen, the first-run setup, the trophies or a
+// look, the front desk, the manager's console, the desktop, the help screen, the first-run setup, the trophies or a
 // floor's running app.
 // Adapted from cubefarm client/src/ui/Overlays.tsx (MIT).
 import { useView } from '../world/view';
@@ -9,8 +9,8 @@ import { FrontDeskPanel } from './FrontDeskPanel';
 import { HelpPanel } from './HelpPanel';
 import { KanbanView } from './KanbanView';
 import { LookPanel } from './LookPanel';
+import { Desktop } from './desktop/Desktop';
 import { ManagerConsole } from './ManagerConsole';
-import { Phone } from './Phone';
 import { SetupWizard } from './SetupWizard';
 import { TrophiesPanel } from './TrophiesPanel';
 import { WorkerPanel } from './WorkerPanel';
@@ -30,8 +30,8 @@ export function Overlays() {
       return <FrontDeskPanel />;
     case 'console':
       return <ManagerConsole tab={overlay.tab} floorId={overlay.floorId} />;
-    case 'phone':
-      return <Phone />;
+    case 'desktop':
+      return <Desktop app={overlay.app} />;
     case 'help':
       return <HelpPanel />;
     case 'setup':

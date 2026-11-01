@@ -104,6 +104,15 @@ describe('the office database', () => {
     expect(store.snapshot().look).toEqual({ hair: 'bun', skin: '#f1c27d' });
   });
 
+  it("puts the desk in the snapshot, with the phone's old chat with the CEO copied into it", async () => {
+    store.say('Hello Mallow', null, 'manager');
+    store.say('Hello! All quiet.', null, 'ceo');
+    office = await openOffice(null, store);
+    expect(store.snapshot().desk.chats).toMatchObject([{ title: 'Earlier messages', messages: [{ from: 'manager', text: 'Hello Mallow' }, { from: 'ceo', text: 'Hello! All quiet.' }] }]);
+    await office.desk.createChat('Recipes');
+    expect(store.snapshot().desk.chats.map((c) => c.title)).toEqual(['Recipes', 'Earlier messages']);
+  });
+
   it('gives every floor the default kit, once', async () => {
     store.putFloor(floor([]));
     office = await openOffice(null, store);

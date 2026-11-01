@@ -12,6 +12,8 @@ import { realBackend } from './backend/real.ts';
 import { DB_DIR, DEMO, DESK_SWEEP_INTERVAL_MS, HOME_DIR, homeProblem, HOST, PORT, SCHEDULER_INTERVAL_MS, STATE_FILE, SYNC_INTERVAL_MS, VERSION, WATCHDOG_INTERVAL_MS } from './config.ts';
 import { openOffice } from './db/office.ts';
 import { demoRoutes } from './demoRoutes.ts';
+import { Projects, repoOwners } from './desk/projects.ts';
+import { deskRoutes } from './deskRoutes.ts';
 import { Floors } from './floors.ts';
 import { HttpError } from './httpError.ts';
 import { createPipeline } from './pipeline/pipeline.ts';
@@ -35,10 +37,14 @@ const demo = DEMO ? createDemoBackend({ home: HOME_DIR }) : null;
 const backend = demo ?? realBackend;
 const floors = new Floors(store, backend);
 const terminals = new Terminals(path.join(HOME_DIR, 'terminals'));
-const pipeline = createPipeline(store, backend, floors, terminals);
-// The office database (shipped work, trophies, floor plans, the manager's look): open before the restart and the first
-// sync, so merges finishing now are recorded and the floors' merged PRs are backfilled.
+// The office database (shipped work, trophies, floor plans, the manager's look, the desktop's chats and discussions):
+// open before the pipeline, whose CEO answers on the desk, and before the restart and the first sync, so merges
+// finishing now are recorded and the floors' merged PRs are backfilled.
 const office = await openOffice(DB_DIR, store);
+const pipeline = createPipeline(store, backend, floors, terminals, { desk: office.desk });
+// Projects the manager approves on the CEO's cards; where new repositories can go is asked of GitHub once, now
+const projects = new Projects(pipeline.ctx, office.desk);
+void repoOwners(pipeline.ctx);
 const pipelineSynced = floors.onSynced;
 floors.onSynced = (floorId) => {
   pipelineSynced?.(floorId);
@@ -92,11 +98,13 @@ app.post(
   }),
 );
 app.post('/api/floors/:floor/plan', route((req) => pipeline.ctx.ceo.plan(String(req.params.floor), req.body?.mission === undefined ? undefined : str(req.body.mission))));
-// The CEO: hired and let go, and the manager's messages to it
+// The CEO: hired and let go, and the manager's messages to it (without a chat picked: the latest chat, or a new one →
+// ChatView). The desktop's chats, project cards and discussions are in deskRoutes.ts.
 app.put('/api/look', route((req) => office.player.setLook(req.body?.look)));
 app.post('/api/ceo', route((req) => pipeline.ctx.ceo.hire(str(req.body?.model).trim())));
 app.delete('/api/ceo', route(() => pipeline.ctx.ceo.letGo()));
 app.post('/api/ceo/message', route((req) => pipeline.ctx.ceo.message(str(req.body?.text))));
+app.use('/api', deskRoutes(pipeline.ctx, office.desk, projects));
 app.post('/api/floors/:floor/sync', route((req) => floors.sync(String(req.params.floor))));
 // A floor's preview: its app run from a worktree of its own on the floor's port. Each answers the floor's PreviewView;
 // a start on a port another program holds is a 409. The PATCH takes { command?, port? }: {port} in a command is filled

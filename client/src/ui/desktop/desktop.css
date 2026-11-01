@@ -1,0 +1,1610 @@
+/* The desktop (ui/desktop/): a monitor over the view, its wallpaper, the app window and the taskbar, then the apps.
+   The game's cartoon look: paper, ink outlines and hard shadows, Fredoka for headings and buttons. */
+
+.dt-backdrop {
+  background: rgba(31, 29, 43, 0.45);
+}
+
+/* ---------- the monitor ---------- */
+
+.dt-monitor {
+  --ink: #1f1d2b;
+  --paper: #fffdf5;
+  --sand: #f4f1ea;
+  --rule: #ece4d4;
+  --muted: #5c6078;
+  --go: #ffd166;
+  --ceo: #9b5de5;
+  color-scheme: light; /* paper in either theme, so its inputs are too */
+  width: min(1280px, 94vw);
+  height: min(820px, 90vh);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 10px 10px 0;
+  border: 2px solid var(--ink);
+  border-radius: 24px;
+  background: #2a2d44;
+  box-shadow:
+    0 6px 0 var(--ink),
+    inset 0 0 0 3px #3b3f5c;
+  color: var(--ink);
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+  animation: dt-on 0.2s ease-out;
+}
+
+@keyframes dt-on {
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+}
+
+.dt-screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  overflow: hidden;
+  /* the wallpaper: a sky with marshmallow clouds */
+  background:
+    radial-gradient(ellipse 120px 70px at 12% 88%, rgba(255, 255, 255, 0.85) 60%, transparent 62%),
+    radial-gradient(ellipse 90px 60px at 18% 82%, rgba(255, 255, 255, 0.85) 60%, transparent 62%),
+    radial-gradient(ellipse 160px 80px at 86% 14%, rgba(255, 244, 236, 0.9) 60%, transparent 62%),
+    radial-gradient(ellipse 100px 60px at 78% 10%, rgba(255, 244, 236, 0.9) 60%, transparent 62%),
+    radial-gradient(circle at 70% 120%, #ffc8dd 0, transparent 55%),
+    linear-gradient(165deg, #9fd3ff 0%, #c9e6ff 45%, #ffe1ea 100%);
+}
+
+.dt-chin {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 26px;
+  color: #a9adc9;
+  font-size: 0.72rem;
+}
+
+.dt-chin kbd {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 600 0.68rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.dt-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7ae582;
+  box-shadow: 0 0 6px #7ae582;
+}
+
+/* ---------- the window ---------- */
+
+.dt-window {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: 0 4px 0 var(--ink);
+  overflow: hidden;
+}
+
+.dt-window-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 12px;
+  border-bottom: 2px solid var(--ink);
+  background: #fff3d6;
+}
+
+.dt-window-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.dt-window-dots i {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: #ef476f;
+}
+
+.dt-window-dots i:nth-child(2) {
+  background: var(--go);
+}
+
+.dt-window-dots i:nth-child(3) {
+  background: #7ae582;
+}
+
+.dt-window-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-window-sub {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+.dt-window-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.dt-window-close:hover {
+  background: #ffd6dc;
+}
+
+.dt-window-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- the taskbar ---------- */
+
+.dt-taskbar {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: rgba(255, 253, 245, 0.88);
+  box-shadow: 0 3px 0 var(--ink);
+  backdrop-filter: blur(4px);
+}
+
+.dt-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.dt-brand-logo {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--ink);
+  border-radius: 9px;
+  background: #ffe1ea;
+}
+
+.dt-brand-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-apps {
+  display: flex;
+  gap: 6px;
+}
+
+.dt-app {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ink);
+  font: 600 0.9rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.dt-app:hover {
+  background: rgba(255, 232, 163, 0.6);
+}
+
+.dt-app.on {
+  border-color: var(--ink);
+  background: #ffffff;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.dt-app-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--ink);
+  border-radius: 11px;
+  font-size: 1.15rem;
+  transition: transform 0.12s;
+}
+
+.dt-app-chat .dt-app-icon {
+  background: var(--go);
+}
+
+.dt-app-discussions .dt-app-icon {
+  background: #d7c2f7;
+}
+
+.dt-app-notices .dt-app-icon {
+  background: #bde8f7;
+}
+
+.dt-app:hover .dt-app-icon,
+.dt-app.on .dt-app-icon {
+  transform: translateY(-2px);
+}
+
+.dt-badge {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: #ef476f;
+  color: #ffffff;
+  font: 700 0.7rem/16px Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: center;
+  animation: office-badge-in 0.5s ease-out;
+}
+
+.dt-clock {
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+
+.dt-clock b {
+  font-size: 1rem;
+}
+
+.dt-clock span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* ---------- shared bits ---------- */
+
+.dt-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-muted {
+  color: var(--muted);
+}
+
+.dt-busy {
+  color: #d9480f;
+  font-weight: 600;
+}
+
+.dt-bad {
+  display: block;
+  color: #b3261e;
+  font-size: 0.8rem;
+}
+
+.dt-warn {
+  display: block;
+  margin-top: 6px;
+  color: #8a5a00;
+  font-size: 0.8rem;
+}
+
+.dt-error {
+  margin: 6px 0 0;
+  color: #c0392b;
+  font-size: 0.85rem;
+}
+
+.dt-pad {
+  padding: 0 16px 6px;
+  background: #ffffff;
+}
+
+.dt-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: system-ui, sans-serif;
+}
+
+.dt-monitor input:not([type="checkbox"]):not([type="radio"]),
+.dt-monitor select {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 5px 9px;
+  border: 2px solid #c9c0ae;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 0.9rem system-ui, sans-serif;
+}
+
+.dt-monitor input:focus-visible,
+.dt-monitor select:focus-visible,
+.dt-monitor textarea:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.7);
+}
+
+.dt-monitor input[aria-invalid="true"],
+.dt-monitor select[aria-invalid="true"] {
+  border-color: #d9534f;
+}
+
+.dt-btn,
+.dt-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 13px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 2px 0 var(--ink);
+  color: var(--ink);
+  font: 600 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dt-btn:hover:not(:disabled),
+.dt-send:hover:not(:disabled) {
+  background: #ffe8a3;
+}
+
+.dt-btn:active:not(:disabled),
+.dt-send:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.dt-btn:disabled,
+.dt-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dt-send,
+.dt-btn-go {
+  background: var(--go);
+}
+
+.dt-btn-bad {
+  background: #ffd6dc;
+}
+
+.dt-btn-ghost {
+  background: transparent;
+  box-shadow: none;
+}
+
+.dt-btn-round {
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 1rem;
+}
+
+.dt-link {
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: #2b5e9e;
+  font: 600 0.82rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.dt-chip {
+  display: inline-block;
+  padding: 0 8px;
+  border: 1.5px solid #c9c0ae;
+  border-radius: 999px;
+  background: var(--paper);
+  color: #3d405b;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dt-chip-good {
+  border-color: #2dc653;
+  background: #e6f8ea;
+  color: #1f7a3a;
+}
+
+.dt-chip-new {
+  border-color: #ef476f;
+  background: #ffe0e6;
+  color: #a4133c;
+}
+
+.dt-pill {
+  flex: none;
+  padding: 2px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dt-pill-warn {
+  background: #ffe8a3;
+}
+
+.dt-pill-good {
+  background: #c7f0d2;
+}
+
+.dt-seg {
+  display: inline-flex;
+  flex: none;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.dt-seg button {
+  padding: 4px 11px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font: 600 0.8rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dt-seg button + button {
+  border-left: 2px solid var(--ink);
+}
+
+.dt-seg button.on {
+  background: var(--go);
+}
+
+.dt-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2.5px solid rgba(31, 29, 43, 0.2);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: dt-spin 0.8s linear infinite;
+}
+
+@keyframes dt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dt-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: #ef476f;
+}
+
+.dt-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ceo);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.dt-avatar-worker {
+  background: #4cc9f0;
+}
+
+.dt-empty {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px;
+  text-align: center;
+}
+
+.dt-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 10px;
+  border: 2px solid var(--ink);
+  border-radius: 20px;
+  background: #fff3d6;
+  box-shadow: 0 3px 0 var(--ink);
+  font-size: 2rem;
+}
+
+.dt-empty h3 {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+}
+
+.dt-empty p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.dt-solo {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+}
+
+/* ---------- a list and its pane (Chat, Discussions) ---------- */
+
+.dt-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+}
+
+.dt-split-wide {
+  grid-template-columns: 330px minmax(0, 1fr);
+}
+
+.dt-side {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 10px;
+  border-right: 2px solid var(--rule);
+  background: #fbf7ee;
+}
+
+.dt-new-btn {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--go);
+  box-shadow: 0 2px 0 var(--ink);
+  color: var(--ink);
+  font: 600 0.95rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dt-new-btn:hover {
+  background: #ffe08a;
+}
+
+.dt-new-btn.on {
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.6), 0 2px 0 var(--ink);
+}
+
+.dt-side-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 4px 6px;
+  color: #3d405b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dt-side-h:first-child {
+  margin-top: 2px;
+}
+
+.dt-side-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--rule);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+.dt-side-empty {
+  margin: 4px 6px 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.dt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dt-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dt-item:hover {
+  background: #fff3d6;
+}
+
+.dt-item.on {
+  border-color: var(--ink);
+  background: #ffffff;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.dt-item-top,
+.dt-item-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dt-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-item time {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.dt-item-tag {
+  overflow: hidden;
+  color: #3d405b;
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-item-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font: 0.8rem system-ui, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-item.unread .dt-item-line {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.dt-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dt-main-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 9px 14px;
+  border-bottom: 2px solid var(--rule);
+  background: #ffffff;
+  font-size: 0.85rem;
+}
+
+.dt-main-head-bare {
+  display: none; /* only its back button, for narrow screens */
+  border-bottom: none;
+  background: transparent;
+}
+
+.dt-main-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-back {
+  display: none;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.dt-title {
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: 600 1.05rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.dt-title span {
+  font-size: 0.75rem;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.dt-title:hover span,
+.dt-title:focus-visible span {
+  opacity: 0.8;
+}
+
+.dt-title-edit {
+  display: flex;
+  flex-direction: column;
+}
+
+.dt-title-edit input {
+  width: min(420px, 100%);
+  font: 600 1rem Fredoka, "Segoe UI", system-ui, sans-serif !important;
+}
+
+/* the conversation */
+.dt-log {
+  position: relative; /* cards' offsetTop, for scrolling to one */
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  background-color: var(--sand);
+  background-image: radial-gradient(rgba(31, 29, 43, 0.06) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+
+.dt-log-empty {
+  margin: auto;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dt-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.dt-row-me {
+  justify-content: flex-end;
+}
+
+.dt-row-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  max-width: min(760px, 88%);
+}
+
+.dt-row-me .dt-row-col {
+  align-items: flex-end;
+  max-width: min(620px, 80%);
+}
+
+.dt-bubble {
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 7px 12px 5px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  font-size: 0.92rem;
+  line-height: 1.42;
+}
+
+.dt-bubble-them {
+  background: #ffffff;
+  border-bottom-left-radius: 4px;
+}
+
+.dt-bubble-me {
+  background: #ffd6a5;
+  border-bottom-right-radius: 4px;
+}
+
+.dt-bubble-from {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.dt-bubble-time {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  text-align: right;
+}
+
+.dt-row-office {
+  flex-direction: column;
+  align-items: center;
+}
+
+.dt-office-line {
+  max-width: min(640px, 92%);
+  padding: 4px 12px;
+  border: 1.5px dashed #c9c0ae;
+  border-radius: 999px;
+  background: #fffaf0;
+  color: #3d405b;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.dt-office-line time {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.dt-typing {
+  display: flex;
+  gap: 4px;
+  padding: 11px 13px;
+}
+
+.dt-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: dt-typing 1.2s infinite;
+}
+
+.dt-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dt-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dt-typing {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.dt-outcome {
+  align-self: center;
+  max-width: min(640px, 92%);
+  padding: 8px 14px;
+  border: 2px solid #2dc653;
+  border-radius: 14px;
+  background: #e6f8ea;
+  color: #1f5132;
+  font-size: 0.88rem;
+}
+
+/* the message box */
+.dt-compose {
+  flex: none;
+  padding: 10px 14px 12px;
+  border-top: 2px solid var(--rule);
+  background: #ffffff;
+}
+
+.dt-compose-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.dt-compose-row .dt-send {
+  padding: 7px 16px;
+}
+
+.dt-compose-note {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.dt-compose-done {
+  flex: none;
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 2px solid var(--rule);
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.dt-hire {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 2px solid var(--rule);
+  background: #ffffff;
+  font-size: 0.9rem;
+}
+
+.dt-hire p {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+.dt-hire-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #e6dafb;
+  font-size: 1.4rem;
+}
+
+/* a new chat */
+.dt-main-new {
+  background-color: var(--sand);
+  background-image: radial-gradient(rgba(31, 29, 43, 0.06) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+
+.dt-new {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  width: min(640px, 100%);
+  margin: 0 auto;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.dt-new .dt-compose,
+.dt-new .dt-hire {
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.dt-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dt-chip-btn {
+  padding: 4px 12px;
+  border: 1.5px solid rgba(31, 29, 43, 0.35);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 600 0.8rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.dt-chip-btn:hover {
+  border-color: var(--ink);
+  background: #fff3d6;
+}
+
+/* resolving a thread */
+.dt-resolve,
+.proj-decline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dt-resolve {
+  flex-basis: 100%;
+}
+
+.dt-resolve input,
+.proj-decline input {
+  flex: 1;
+  min-width: 180px;
+}
+
+/* ---------- Notices ---------- */
+
+.dt-notices {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sand);
+}
+
+.dt-notices-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 2px solid var(--rule);
+  background: #ffffff;
+}
+
+.dt-notices .dt-empty {
+  margin: auto;
+}
+
+.dt-feed {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  list-style: none;
+}
+
+.dt-feed-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(860px, 100%);
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 2px solid var(--ink);
+  border-left-width: 6px;
+  border-radius: 12px;
+  background: #ffffff;
+  font-size: 0.9rem;
+}
+
+.dt-feed-office {
+  border-left-color: #4cc9f0;
+}
+
+.dt-feed-ceo {
+  border-left-color: var(--ceo);
+}
+
+.dt-feed-item.new {
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.dt-feed-icon {
+  flex: none;
+  font-size: 1.2rem;
+}
+
+.dt-feed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 2px;
+  font-size: 0.85rem;
+}
+
+.dt-feed-head time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* ---------- a project card ---------- */
+
+.proj-card {
+  width: 640px; /* fixed, so a card is as wide whatever the bubble above it */
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 3px 0 var(--ink);
+  overflow: hidden;
+  font-size: 0.88rem;
+}
+
+.proj-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 2px solid var(--ink);
+  background: #fff3d6;
+}
+
+.proj-started .proj-head {
+  background: #dff7e5;
+}
+
+.proj-starting .proj-head {
+  background: #e3f0ff;
+}
+
+.proj-failed .proj-head {
+  background: #ffe0e6;
+}
+
+.proj-off {
+  opacity: 0.62;
+  filter: grayscale(0.85);
+  box-shadow: none;
+}
+
+.proj-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 1.1rem;
+}
+
+.proj-kicker {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.proj-head h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  overflow-wrap: anywhere;
+}
+
+.proj-pill {
+  flex: none;
+  padding: 1px 9px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.proj-pill-pending {
+  background: var(--go);
+}
+
+.proj-pill-starting {
+  background: #a9d6ff;
+}
+
+.proj-pill-started {
+  background: #7ae582;
+}
+
+.proj-pill-failed {
+  background: #ff99ac;
+}
+
+.proj-section {
+  padding: 9px 14px;
+  border-bottom: 1.5px dashed var(--rule);
+}
+
+.proj-section h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.proj-section h4 .dt-muted {
+  font-weight: 500;
+}
+
+.proj-repo,
+.proj-line {
+  margin: 0;
+}
+
+.proj-desc {
+  margin: 4px 0 0;
+  color: #3d405b;
+  font-family: system-ui, sans-serif;
+}
+
+.proj-repo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 8px;
+}
+
+.proj-slash {
+  padding-bottom: 6px;
+  color: var(--muted);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.proj-repo-row .dt-seg {
+  margin-bottom: 1px;
+}
+
+.dt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 6px;
+}
+
+.proj-repo-row .dt-field {
+  margin: 0;
+}
+
+.dt-field-label {
+  color: #3d405b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dt-field.dt-grow {
+  min-width: 140px;
+}
+
+.dt-field input,
+.dt-field select {
+  width: 100%;
+}
+
+.proj-repo-row .dt-field:first-child {
+  min-width: 120px;
+}
+
+.proj-section > .dt-field:last-child {
+  margin: 8px 0 0;
+}
+
+.proj-brief {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: system-ui, sans-serif;
+  line-height: 1.45;
+}
+
+.proj-brief.folded {
+  max-height: 7.5em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 60%, transparent);
+  mask-image: linear-gradient(#000 60%, transparent);
+}
+
+.proj-team {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dt-monitor .proj-team input[type="number"] {
+  width: 64px;
+  text-align: center;
+}
+
+.proj-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proj-tasks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.proj-tasks li > input {
+  margin-top: 5px;
+  accent-color: #f4a300;
+}
+
+.proj-tasks li.off .proj-task-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.proj-n {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.proj-task {
+  flex: 1;
+  min-width: 0;
+}
+
+.proj-task summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 1px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.proj-task summary::-webkit-details-marker {
+  display: none;
+}
+
+.proj-task-title {
+  font-family: system-ui, sans-serif;
+}
+
+.proj-task-body {
+  margin: 4px 0 4px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--go);
+  background: #fffaf0;
+  color: #3d405b;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: system-ui, sans-serif;
+  font-size: 0.84rem;
+}
+
+.proj-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: #fbf7ee;
+}
+
+.proj-foot .dt-muted {
+  font-size: 0.8rem;
+}
+
+.proj-decline {
+  flex: 1;
+}
+
+.proj-foot-starting {
+  color: #1d4f91;
+  font-weight: 600;
+}
+
+.proj-foot-failed {
+  background: #fff0f2;
+  color: #a4133c;
+  font-family: system-ui, sans-serif;
+}
+
+.proj-foot-off {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.proj-foot-started {
+  background: #effbf2;
+}
+
+.proj-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+  color: #3d405b;
+  font-size: 0.82rem;
+}
+
+.proj-issues a {
+  color: #2b5e9e;
+  font-weight: 600;
+}
+
+.proj-card > .dt-error {
+  margin: 0;
+  padding: 6px 14px 9px;
+  background: #fbf7ee;
+}
+
+/* ---------- narrow screens: one pane at a time (parts.tsx useNarrow has the same width) ---------- */
+
+@media (max-width: 760px) {
+  .dt-monitor {
+    width: calc(100vw - 12px);
+    height: calc(100vh - 12px);
+    padding: 5px 5px 0;
+    border-radius: 16px;
+  }
+
+  .dt-screen {
+    gap: 6px;
+    padding: 6px;
+    border-radius: 10px;
+  }
+
+  .dt-chin {
+    height: 8px;
+  }
+
+  .dt-chin > span:not(.dt-led) {
+    display: none;
+  }
+
+  .dt-split,
+  .dt-split-wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dt-split[data-pane="list"] > .dt-main,
+  .dt-split[data-pane="main"] > .dt-side {
+    display: none;
+  }
+
+  .dt-side {
+    border-right: none;
+  }
+
+  .dt-back {
+    display: block;
+  }
+
+  .dt-main-head-bare {
+    display: flex;
+  }
+
+  .dt-log {
+    padding: 12px;
+  }
+
+  .dt-row-col,
+  .dt-row-me .dt-row-col {
+    max-width: 92%;
+  }
+
+  .dt-window-sub,
+  .dt-window-dots,
+  .dt-brand {
+    display: none;
+  }
+
+  .dt-taskbar {
+    grid-template-columns: 1fr auto;
+    padding: 4px 8px;
+  }
+
+  .dt-apps {
+    gap: 2px;
+  }
+
+  .dt-app {
+    padding: 3px;
+  }
+
+  .dt-app-label {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .dt-clock span {
+    display: none;
+  }
+
+  .dt-main-head .dt-btn-ghost {
+    display: none;
+  }
+}

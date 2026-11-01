@@ -52,8 +52,8 @@ function CeoCard() {
         <ModelInput value={ceo.model} placeholder={defaultModel} label="The CEO's model" onCommit={(m) => patchWorker(ceo.id, { model: m })} />
         <EffortSelect value={ceo.effort} fallback={defaultEffort} label="The CEO's effort" onChange={(effort) => void patchWorker(ceo.id, { effort })} />
         <span className="console-grow" />
-        <button className="console-btn" title="Chat with the CEO on your phone (P)" onClick={() => act({ kind: 'phone' })}>
-          📱 Chat
+        <button className="console-btn" title="Chat with the CEO on your desktop (P)" onClick={() => act({ kind: 'desktop', app: 'chat' })}>
+          💬 Chat
         </button>
         <button className="console-btn" onClick={() => act({ kind: 'terminal', workerId: ceo.id })}>
           Terminal

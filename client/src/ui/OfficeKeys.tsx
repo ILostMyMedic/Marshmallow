@@ -1,4 +1,4 @@
-// The office's keys that work anywhere (Player.tsx has the ones on foot): O the manager's console, P the phone, H the
+// The office's keys that work anywhere (Player.tsx has the ones on foot): O the manager's console, P the desktop, H the
 // help screen, each opening its panel or closing it again. And the first-run setup, which opens by itself until it's
 // finished or skipped. Adapted from cubefarm client/src/ui/keymap.ts's global actions (MIT): fixed keys, no rebinding.
 import { useEffect } from 'react';
@@ -6,7 +6,7 @@ import { useStore } from '../store';
 import { act } from '../world/actions';
 import { useView, type Overlay } from '../world/view';
 
-const KEYS: Record<string, Overlay> = { KeyO: { kind: 'console' }, KeyP: { kind: 'phone' }, KeyH: { kind: 'help' } };
+const KEYS: Record<string, Overlay> = { KeyO: { kind: 'console' }, KeyP: { kind: 'desktop' }, KeyH: { kind: 'help' } };
 
 const typing = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement | null;

@@ -1,5 +1,5 @@
 // The notification sounds' decisions, pure (no WebAudio, so they're tested): which cue each piece of news gets (a merge,
-// a PR opened, QA's verdict, a worker in trouble, a question, a message on the phone…), which one wins when several
+// a PR opened, QA's verdict, a worker in trouble, a question, a message on the desktop…), which one wins when several
 // arrive together, and how often one may play. notifySfx.ts plays them; Toasts.tsx spots the news. New in Marshmallow,
 // after cubefarm's event cues (client/src/ui/sfx.ts `cue`).
 
@@ -37,7 +37,7 @@ export function momentCue(type: Moment['type']): Cue {
   }
 }
 
-/** The phone's cue for a new message: the CEO's reply, the office's notice, or none for your own. */
+/** The cue for a new message: the CEO's reply, the office's notice, or none for your own. */
 export const messageCue = (from: OfficeMessage['from']): Cue | null => (from === 'ceo' ? 'message' : from === 'office' ? 'notice' : null);
 
 /** The more important of two cues (the first on a tie). */

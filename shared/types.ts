@@ -279,8 +279,8 @@ export interface Question {
 }
 
 /** A note from the office to the manager, for the phone: a PR that needs them, merges GitHub refuses, pacing. */
-/** The CEO's jobs: study a new floor, plan the manager's brief into issues, answer the manager. */
-export type CeoJobKind = 'onboard' | 'plan' | 'chat';
+/** The CEO's jobs: study a new floor, plan the manager's brief into issues, answer the manager in a chat or a discussion. */
+export type CeoJobKind = 'onboard' | 'plan' | 'chat' | 'discussion';
 
 export interface OfficeMessage {
   id: number;
@@ -359,6 +359,83 @@ export interface PreviewView {
   log: string[]; // the last lines of its output, oldest first
 }
 
+// ---------- the desktop: chats with the CEO and discussions (server/desk/, kept in the office database) ----------
+
+/** One message in a chat or a discussion. */
+export interface DeskMessage {
+  id: number;
+  at: number;
+  from: 'manager' | 'ceo' | 'office'; // the office's own lines: a project started, a step that failed
+  text: string;
+  proposalId: number | null; // the project card the CEO put with this message
+}
+
+/** A task the CEO plans for a new project: filed in order, so it may wait on tasks filed before it. */
+export interface ProposalTask {
+  title: string;
+  body: string;
+  dependsOn: number[]; // indices into the proposal's tasks, each lower than this one's
+}
+
+/** Where a proposed project lives: a new repository, or one that exists. */
+export type ProposalRepo = { kind: 'new'; owner: string; name: string; description: string; private: boolean } | { kind: 'existing'; fullName: string };
+
+/**
+ * A project the CEO proposes in a chat. Nothing touches GitHub until the manager approves it; then the office creates
+ * (or links) the repository, connects it as a floor with the brief, sets the team and files the tasks.
+ */
+export interface ProjectProposal {
+  id: number;
+  chatId: number;
+  at: number;
+  status: 'pending' | 'starting' | 'started' | 'declined' | 'failed' | 'replaced'; // replaced: the CEO proposed again
+  repo: ProposalRepo;
+  brief: string; // becomes the floor's brief
+  teamSize: number;
+  tasks: ProposalTask[];
+  step: string | null; // what it's doing while starting ("Creating the repository…")
+  floorId: string | null; // the floor it started
+  issueNumbers: number[]; // the tasks as filed
+  error: string | null;
+  decidedAt: number | null;
+}
+
+/** A conversation with the CEO about an idea; each keeps its own CEO session, so ideas don't mix. */
+export interface ChatView {
+  id: number;
+  title: string;
+  createdAt: number;
+  updatedAt: number; // its latest message
+  replying: boolean; // the CEO has a job for it waiting or running
+  messages: DeskMessage[]; // oldest first
+}
+
+/**
+ * A thread the CEO opened to settle something with the manager before it plans or acts. (Workers' questions on issues
+ * are threads too, drawn from the snapshot's questions.)
+ */
+export interface DiscussionView {
+  id: number;
+  title: string;
+  floorId: string | null; // the floor it's about, if one
+  openedAt: number;
+  updatedAt: number;
+  status: 'open' | 'resolved';
+  outcome: string | null; // how it was settled, once resolved
+  replying: boolean; // the CEO has a job for it waiting or running
+  messages: DeskMessage[]; // oldest first; the first is the CEO's
+}
+
+/** Everything the desktop shows besides the office's notices and the workers' questions. */
+export interface DeskView {
+  chats: ChatView[]; // the most recently active first
+  proposals: ProjectProposal[];
+  discussions: DiscussionView[]; // open ones first, then the most recently active
+  owners: string[]; // where a new repository can go: the gh login first, then its organisations
+}
+
+export const EMPTY_DESK: DeskView = { chats: [], proposals: [], discussions: [], owners: [] };
+
 /** What a tab needs to draw everything, sent when it connects. */
 export interface Snapshot {
   version: string;
@@ -378,6 +455,7 @@ export interface Snapshot {
   floorPlans: Record<string, FloorItem[]>; // by floor id
   world: WorldView; // the world events on now (shared/worldEvents.ts)
   previews: Record<string, PreviewView>; // by floor id
+  desk: DeskView;
 }
 
 /** Changes to the state: the snapshot with these folded in is what the server has. */
@@ -400,7 +478,8 @@ export type StateEvent =
   | { type: 'look'; look: PlayerLook | null }
   | { type: 'floorPlan'; floorId: string; items: FloorItem[] }
   | { type: 'world'; world: WorldView } // a world event started or ended, or the next one moved
-  | { type: 'preview'; preview: PreviewView };
+  | { type: 'preview'; preview: PreviewView }
+  | { type: 'desk'; desk: DeskView }; // the whole desk, after any change to it
 
 /**
  * Things that happened, for the game's moments (arrivals, celebrations) and the debug page's feed. They change no

@@ -5,7 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import type { HttpError } from '../../httpError.ts';
 import { checkCloseIssue, IssueCap, planDependencies, type DependsRequest } from './issueRules.ts';
-import { askedFor, ceoJobPrompt, ceoSystemPrompt, jobLabel, type CeoJob } from './prompts.ts';
+import { askedFor, ceoJobPrompt, ceoSystemPrompt, jobLabel, type CeoJob, type JobThread } from './prompts.ts';
 import { createOfficeTools, type OfficeHandlers } from './tools.ts';
 
 describe('jobLabel', () => {
@@ -16,6 +16,7 @@ describe('jobLabel', () => {
     expect(jobLabel({ kind: 'plan' }, { floor: 1, fullName: 'solo' })).toBe('Planning floor 1 · solo');
     expect(jobLabel({ kind: 'plan' }, null)).toBe('Planning a removed floor');
     expect(jobLabel({ kind: 'chat' }, null)).toBe('Replying to you');
+    expect(jobLabel({ kind: 'discussion' }, null)).toBe('Replying in a discussion');
   });
 });
 
@@ -34,6 +35,9 @@ describe('office tools', () => {
       setDependencies: async () => '',
       closeIssue: async () => '',
       askManager: async () => '',
+      startDiscussion: async () => '',
+      resolveDiscussion: async () => '',
+      proposeProject: async (a) => (calls.push(a), 'proposed'),
     };
     const office = createOfficeTools(h);
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
@@ -46,7 +50,34 @@ describe('office tools', () => {
   it('lists every tool the CEO relies on', async () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['ask_manager', 'close_issue', 'company_status', 'configure_worker', 'file_issue', 'scale_team', 'set_dependencies', 'set_floor_profile', 'worker_detail']);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'ask_manager',
+      'close_issue',
+      'company_status',
+      'configure_worker',
+      'file_issue',
+      'propose_project',
+      'resolve_discussion',
+      'scale_team',
+      'set_dependencies',
+      'set_floor_profile',
+      'start_discussion',
+      'worker_detail',
+    ]);
+  });
+
+  it("describes propose_project's tasks and flags as plain JSON Schema, and takes a project through", async () => {
+    const { client, calls } = await connect();
+    const propose = (await client.listTools()).tools.find((t) => t.name === 'propose_project')!;
+    const props = propose.inputSchema.properties as Record<string, { type?: string; items?: { type?: string; properties?: Record<string, unknown> } }>;
+    expect(props.private.type).toBe('boolean');
+    expect(props.tasks.type).toBe('array');
+    expect(props.tasks.items?.type).toBe('object');
+    expect(Object.keys(props.tasks.items?.properties ?? {}).sort()).toEqual(['body', 'depends_on', 'title']);
+    expect(propose.inputSchema.required?.sort()).toEqual(['brief', 'tasks', 'team_size']);
+    const project = { new_repo_name: 'todo', brief: 'A todo app', team_size: 2, tasks: [{ title: 'Skeleton', body: '' }, { title: 'Lists', body: 'x', depends_on: [0] }] };
+    await client.callTool({ name: 'propose_project', arguments: project });
+    expect(calls).toEqual([project]);
   });
 
   it('passes the arguments through, and turns a handler error into a refusal', async () => {
@@ -121,7 +152,8 @@ describe('planDependencies (set_dependencies)', () => {
 describe('the prompts', () => {
   const system = ceoSystemPrompt({ name: 'Mallow', company: 'Acme', manager: 'Sam', sessionLimit: 0, maxWorkers: 8 });
   const floor = { floor: 2, fullName: 'acme/app', clone: '/clones/app', mission: 'Add voice messages', backlog: 0 };
-  const job = (kind: CeoJob['kind']): CeoJob => ({ kind, floorId: 'acme/app', text: 'Shrink floor 2', at: 0 });
+  const job = (kind: CeoJob['kind'], over: Partial<CeoJob> = {}): CeoJob => ({ kind, floorId: 'acme/app', chatId: null, discussionId: null, text: '', at: 0, ...over });
+  const thread = (over: Partial<JobThread> = {}): JobThread => ({ title: 'A recipe app', context: '', resumed: false, messages: [{ from: 'manager', text: 'Recipes for kids?' }], ...over });
 
   it('keeps the CEO to the office tools, whole features, and work the manager asked for', () => {
     expect(system).toContain('You cannot edit files or run commands');
@@ -129,16 +161,45 @@ describe('the prompts', () => {
     expect(system).toContain('Never decide on new work yourself');
     expect(system).toContain('A floor holds at most 8.');
     expect(system).toContain('File at most 12 issues per job.');
-    expect(askedFor(job('plan')) && askedFor(job('chat')) && !askedFor(job('onboard'))).toBe(true);
+    expect(system).toContain('start_discussion');
+    expect(system).toContain('propose_project');
+    expect(askedFor(job('plan')) && askedFor(job('chat')) && askedFor(job('discussion')) && !askedFor(job('onboard'))).toBe(true);
   });
 
-  it('onboards with a profile and a team size and files nothing; plans from the brief; passes chat through', () => {
+  it('onboards with a profile and a team size and files nothing; plans from the brief', () => {
     const onboard = ceoJobPrompt(job('onboard'), { ...floor, mission: '', backlog: 3 });
     expect(onboard).toContain('set_floor_profile');
     expect(onboard).toContain('scale_team');
     expect(onboard).toContain('File no issues: leave its 3 open issues as they are.');
     expect(ceoJobPrompt(job('plan'), floor)).toContain('"""Add voice messages"""');
-    expect(ceoJobPrompt(job('chat'), null)).toBe('Message from the manager:\nShrink floor 2');
+  });
+
+  it("onboards a project from an approved card keeping the agreed team, and plans nothing", () => {
+    const onboard = ceoJobPrompt(job('onboard', { project: { teamSize: 3 } }), floor);
+    expect(onboard).toContain('the manager approved it from your plan in a chat');
+    expect(onboard).toContain("Keep the team at 3: the manager agreed that size on the card, so don't call scale_team.");
+    expect(onboard).toContain('File no issues: the starting tasks are filed from the plan.');
+  });
+
+  it("opens a chat's first job with how chats work and the thread so far; later ones carry only what's new", () => {
+    const first = ceoJobPrompt(job('chat', { chatId: 1 }), null, thread());
+    expect(first).toContain("You're in a chat with the manager about an idea");
+    expect(first).toContain('call propose_project');
+    expect(first.endsWith('The chat so far:\nManager: Recipes for kids?')).toBe(true);
+    const later = ceoJobPrompt(job('chat', { chatId: 1 }), null, thread({ resumed: true, messages: [{ from: 'manager', text: 'Go ahead' }, { from: 'office', text: '🚀 Started floor 2' }] }));
+    expect(later).toBe('New in the chat:\nManager: Go ahead\nOffice: 🚀 Started floor 2');
+  });
+
+  it("opens a discussion's first job with where it was opened and the thread, and asks to settle it", () => {
+    const messages: JobThread['messages'] = [
+      { from: 'ceo', text: 'A slice or the whole thing?' },
+      { from: 'manager', text: 'A slice' },
+    ];
+    const first = ceoJobPrompt(job('discussion', { discussionId: 4 }), null, thread({ title: 'Scope', context: 'while planning floor 2 (acme/app)', messages }));
+    expect(first).toContain('You opened the discussion "Scope" while planning floor 2 (acme/app), to settle something');
+    expect(first).toContain('You: A slice or the whole thing?\nManager: A slice');
+    expect(first).toContain('call resolve_discussion with the outcome, then carry on with the work it was holding up');
+    expect(ceoJobPrompt(job('discussion', { discussionId: 4 }), null, thread({ resumed: true, messages: [{ from: 'manager', text: 'Actually, all of it' }] }))).toBe('New in the discussion:\nManager: Actually, all of it');
   });
 });
 

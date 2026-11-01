@@ -1,4 +1,4 @@
-// The message box the phone and the worker panel share: Enter sends, Shift+Enter adds a line. It starts one line tall,
+// The message box the desktop and the worker panel share: Enter sends, Shift+Enter adds a line. It starts one line tall,
 // grows to about six, then scrolls. Put it in a <form> next to its Send button: Enter submits the form, so a disabled
 // Send button still blocks it. Adapted from cubefarm client/src/ui/MessageBox.tsx (MIT).
 import { useLayoutEffect, useRef, type TextareaHTMLAttributes } from 'react';

@@ -32,7 +32,8 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [x] **One floor per repository** · S
 - [x] **Connect an existing GitHub repo** · S
 - [ ] **Connect a local project folder** · S → `server/workspace.ts`
-- [ ] **Create a new repo / publish a local folder** to GitHub · S
+- [x] **Create a new repo** on GitHub, from a project the CEO proposes and you approve: private or public, under your account or one of your organisations, with a first commit so workers can start at once · S
+- [ ] **Publish a local folder** to GitHub · S
 - [x] **Issue ordering**: `Depends on #N` waits; the longest blocking chain goes first, then the oldest · S → `shared/issues.ts`
 - [x] **Skip labels**: `skip`, `wontfix`, `question` · S
 - [x] **Questions to you**: a worker or the CEO that finds an issue unclear (or a backlog with nothing ready) asks on GitHub, as a 🤖 comment on the issue with the `mm:needs-answer` label. The issue is skipped until you reply there; the next sync takes the label off and the issue goes back to the queue with your answer in its prompt. Open questions also show in the office · M (new: not in cubefarm)
@@ -197,10 +198,12 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [x] **Manager console**: floors, team, issues, settings · L → `client/src/ui/ManagerConsole.tsx`
 - [x] **Worker panel**: live terminal, message box, setup · M → `client/src/ui/TerminalView.tsx`
 - [x] **2D Kanban view** · M → `client/src/ui/KanbanView.tsx`
-- [x] **Phone overlay** (on the desktop): CEO chat, office messages · M → `client/src/ui/Phone.tsx`
+- [x] **The desktop** (P): a computer screen in place of the phone, with a dock of apps and their badges: Chat, Discussions and Notices · M → `client/src/ui/desktop/` (new)
+- [x] **Chats with the CEO**: a separate conversation per idea, each with its own context, to shape an idea into a plan; when it's ready the CEO proposes the project as a card (the repository, the brief, the team size, the starting tasks), and approving it starts the repo, the floor, the team and the tasks · L (new)
+- [x] **Discussions**: the CEO opens a thread whenever something needs settling before it plans or acts, and you go back and forth until it's resolved; workers' questions on issues are threads too · M (new)
 - [x] **Toasts** · S
 - [x] **Help screen** with the controls · S
-- [ ] **Phone mini-games** (tetris, snake, pet) · M
+- [ ] **Desktop mini-games** (tetris, snake, pet) · M
 - [ ] **Tutorial** · M
 - [ ] **Mission control table**: throughput, lead time, cost · M → `server/metrics.ts`
 - [x] **Floor previews**: run each floor's app (its default branch, from a worktree of its own, on a port kept for the floor) and open it in the office: a big app monitor on every floor, and E on it for the app viewer with the live app · L → `server/previews.ts`, `client/src/ui/AppViewer.tsx`

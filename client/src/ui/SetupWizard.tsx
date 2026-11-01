@@ -111,8 +111,8 @@ export function SetupWizard() {
             <div className="wizard-icon">🧠</div>
             <h2>A CEO?</h2>
             <p className="wizard-tag">
-              A CEO studies each new floor (what the project is, how QA should test it, how big its team should be), turns the briefs you give it into GitHub issues, and answers your messages on the
-              phone. Each of those is a session{demo ? ' (pretend ones in the demo)' : ''}.
+              A CEO studies each new floor (what the project is, how QA should test it, how big its team should be), turns the briefs you give it into GitHub issues, talks your ideas through on the
+              desktop and proposes them as projects. Each of those is a session{demo ? ' (pretend ones in the demo)' : ''}.
             </p>
             {ceo ? (
               <p className="console-done">
@@ -155,7 +155,7 @@ export function SetupWizard() {
                 🗂 Press <kbd>O</kbd> for the manager's console: connect a repository on its Floors tab to open your first floor.
               </li>
               <li>
-                📱 <kbd>P</kbd> is your phone, for the CEO's chat and the workers' questions; <kbd>H</kbd> shows every control.
+                🖥 <kbd>P</kbd> is your desktop, for chats with the CEO, discussions and the workers' questions; <kbd>H</kbd> shows every control.
               </li>
             </ul>
             <div className="wizard-ends">

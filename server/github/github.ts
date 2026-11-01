@@ -24,6 +24,20 @@ export async function currentUser(): Promise<string> {
   return gh(['api', 'user', '--jq', '.login']);
 }
 
+/** The gh login, then its organisations (none when gh may not read them): where a new repository can go. */
+export async function owners(): Promise<string[]> {
+  const [login, orgs] = await Promise.all([currentUser(), gh(['api', 'user/orgs', '--paginate', '--jq', '.[].login']).catch(() => '')]);
+  return [login, ...orgs.split(/\r?\n/).map((o) => o.trim()).filter((o) => o && o !== login)];
+}
+
+/** Creates a repository on GitHub with a README (--add-readme), so origin has a first commit; returns its owner/name. */
+export async function createRepo(owner: string, name: string, o: { description: string; private: boolean }): Promise<string> {
+  const args = ['repo', 'create', `${owner}/${name}`, o.private ? '--private' : '--public', '--add-readme'];
+  if (o.description.trim()) args.push('--description', o.description.trim());
+  const out = await gh(args, { timeoutMs: 60_000 });
+  return out.match(/github\.com\/([\w.-]+\/[\w.-]+)/)?.[1] ?? `${owner}/${name}`;
+}
+
 export async function listMyRepos(owner?: string): Promise<GhRepoSummary[]> {
   const args = ['repo', 'list'];
   if (owner) args.push(owner);
@@ -40,7 +54,8 @@ export async function repoMeta(fullName: string): Promise<RepoMeta> {
     '--json',
     'nameWithOwner,description,url,defaultBranchRef',
   ]);
-  return { nameWithOwner: raw.nameWithOwner, description: raw.description ?? '', url: raw.url, defaultBranch: raw.defaultBranchRef?.name || 'main' };
+  // An empty repository has no default branch yet: 'main' is what its first push will likely make.
+  return { nameWithOwner: raw.nameWithOwner, description: raw.description ?? '', url: raw.url, defaultBranch: raw.defaultBranchRef?.name || 'main', empty: !raw.defaultBranchRef };
 }
 
 export async function listIssues(fullName: string): Promise<IssueInfo[]> {
@@ -299,8 +314,10 @@ export async function uploadEvidence(fullName: string, filePath: string, data: B
 /** GitHub as the office uses it, through gh. */
 export const realGithub: GitHubApi = {
   user: currentUser,
+  owners,
   listMyRepos,
   repoMeta,
+  createRepo,
   listIssues,
   listPulls,
   createIssue,

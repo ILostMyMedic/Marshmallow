@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { EMPTY_CLOUD } from '../../shared/cloud';
 import { EMPTY_WORLD, type WorldView } from '../../shared/worldEvents';
-import { DEFAULT_SETTINGS, EMPTY_RECORDS, isMoment, type CloudView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type PreviewView, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
+import { DEFAULT_SETTINGS, EMPTY_DESK, EMPTY_RECORDS, isMoment, type CloudView, type DeskView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type PreviewView, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
 const LOG_KEEP = 200;
@@ -30,6 +30,7 @@ export interface Office {
   floorPlans: Record<string, FloorItem[]>;
   previews: Record<string, PreviewView>; // by floor id (server/previews.ts)
   world: WorldView; // the world events on now
+  desk: DeskView; // the desktop's chats with the CEO, its project proposals and discussions
 }
 
 export const EMPTY_OFFICE: Office = {
@@ -51,6 +52,7 @@ export const EMPTY_OFFICE: Office = {
   floorPlans: {},
   previews: {},
   world: EMPTY_WORLD,
+  desk: EMPTY_DESK,
 };
 
 /** Office messages a tab keeps. */
@@ -85,6 +87,7 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         floorPlans: d.floorPlans ?? {},
         previews: d.previews ?? {},
         world: d.world ?? EMPTY_WORLD,
+        desk: d.desk ?? EMPTY_DESK,
       };
     }
     case 'settings':
@@ -130,6 +133,8 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
       return { ...o, previews: { ...o.previews, [ev.preview.floorId]: ev.preview } };
     case 'world':
       return { ...o, world: ev.world };
+    case 'desk':
+      return { ...o, desk: ev.desk };
   }
 }
 

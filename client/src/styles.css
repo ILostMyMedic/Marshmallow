@@ -1142,7 +1142,7 @@ button.link {
   }
 }
 
-/* ---------- the worker panel and the phone (ui/WorkerPanel.tsx, ui/Phone.tsx, ui/MessageBox.tsx) ---------- */
+/* ---------- the worker panel (ui/WorkerPanel.tsx, ui/MessageBox.tsx; the desktop's own are in ui/desktop/desktop.css) ---------- */
 
 textarea.msg-box {
   flex: 1;
@@ -1164,8 +1164,7 @@ textarea.msg-box:disabled {
   color: #5c6078;
 }
 
-.wp-btn,
-.phone-send {
+.wp-btn {
   flex: none;
   padding: 5px 12px;
   border: 2px solid #1f1d2b;
@@ -1177,14 +1176,12 @@ textarea.msg-box:disabled {
   cursor: pointer;
 }
 
-.wp-btn:disabled,
-.phone-send:disabled {
+.wp-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.wp-btn-go,
-.phone-send {
+.wp-btn-go {
   background: #ffd166;
 }
 
@@ -1196,13 +1193,11 @@ textarea.msg-box:disabled {
   box-shadow: none;
 }
 
-.wp-muted,
-.phone-muted {
+.wp-muted {
   color: #5c6078;
 }
 
-.wp-error,
-.phone-error {
+.wp-error {
   margin: 6px 0 0;
   color: #c0392b;
   font-size: 0.85rem;
@@ -1366,398 +1361,6 @@ textarea.msg-box:disabled {
   flex: 1;
   min-height: 0;
   height: auto;
-}
-
-/* the phone: bottom right of the view, a bezel round a paper screen, tabs under it */
-.phone-backdrop {
-  place-items: end end;
-  padding: 16px 24px;
-  background: rgba(31, 29, 43, 0.22);
-}
-
-.phone {
-  width: min(390px, calc(100vw - 32px));
-  height: min(740px, calc(100vh - 32px));
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  padding: 10px 10px 8px;
-  border: 4px solid #1f1d2b;
-  border-radius: 38px;
-  background: #23263a;
-  box-shadow:
-    0 8px 0 #1f1d2b,
-    inset 0 0 0 3px #3b3f5c;
-  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
-  animation: phone-up 0.22s ease-out;
-}
-
-@keyframes phone-up {
-  from {
-    transform: translateY(40px);
-    opacity: 0;
-  }
-}
-
-.phone-status {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2px 16px 8px;
-  color: #e9e9f5;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.phone-notch {
-  width: 90px;
-  height: 18px;
-  border-radius: 999px;
-  background: #15151f;
-}
-
-.phone-screen {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: 26px 26px 12px 12px;
-  background: #fffdf5;
-  color: #1f1d2b;
-}
-
-.phone-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 4px 2px;
-}
-
-.phone-tab {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 4px;
-  border: none;
-  border-radius: 14px;
-  background: transparent;
-  color: #b8bbd6;
-  font: 600 0.78rem Fredoka, "Segoe UI", system-ui, sans-serif;
-  cursor: pointer;
-}
-
-.phone-tab > span:last-child {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.phone-tab-on {
-  background: #3b3f5c;
-  color: #ffffff;
-}
-
-.phone-tab-icon {
-  position: relative;
-  font-size: 1.3rem;
-}
-
-.phone-badge {
-  position: absolute;
-  top: -6px;
-  right: -14px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  box-sizing: border-box;
-  border-radius: 9px;
-  border: 2px solid #1f1d2b;
-  background: #ef476f;
-  color: #ffffff;
-  font: 700 0.65rem/14px Fredoka, "Segoe UI", system-ui, sans-serif;
-  text-align: center;
-}
-
-.phone-hint {
-  padding-top: 4px;
-  color: #8e92b3;
-  font-size: 0.72rem;
-  text-align: center;
-}
-
-.phone-hint kbd {
-  padding: 0 4px;
-  border-radius: 4px;
-  background: #fffdf5;
-  color: #1f1d2b;
-  font: 600 0.7rem Fredoka, "Segoe UI", system-ui, sans-serif;
-}
-
-.phone-scroll {
-  flex: 1;
-  overflow: auto;
-  padding: 12px;
-}
-
-.phone-h {
-  margin: 12px 2px 8px;
-  font-size: 1rem;
-}
-
-.phone-h:first-child {
-  margin-top: 0;
-}
-
-.phone-empty {
-  padding: 8px 6px;
-  color: #5c6078;
-  font-size: 0.88rem;
-  line-height: 1.5;
-}
-
-.phone-grow {
-  flex: 1;
-  min-width: 0;
-}
-
-.phone-link {
-  border: none;
-  background: none;
-  padding: 2px 4px;
-  color: #3a56d4;
-  font: 600 0.82rem Fredoka, "Segoe UI", system-ui, sans-serif;
-  cursor: pointer;
-}
-
-.phone-chat {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.phone-chat-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 2px solid #ece4d4;
-  background: #ffffff;
-  font-size: 0.9rem;
-}
-
-.phone-avatar {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid #1f1d2b;
-  background: #9b5de5;
-  color: #ffffff;
-  font-weight: 700;
-}
-
-.phone-busy {
-  color: #d9480f;
-  font-weight: 600;
-}
-
-.phone-log {
-  flex: 1;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  background: #f4f1ea;
-}
-
-.phone-row {
-  display: flex;
-}
-
-.phone-row-me {
-  justify-content: flex-end;
-}
-
-.phone-bubble {
-  max-width: 86%;
-  padding: 7px 11px 5px;
-  border: 2px solid #1f1d2b;
-  border-radius: 16px;
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
-
-.phone-bubble-them {
-  background: #ffffff;
-  border-bottom-left-radius: 4px;
-}
-
-.phone-bubble-me {
-  background: #ffd6a5;
-  border-bottom-right-radius: 4px;
-}
-
-.phone-bubble-from {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #5c6078;
-}
-
-.phone-bubble-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: system-ui, sans-serif;
-}
-
-.phone-bubble-time {
-  margin-top: 2px;
-  color: #5c6078;
-  font-size: 0.65rem;
-  text-align: right;
-}
-
-.phone-typing {
-  display: flex;
-  gap: 4px;
-  padding: 10px 12px;
-}
-
-.phone-typing span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #5c6078;
-  animation: phone-typing 1.2s infinite;
-}
-
-.phone-typing span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.phone-typing span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes phone-typing {
-  0%,
-  60%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.5;
-  }
-  30% {
-    transform: translateY(-4px);
-    opacity: 1;
-  }
-}
-
-.phone-quick {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 6px 10px 0;
-  background: #ffffff;
-}
-
-.phone-chip {
-  flex: none;
-  padding: 4px 10px;
-  border: 1.5px solid rgba(31, 29, 43, 0.3);
-  border-radius: 999px;
-  background: #ffffff;
-  color: #1f1d2b;
-  font: 600 0.75rem Fredoka, "Segoe UI", system-ui, sans-serif;
-  cursor: pointer;
-}
-
-.phone-chip:hover {
-  border-color: #1f1d2b;
-}
-
-.phone-input {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 8px 10px 10px;
-  background: #ffffff;
-}
-
-.phone-chat .phone-error {
-  margin: 0;
-  padding: 0 12px 8px;
-  background: #ffffff;
-}
-
-.phone-hire {
-  padding: 12px;
-  background: #ffffff;
-  border-top: 2px solid #ece4d4;
-  font-size: 0.88rem;
-}
-
-.phone-hire p {
-  margin: 0 0 10px;
-  line-height: 1.45;
-}
-
-.phone-card {
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  border: 2px solid #1f1d2b;
-  border-radius: 14px;
-  background: #ffffff;
-  font-size: 0.85rem;
-}
-
-.phone-card-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  align-items: baseline;
-}
-
-.phone-quote {
-  margin: 6px 0 8px;
-  padding: 6px 10px;
-  border-left: 4px solid #ffd166;
-  background: #fffaf0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: system-ui, sans-serif;
-}
-
-.phone-input-card {
-  padding: 0 0 6px;
-}
-
-.phone-answer {
-  margin: 0 0 6px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.phone-notices {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.phone-notices li {
-  padding: 7px 10px;
-  border-radius: 12px;
-  background: #f4f1ea;
-  font-size: 0.85rem;
 }
 
 /* ---------- the manager's console and the first-run setup (ui/ManagerConsole.tsx, ui/console/, ui/SetupWizard.tsx) ---------- */
@@ -2541,7 +2144,7 @@ textarea.msg-box:disabled {
   font-size: 0.8rem;
 }
 
-/* the phone's button with something new on it: a ring round it, and the badge pops in (it remounts on each new count) */
+/* the desktop's button with something new on it: a ring round it, and the badge pops in (it remounts on each new count) */
 .office-bar button.office-news {
   border-color: #ef476f;
   box-shadow: 0 2px 0 #1f1d2b, 0 0 0 3px rgba(239, 71, 111, 0.28);

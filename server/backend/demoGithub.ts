@@ -12,6 +12,7 @@ import type { GitHubApi, IssueComment, PrDetails, RepoMeta } from './backend.ts'
 interface FakeRepo {
   fullName: string;
   description: string;
+  private?: boolean; // made by createRepo (the seeded ones are public)
   issues: IssueInfo[]; // the open ones
   pulls: PullInfo[]; // newest first
   nextNumber: number; // issues and PRs share one sequence, as on GitHub
@@ -65,6 +66,9 @@ const SEED: { fullName: string; description: string; issues: [string, string][] 
 ];
 
 const CHECKS = ['CI / build', 'Vercel'];
+/** Who the demo acts as, and the organisation it belongs to (the seeded repositories' owner). */
+export const DEMO_LOGIN = 'demo-manager';
+const DEMO_ORGS = ['demo-co'];
 const fakeSha = () => crypto.randomBytes(20).toString('hex');
 const iso = () => new Date().toISOString();
 // What GitHub hands out is the caller's to keep: copies, so nothing changes under the office's feet.
@@ -102,16 +106,35 @@ export class FakeGitHub implements GitHubApi {
   // ---------- GitHubApi ----------
 
   async user() {
-    return 'demo-manager';
+    return DEMO_LOGIN;
+  }
+
+  async owners() {
+    return [DEMO_LOGIN, ...DEMO_ORGS];
   }
 
   async listMyRepos(): Promise<GhRepoSummary[]> {
-    return [...this.repos.values()].map((r) => ({ nameWithOwner: r.fullName, description: r.description, visibility: 'PUBLIC', updatedAt: iso() }));
+    return [...this.repos.values()].map((r) => ({ nameWithOwner: r.fullName, description: r.description, visibility: r.private ? 'PRIVATE' : 'PUBLIC', updatedAt: iso() }));
   }
 
   async repoMeta(fullName: string): Promise<RepoMeta> {
     const r = this.repo(fullName);
-    return { nameWithOwner: r.fullName, description: r.description, url: `https://github.com/${r.fullName}`, defaultBranch: 'main' };
+    return { nameWithOwner: r.fullName, description: r.description, url: `https://github.com/${r.fullName}`, defaultBranch: 'main', empty: false };
+  }
+
+  // Like gh repo create --add-readme: a README's commit on main, and no issues yet.
+  async createRepo(owner: string, name: string, o: { description: string; private: boolean }) {
+    if (![DEMO_LOGIN, ...DEMO_ORGS].includes(owner)) throw new Error(`GraphQL: ${DEMO_LOGIN} cannot create a repository for ${owner}. (createRepository)`);
+    const fullName = `${owner}/${name}`;
+    if (this.has(fullName)) throw new Error('GraphQL: Name already exists on this account (createRepository)');
+    this.repos.set(fullName, { fullName, description: o.description, private: o.private, issues: [], pulls: [], nextNumber: 1, closed: [] });
+    this.save();
+    return fullName;
+  }
+
+  /** Whether a repository by this name exists (names are case-insensitive, as on GitHub). */
+  has(fullName: string): boolean {
+    return [...this.repos.keys()].some((k) => k.toLowerCase() === fullName.toLowerCase());
   }
 
   async listIssues(fullName: string) {

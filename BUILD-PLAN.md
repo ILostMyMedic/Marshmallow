@@ -271,7 +271,19 @@ Each floor's app, running, to verify what the team shipped. Adapted from cubefar
 
 Also done alongside it: street events (a rock band's tour bus, an ice cream truck, a fire engine, a food truck and a parade, one at a time, with the city's cars giving way) and the world events on the debug page (start any of them, see what's on and end it, bring the next pick forward, the log). See FEATURES.md and docs/porting-map.md.
 
-## Phase 18: coins and the shop
+## Phase 18: the desktop, chats and discussions
+
+The phone becomes a desktop: a bigger surface for planning with the CEO and settling things with them, not just a chat. New: cubefarm has no desktop, discussions or CEO repo tool; its repo creation (`server/workspace.ts` `publishFolder`, `server/swarm.ts` `createRepo`) is the reference for starting a repo.
+
+1. The desktop (`client/src/ui/desktop/`): P opens a computer screen with a dock of apps (Chat, Discussions, Notices), their badges and a clock, in place of the phone.
+2. Chats (`server/db/desk.ts`, kept in the office database): a separate conversation with the CEO per idea, each resuming its own CEO session, so ideas don't mix and a floor's onboarding never takes over a chat. The CEO helps shape the idea, and when the plan is ready it proposes the project as a card in the chat: a new repository (owner, name, private or public) or an existing one, the brief, the team size and the starting tasks.
+3. Starting a project (`server/desk/projects.ts`): nothing touches GitHub until the manager approves the card, which they may edit first. Then the office creates the repository with a first commit (`gh repo create --add-readme`) or checks the existing one isn't empty, connects it as a floor with the brief and the agreed team size, files the tasks in order with their dependencies, and says so in the chat; the CEO onboards the floor as usual. A step that fails says what was already done.
+4. Discussions: the CEO opens a thread (`start_discussion`) whenever something needs settling before it plans or acts, goes back and forth with the manager, and resolves it with the outcome before carrying on. The workers' questions on issues show as threads too, answered on GitHub as before.
+5. Notices: the office's notices and the CEO's job reports, in one feed.
+
+**Done when:** in the demo, a new chat with the CEO turns an idea into a project card; approving it creates the repository in the fake GitHub, a new floor appears with its team and the planned issues, and the work starts; a discussion the CEO opens is answered and resolved from the desktop; a worker's question is answered from Discussions; and two chats keep their own context. (Done: seen in a browser on the demo: an idea in a new chat got a reply, "go ahead" brought a card for a new private repo with a team of 2 and three tasks, and approving it created the repository in the fake GitHub, connected it as floor 3 with its brief, filed #1–#3 with their dependencies, and its two workers started on them; a second chat kept its own thread; planning floor 1's brief opened a discussion, and the reply settled it and filed the plan; a worker's question on an issue was answered from Discussions. Tested in `server/db/desk.test.ts`, `server/desk/proposals.test.ts`, `server/desk/projects.test.ts`, `server/team/ceo/jobs.test.ts` and `client/src/ui/desktop/desk.test.ts`. `gh repo create --add-readme` and the organisations list have not yet been run against the real GitHub.)
+
+## Phase 19: coins and the shop
 
 1. Coins per floor (`server/ledger.ts`, after cubefarm's): earned from merges, first-time QA passes and fixes, idempotent from what the office already sees, kept in the database; shown on each floor and in the console.
 2. The shop: a kiosk in the lobby and a console tab, buying per floor. Floors keep what they have; the shop sells extras (a vending machine, a beer fridge, plants, rugs, a couch, posters) and upgrades (a better coffee machine, a nicer ping-pong table).

@@ -10,7 +10,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ['Tab', 'Walk the floor, or look down on it'],
       ['O', "The manager's console: floors, team, issues, settings"],
-      ['P', 'Your phone: the CEO and the office’s messages'],
+      ['P', 'Your desktop: chats with the CEO, discussions to settle, the office’s notices'],
       ['H', 'This help'],
       ['M', 'Mute or unmute the sounds'],
       ['Esc', 'Close a panel'],

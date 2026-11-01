@@ -1,7 +1,7 @@
 // The manager's console: the floors, the team, the issues and the office's settings, everything the debug page does,
 // over the game. O, the HUD's Office button or the front desk opens it; the tab and floor live in its overlay
 // (console/nav.ts), and a refused command shows at the top. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (MIT).
-// Cut: mission control, the CEO's own tab (the CEO is on Team, their chat on the phone), the time-lapse and the
+// Cut: mission control, the CEO's own tab (the CEO is on Team, their chats on the desktop), the time-lapse and the
 // accessibility tab.
 import { useEffect } from 'react';
 import { useStore } from '../store';

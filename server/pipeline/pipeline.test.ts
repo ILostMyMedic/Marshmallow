@@ -8,6 +8,8 @@ import type { WebSocket } from 'ws';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ServerEvent, Worker } from '../../shared/types.ts';
 import { createDemoBackend, type DemoBackend } from '../backend/demo.ts';
+import { openDb, type Db } from '../db/db.ts';
+import { Desk } from '../db/desk.ts';
 import { Floors } from '../floors.ts';
 import { Store } from '../store.ts';
 import { IssueCap } from '../team/ceo/issueRules.ts';
@@ -27,10 +29,10 @@ let events: ServerEvent[];
 let syncing: NodeJS.Timeout;
 
 /** The office with the demo backend; `rand` settles every coin toss in the fake GitHub and sessions. */
-function office(rand: number, teamTiming?: TeamTiming) {
+function office(rand: number, teamTiming?: TeamTiming, desk?: Desk) {
   backend = createDemoBackend({ home: null, timing: INSTANT, rand: () => rand });
   floors = new Floors(store, backend);
-  pipeline = createPipeline(store, backend, floors, null, { teamTiming });
+  pipeline = createPipeline(store, backend, floors, null, { teamTiming, desk });
   // The server syncs every 45 s; here often, so merges waiting on checks see them finish.
   syncing = setInterval(() => void floors.syncAll(), 25);
 }
@@ -218,38 +220,61 @@ describe('autoscaling by the rules', () => {
 });
 
 describe('the CEO on the demo', () => {
-  it('onboards a floor, plans a brief into issues, and acts on a message', async () => {
-    office(0.9);
+  let db: Db | null = null;
+  afterEach(async () => {
+    // Before the outer afterEach: the office stops before its database closes.
+    pipeline.scheduler.stop();
+    pipeline.stopAll();
+    await new Promise((r) => setTimeout(r, 50));
+    await db?.close();
+    db = null;
+  });
+
+  it('onboards a floor, settles its brief in a discussion before planning it, and acts on a message in a chat', async () => {
+    db = await openDb(null);
+    const desk = new Desk(db, store);
+    await desk.load();
+    office(0.9, undefined, desk);
     const ceo = pipeline.ctx.ceo.hire('ollama/gpt-oss:20b');
     expect(store.worker(ceo.id).model).toBe('ollama/gpt-oss:20b');
     await floors.connect(REPO, { autoAssign: false });
     pipeline.ctx.ceo.joined(REPO);
     pipeline.scheduler.start(20);
 
-    // Onboarding: a profile, and a team size the floor then holds.
+    // Onboarding: a profile, and a team size the floor then holds; its report goes to the notices.
     await until(() => store.floor(REPO).teamSize !== null && store.snapshot().messages.some((m) => m.from === 'ceo'));
     expect(store.floor(REPO)).toMatchObject({ summary: 'pixel-todo · demo project', teamSize: 3 });
     expect(store.workerList().filter((w) => w.floorId === REPO)).toHaveLength(3);
     expect(store.worker(ceo.id).status).toBe('idle');
 
-    // A plan files three issues, two waiting on the first.
+    // A floor's first plan opens a discussion about its scope instead of filing anything.
     pipeline.ctx.ceo.plan(REPO, 'Share a list');
+    await until(() => desk.get().discussions.length === 1);
+    const [d] = desk.get().discussions;
+    expect(d).toMatchObject({ title: 'Scope of "Share a list"', floorId: REPO, status: 'open', messages: [{ from: 'ceo' }] });
+    await until(() => store.snapshot().messages.at(-1)?.text.includes('I opened a discussion about its scope') === true);
+    expect(await backend.github.listIssues(REPO)).toHaveLength(7);
+
+    // The manager answers there: the CEO settles it and files three issues, two waiting on the first.
+    await pipeline.ctx.ceo.postToDiscussion(d.id, 'A slice, please');
     await until(async () => (await backend.github.listIssues(REPO)).length === 10);
     const filed = (await backend.github.listIssues(REPO)).filter((i) => i.title.includes('Share a list'));
     expect(filed.map((i) => i.body.startsWith(`Depends on #${filed[0].number}`))).toEqual([false, true, true]);
     expect(filed[0].body).toContain("_Filed by Marshmallow's CEO._");
+    await until(() => desk.get().discussions[0].messages.at(-1)?.from === 'ceo');
+    expect(desk.get().discussions[0]).toMatchObject({ status: 'resolved', outcome: 'Going with the manager\'s answer: "A slice, please"' });
 
-    // The manager's message: close an issue.
-    pipeline.ctx.ceo.message('Please close #6 on floor 1');
+    // The manager's message without a chat: a new chat, where the CEO closes an issue and says so.
+    await pipeline.ctx.ceo.message('Please close #6 on floor 1');
     await until(async () => (await backend.github.issueState(REPO, 6)) === 'CLOSED');
-    await until(() => store.snapshot().messages.at(-1)?.text === 'Done: #6 on floor 1 is closed.');
-    expect(store.snapshot().messages.some((m) => m.from === 'manager' && m.text === 'Please close #6 on floor 1')).toBe(true);
+    await until(() => desk.get().chats[0]?.messages.at(-1)?.text === 'Done: #6 on floor 1 is closed.');
+    expect(desk.get().chats[0]).toMatchObject({ title: 'Please close #6 on floor 1', messages: [{ from: 'manager', text: 'Please close #6 on floor 1' }, { from: 'ceo' }] });
   });
 
   it('refuses to file issues nobody asked for', async () => {
     office(0.9);
     await floors.connect(REPO, { autoAssign: false });
-    const job = { kind: 'onboard' as const, floorId: REPO, text: '', at: 0 };
+    const job = { kind: 'onboard' as const, floorId: REPO, chatId: null, discussionId: null, text: '', at: 0 };
     const h = officeHandlers(pipeline.ctx, job, new IssueCap(12), 'Mallow');
     await expect(h.fileIssue({ floor: 1, title: 'Unasked', body: 'x' })).rejects.toThrow(/Only the manager decides on new work/);
   });

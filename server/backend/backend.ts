@@ -15,6 +15,8 @@ export interface RepoMeta {
   description: string;
   url: string;
   defaultBranch: string;
+  /** No commits yet, so no default branch: workers' desks, which start from origin/<default branch>, can't be set up. */
+  empty: boolean;
 }
 
 export interface PrDetails {
@@ -46,8 +48,12 @@ export interface IssueComment {
 export interface GitHubApi {
   /** Who the office acts as (the gh login). */
   user(): Promise<string>;
+  /** Where a new repository can go: the gh login first, then the organisations it belongs to. */
+  owners(): Promise<string[]>;
   listMyRepos(owner?: string): Promise<GhRepoSummary[]>;
   repoMeta(fullName: string): Promise<RepoMeta>;
+  /** Creates `owner/name` with a README, so it has a first commit and a default branch; returns its owner/name. */
+  createRepo(owner: string, name: string, o: { description: string; private: boolean }): Promise<string>;
   /** Open issues. */
   listIssues(fullName: string): Promise<IssueInfo[]>;
   /** Open pull requests and the latest merged ones. */

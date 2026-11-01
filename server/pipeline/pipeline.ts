@@ -4,6 +4,7 @@
 // stuck work.
 // Adapted from cubefarm server/swarm.ts (MIT): reconcilePulls, stopAgent, resetAgent.
 import type { Backend } from '../backend/backend.ts';
+import type { Desk } from '../db/desk.ts';
 import type { Floors } from '../floors.ts';
 import { HttpError } from '../httpError.ts';
 import type { ReconnectedCli } from '../sessions/cliRunner.ts';
@@ -39,9 +40,9 @@ export interface Pipeline {
   resetWorker(workerId: string): void;
   /**
    * The manager's note to a worker, dropped into their running session (and shown in their terminal). Refused when
-   * they have none: a follow-up comes with their next task. The CEO's goes to the CEO as a message.
+   * they have none: a follow-up comes with their next task. The CEO's goes into the latest chat with the CEO.
    */
-  messageWorker(workerId: string, text: string): void;
+  messageWorker(workerId: string, text: string): void | Promise<unknown>;
   /** Stops every session (the demo's reset, shutdown). */
   stopAll(): void;
   /** Tidies workers' machines: finished branches, and the machines of workers who left. */
@@ -55,11 +56,14 @@ export interface Pipeline {
   close(): void;
 }
 
-/** `terminals`: each worker's terminal, which their sessions run in (null in tests that don't watch them). */
-export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null, o: { teamTiming?: TeamTiming; cloud?: ConstructorParameters<typeof CloudOffice>[1] } = {}): Pipeline {
+/**
+ * `terminals`: each worker's terminal, which their sessions run in (null in tests that don't watch them). `desk`: the
+ * office database's chats and discussions, which the CEO answers in (none in tests that don't need them).
+ */
+export function createPipeline(store: Store, backend: Backend, floors: Floors, terminals: Terminals | null = null, o: { teamTiming?: TeamTiming; cloud?: ConstructorParameters<typeof CloudOffice>[1]; desk?: Desk } = {}): Pipeline {
   const usage = new Usage(store);
   const sessions = new Sessions(store, backend, { limited: (at) => usage.limited(at), usageWarning: (info) => usage.warned(info) }, terminals);
-  const ctx = { store, backend, sessions, floors, usage, prepStrikes: new Map(), preparing: new Set(), dropping: new Map(), soon: (ms?: number) => scheduler.soon(ms) } as Ctx;
+  const ctx = { store, backend, sessions, floors, usage, desk: o.desk ?? null, prepStrikes: new Map(), preparing: new Set(), dropping: new Map(), soon: (ms?: number) => scheduler.soon(ms) } as Ctx;
   ctx.build = new Build(ctx);
   ctx.qa = new Qa(ctx);
   ctx.fix = new Fix(ctx);
@@ -71,7 +75,7 @@ export function createPipeline(store: Store, backend: Backend, floors: Floors, t
   ctx.closures = new Closures(ctx);
   sessions.onSignedOut = (id) => ctx.cloud.needSignIn(id);
   const scheduler = new Scheduler(ctx);
-  ctx.ceo.onboardUnknown();
+  ctx.ceo.afterRestart();
 
   floors.onSynced = (floorId) => {
     reconcile(ctx, floorId);

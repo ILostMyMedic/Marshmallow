@@ -108,7 +108,7 @@ function SignIn({ w }: { w: Worker }) {
   );
 }
 
-/** The message box: a note into their running session, or for the CEO a message (their reply comes on the phone). */
+/** The message box: a note into their running session, or for the CEO a message (it goes to your latest chat on the desktop, and so does their reply). */
 function Message({ w }: { w: Worker }) {
   const { busy, error, run } = useCommand();
   const [text, setText] = useState('');
@@ -136,7 +136,7 @@ function Message({ w }: { w: Worker }) {
         disabled={!can}
         placeholder={
           ceo
-            ? `Message ${w.name}… (their reply comes on your phone)`
+            ? `Message ${w.name}… (it goes to your latest chat on the desktop)`
             : w.status === 'working'
               ? `Tell ${w.name} something while they work…`
               : w.status === 'preparing'
@@ -230,7 +230,7 @@ export function WorkerSetup({ w, onGone }: { w: Worker; onGone?: () => void }) {
           <span>
             <b>Let {w.name} go?</b>{' '}
             {ceo
-              ? 'Their session stops, and the jobs waiting for them go with them. You can hire a CEO again from the phone.'
+              ? 'Their session stops, and the jobs waiting for them go with them. You can hire a CEO again from the desktop.'
               : 'A running session stops, and their desk is cleared (work on no branch is saved as a patch first). Branches they pushed stay on GitHub, and the floor keeps its new size.'}
           </span>
           <button className="wp-btn" disabled={busy} onClick={() => setConfirming(false)}>

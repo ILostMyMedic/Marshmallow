@@ -9,6 +9,7 @@ import type { BoxCliRecord } from './sessions/boxCli.ts';
 import {
   type CloudView,
   DEFAULT_SETTINGS,
+  EMPTY_DESK,
   EMPTY_RECORDS,
   isBusy,
   type Floor,
@@ -69,8 +70,8 @@ export interface SavedState {
 }
 
 /** What the office database adds to a tab's snapshot (server/db/office.ts keeps it in memory). */
-export type DbView = Pick<Snapshot, 'records' | 'look' | 'floorPlans' | 'world'>;
-const NO_DB: DbView = { records: EMPTY_RECORDS, look: null, floorPlans: {}, world: EMPTY_WORLD };
+export type DbView = Pick<Snapshot, 'records' | 'look' | 'floorPlans' | 'world' | 'desk'>;
+const NO_DB: DbView = { records: EMPTY_RECORDS, look: null, floorPlans: {}, world: EMPTY_WORLD, desk: EMPTY_DESK };
 
 /** Log lines per worker in state.json, and in a tab's snapshot (memory keeps LOG_BUFFER). */
 const LOG_SAVED = 200;

@@ -255,7 +255,7 @@ function Questions({ run }: { run: Run }) {
   );
 }
 
-/** The office's messages to the manager (the phone, later): PRs that need them, merges GitHub refused, pacing. */
+/** The office's messages to the manager (the desktop's Notices, in the game): PRs that need them, merges GitHub refused, pacing. */
 function Messages() {
   const messages = useStore((s) => s.messages);
   if (!messages.length) return null;
@@ -578,7 +578,7 @@ function ModelField({ value, placeholder, onCommit, label }: { value: string; pl
 
 const MODEL_SUGGESTIONS = [...CLAUDE_MODELS, 'ollama/gpt-oss:20b', 'ollama/qwen3:8b'];
 
-/** The CEO: hire one, then their status, model and terminal, and a box to write to them (the phone, later). */
+/** The CEO: hire one, then their status, model and terminal, and a box to write to them (the desktop has the chats, in the game). */
 function CeoSection({ run }: { run: Run }) {
   const ceo = useStore((s) => Object.values(s.workers).find((w) => w.role === 'ceo') ?? null);
   const lastLine = useStore((s) => (ceo ? s.logs[ceo.id]?.at(-1)?.text : undefined));

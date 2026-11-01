@@ -94,4 +94,71 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    id: 4,
+    name: 'the desktop: chats, proposals, discussions',
+    sql: `
+      -- the manager's chats with the CEO, one per idea; each resumes its own CEO session, so ideas don't mix
+      create table chats (
+        id serial primary key,
+        title text not null,
+        session_id text,
+        created_at timestamptz not null,
+        updated_at timestamptz not null
+      );
+      create index chats_by_update on chats (updated_at desc);
+
+      -- sender: manager, ceo or office (the office's own lines: a project started, a reply that failed)
+      create table chat_messages (
+        id serial primary key,
+        chat_id integer not null references chats (id) on delete cascade,
+        at timestamptz not null,
+        sender text not null,
+        text text not null,
+        proposal_id integer
+      );
+      create index chat_messages_by_chat on chat_messages (chat_id, id);
+
+      -- the projects the CEO proposes in a chat: repo and tasks as JSON, as shared/types.ts has them
+      create table proposals (
+        id serial primary key,
+        chat_id integer not null references chats (id) on delete cascade,
+        at timestamptz not null,
+        status text not null,
+        repo jsonb not null,
+        brief text not null,
+        team_size integer not null,
+        tasks jsonb not null,
+        step text,
+        floor_id text,
+        issue_numbers jsonb not null default '[]',
+        error text,
+        decided_at timestamptz
+      );
+      create index proposals_by_chat on proposals (chat_id);
+
+      -- threads the CEO opens to settle something with the manager; context: where it was opened, for its first job
+      create table discussions (
+        id serial primary key,
+        title text not null,
+        floor_id text,
+        status text not null,
+        outcome text,
+        context text not null default '',
+        session_id text,
+        opened_at timestamptz not null,
+        updated_at timestamptz not null
+      );
+      create index discussions_by_update on discussions (updated_at desc);
+
+      create table discussion_messages (
+        id serial primary key,
+        discussion_id integer not null references discussions (id) on delete cascade,
+        at timestamptz not null,
+        sender text not null,
+        text text not null
+      );
+      create index discussion_messages_by_discussion on discussion_messages (discussion_id, id);
+    `,
+  },
 ];

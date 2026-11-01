@@ -1,6 +1,7 @@
 // The contract between the server and the browser: a snapshot when a tab connects, then typed events folded into it.
 // The game reads the same stream later, so workers carry what it needs from day one: status, activity, idleSince, seed.
 // Adapted from cubefarm shared/types.ts (MIT).
+import type { AwardStats } from './awards.ts';
 import type { WorldView } from './worldEvents.ts';
 
 /** Where a worker stands, as far as the pipeline is concerned. */
@@ -177,6 +178,7 @@ export interface Floor {
   qaBrief: string; // how QA should test this kind of project (written by the CEO, editable)
   teamSize: number | null; // the size the CEO or the manager set, which the rules leave alone; null = the rules size it
   held: HeldIssue[]; // open issues whose PR was closed without merging: they wait for the manager instead of auto-assign
+  languages: RepoLanguage[]; // the repository's languages, biggest first (its posters are made from them); refreshed with its metadata
   // GitHub's side: refreshed by every sync, never saved
   cloneStatus: 'pending' | 'cloning' | 'ready' | 'error';
   cloneError: string | null;
@@ -184,6 +186,12 @@ export interface Floor {
   pulls: PullInfo[]; // open and recently merged PRs
   lastSync: number | null;
   syncError: string | null;
+}
+
+/** One of a repository's languages and its share of the code, from 0 to 1. */
+export interface RepoLanguage {
+  name: string;
+  share: number;
 }
 
 export type QaStatus =
@@ -303,7 +311,7 @@ export interface ShippedWork {
   mergedAt: number;
 }
 
-/** A milestone the office or a floor reached (server/db/trophies.ts has the list). */
+/** An award the office or a floor won (shared/awards.ts has the list): its trophy. */
 export interface Trophy {
   id: string;
   floorId: string | null; // null: the company's
@@ -311,6 +319,7 @@ export interface Trophy {
   title: string;
   detail: string;
   earnedAt: number;
+  reward: number; // coins it paid (the company's to every floor); 0 when it was found in a floor's old history
 }
 
 /** What the office has shipped and won: the latest merges, each floor's total and the company's, and every trophy. */
@@ -330,6 +339,34 @@ export interface FloorItem {
   tier: number; // 1, or higher for an upgrade
   since: number;
 }
+
+/** Why coins came or went: a merge, its clean first QA pass, a PR fixed after failing QA, an award, the shop, the demo's gift. */
+export type CoinReason = 'merge' | 'clean-qa' | 'fixed' | 'award' | 'purchase' | 'grant';
+
+/** A line in a floor's ledger (server/ledger.ts): coins earned (amount > 0) or spent. */
+export interface CoinEntry {
+  id: number;
+  floorId: string;
+  amount: number;
+  reason: CoinReason;
+  detail: string; // e.g. "PR #12 merged", "Espresso machine"
+  prNumber: number | null;
+  at: number;
+}
+
+/** A floor's purse: what it has to spend, and what it has earned in all. */
+export interface FloorCoins {
+  coins: number;
+  earned: number;
+}
+
+/** Every floor's purse (floors no longer connected keep theirs, for when they come back) and the latest lines. */
+export interface CoinsView {
+  floors: Record<string, FloorCoins>; // by floor id
+  recent: CoinEntry[]; // newest first
+}
+
+export const EMPTY_COINS: CoinsView = { floors: {}, recent: [] };
 
 /** The manager's look in the game, as the client keeps it (client/src/world/appearance.ts); stored as it comes. */
 export type PlayerLook = Record<string, unknown>;
@@ -453,6 +490,8 @@ export interface Snapshot {
   records: RecordsView;
   look: PlayerLook | null;
   floorPlans: Record<string, FloorItem[]>; // by floor id
+  coins: CoinsView;
+  awards: AwardStats; // the counts behind the awards, for how far along each one is
   world: WorldView; // the world events on now (shared/worldEvents.ts)
   previews: Record<string, PreviewView>; // by floor id
   desk: DeskView;
@@ -477,6 +516,8 @@ export type StateEvent =
   | { type: 'records'; records: RecordsView }
   | { type: 'look'; look: PlayerLook | null }
   | { type: 'floorPlan'; floorId: string; items: FloorItem[] }
+  | { type: 'coins'; coins: CoinsView }
+  | { type: 'awards'; awards: AwardStats }
   | { type: 'world'; world: WorldView } // a world event started or ended, or the next one moved
   | { type: 'preview'; preview: PreviewView }
   | { type: 'desk'; desk: DeskView }; // the whole desk, after any change to it
@@ -490,10 +531,12 @@ export type Moment =
   | { type: 'left'; at: number; worker: Worker }
   | { type: 'issuesFiled'; at: number; floorId: string; numbers: number[] }
   | { type: 'prOpened'; at: number; floorId: string; prNumber: number; workerId: string; issueNumber: number | null }
-  | { type: 'qaPassed'; at: number; floorId: string; prNumber: number; qaWorkerId: string | null }
-  | { type: 'qaFailed'; at: number; floorId: string; prNumber: number; qaWorkerId: string | null }
+  | { type: 'qaPassed'; at: number; floorId: string; prNumber: number; qaWorkerId: string | null; round: number }
+  | { type: 'qaFailed'; at: number; floorId: string; prNumber: number; qaWorkerId: string | null; round: number }
   | { type: 'merged'; at: number; floorId: string; prNumber: number; devWorkerId: string | null; qaWorkerId?: string | null } // the QA record is gone by then
-  | { type: 'trophy'; at: number; trophy: Trophy };
+  | { type: 'trophy'; at: number; trophy: Trophy }
+  // coins a floor just earned, all at once (a merge with its clean QA pass, say): the game bursts them over the builder's desk
+  | { type: 'earned'; at: number; floorId: string; amount: number; reasons: string[]; prNumber: number | null; workerId: string | null; award?: boolean }; // award: an award's coins (its trophy moment says so)
 
 /** Server to browser on /ws/term: a worker's terminal. */
 export type TermServerMessage =
@@ -508,5 +551,5 @@ export type TermClientMessage = { t: 'input'; data: string } | { t: 'resize'; co
 /** Everything the server sends over /ws. */
 export type ServerEvent = StateEvent | Moment;
 
-const MOMENT_TYPES = new Set<string>(['hired', 'left', 'issuesFiled', 'prOpened', 'qaPassed', 'qaFailed', 'merged', 'trophy'] satisfies Moment['type'][]);
+const MOMENT_TYPES = new Set<string>(['hired', 'left', 'issuesFiled', 'prOpened', 'qaPassed', 'qaFailed', 'merged', 'trophy', 'earned'] satisfies Moment['type'][]);
 export const isMoment = (ev: ServerEvent): ev is Moment => MOMENT_TYPES.has(ev.type);

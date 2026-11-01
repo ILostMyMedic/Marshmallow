@@ -118,14 +118,17 @@ function MugStack({ position }: { position: P }) {
   );
 }
 
-/** The kitchenette counter along the east wall, its front facing local -x: the coffee machine, mugs, fruit, a kettle and the fridge. */
-export function Kitchenette({ position, floor }: { position: P; floor: number }) {
+/**
+ * The kitchenette counter along the east wall, its front facing local -x: the coffee machine (an espresso machine at
+ * `coffeeTier` 2, the shop's upgrade), mugs, fruit, a kettle and the fridge.
+ */
+export function Kitchenette({ position, floor, coffeeTier = 1 }: { position: P; floor: number; coffeeTier?: number }) {
   return (
     <group position={position}>
       {/* counter runs along z */}
       <Box size={[0.8, 0.9, 4]} position={[0, 0.45, 0]} color="#8ecae6" outline />
       <Box size={[0.9, 0.06, 4.1]} position={[-0.02, 0.93, 0]} color="#f8f9fa" outline />
-      <CoffeeMachine position={[0, 0.96, -1.1]} />
+      <CoffeeMachine position={[0, 0.96, -1.1]} tier={coffeeTier} />
       <MugStack position={[0, 0.96, -0.45]} />
       {/* fruit bowl + kettle */}
       <Cyl r={0.2} rTop={0.24} h={0.1} position={[0, 1.01, 0.6]} color="#f4a261" outline />

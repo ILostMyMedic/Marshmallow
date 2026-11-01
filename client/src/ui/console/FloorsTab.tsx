@@ -1,6 +1,6 @@
-// The console's Floors tab: every floor with its settings, its app (the preview: start, stop, restart, its address, the
-// command and port to run it with), a sync, the CEO's planning of its brief and the issues held for you, and connecting
-// a repository as a new floor. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (FloorsTab, FloorRow, FloorBrief),
+// The console's Floors tab: every floor with its coins, its settings, its app (the preview: start, stop, restart, its
+// address, the command and port to run it with), a sync, the CEO's planning of its brief and the issues held for you,
+// and connecting a repository as a new floor. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (FloorsTab, FloorRow, FloorBrief),
 // AppViewer.tsx (PreviewSettings) and ProjectPicker.tsx's GitHub mode (MIT). Cut: folders on this computer and new
 // projects, disconnecting, floor colours, linked repos, auto-merge (always on here), the office's own update, and the
 // preview's environment.
@@ -170,6 +170,7 @@ function Preview({ floor }: { floor: Floor }) {
 function FloorCard({ floor, focused }: { floor: Floor; focused: boolean }) {
   const team = useStore((s) => Object.values(s.workers).filter((w) => w.floorId === floor.id && w.role !== 'ceo').length);
   const hasCeo = useStore((s) => Object.values(s.workers).some((w) => w.role === 'ceo'));
+  const purse = useStore((s) => s.coins.floors[floor.id]);
   const visit = useVisit();
   const [syncing, go] = useBusy();
   const ref = useRef<HTMLElement>(null);
@@ -189,6 +190,9 @@ function FloorCard({ floor, focused }: { floor: Floor; focused: boolean }) {
           </a>
           <div className="console-hint">{floor.summary ? `🧠 ${floor.summary}` : floor.description || (hasCeo ? 'The CEO studies it once it has synced.' : '')}</div>
         </div>
+        <button className="console-btn small console-coins" title={`${purse?.earned ?? 0} earned in all: spend them in the shop`} onClick={() => showTab('shop', floor.id)}>
+          🪙 {purse?.coins ?? 0}
+        </button>
         <button className="console-btn" onClick={() => visit(floor.floor)}>
           Visit
         </button>
@@ -197,7 +201,7 @@ function FloorCard({ floor, focused }: { floor: Floor; focused: boolean }) {
         <span className="console-grow">
           {plural(team, 'worker')} · {plural(floor.issues.length, 'open issue')} · {plural(openPrs, 'open PR')}
           {floor.cloneStatus !== 'ready' && ` · clone ${floor.cloneStatus}`} · {floor.lastSync ? `synced ${time(floor.lastSync)}` : 'not synced yet'}
-          {floor.teamSize !== null && ` · team held at ${floor.teamSize}`}
+          {floor.teamSize !== null && ` · team held at ${floor.teamSize}`} · 🪙 {purse?.earned ?? 0} earned in all
         </span>
         <button className="console-btn small" disabled={syncing} title="Fetch its issues and PRs from GitHub now" onClick={() => void go(run('POST', `/api/floors/${fp}/sync`))}>
           {syncing ? 'Syncing…' : '⟳ Sync'}

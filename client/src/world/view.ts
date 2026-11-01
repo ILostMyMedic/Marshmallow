@@ -7,14 +7,15 @@ import type { SnackId } from './fridge';
 import type { End } from './pongPhysics';
 
 /** The manager's console's tabs (ui/ManagerConsole.tsx). */
-export type ConsoleTab = 'floors' | 'team' | 'issues' | 'settings';
+export type ConsoleTab = 'floors' | 'team' | 'issues' | 'shop' | 'settings';
 
 /** The desktop's apps (ui/desktop/Desktop.tsx). */
 export type DesktopApp = 'chat' | 'discussions' | 'notices';
 
 /**
  * A panel over the view: a worker's panel (their terminal), a floor's board, the elevator's buttons, your look, the
- * front desk, the manager's console, the desktop, the help screen, the first-run setup, the trophies, or a floor's running app.
+ * front desk, the manager's console, the desktop, the help screen, the first-run setup, the trophies, a floor's running
+ * app, the shop (the lobby's kiosk: a floor's coins and what they buy), or the awards (the company's, or a floor's).
  */
 export type Overlay =
   | { kind: 'terminal'; workerId: string }
@@ -27,14 +28,16 @@ export type Overlay =
   | { kind: 'help' }
   | { kind: 'setup' }
   | { kind: 'trophies' }
-  | { kind: 'app'; floorId: string };
+  | { kind: 'app'; floorId: string }
+  | { kind: 'shop'; floorId?: string }
+  | { kind: 'awards'; floorId?: string };
 
-const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk', 'console', 'desktop', 'help', 'setup', 'trophies', 'app'] satisfies Overlay['kind'][];
+const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'frontdesk', 'console', 'desktop', 'help', 'setup', 'trophies', 'app', 'shop', 'awards'] satisfies Overlay['kind'][];
 
 /**
  * What E does with what's under the crosshair: open a panel, or do something in the room (actions.ts hands those to
- * whoever registered for them): say hi, take a mug, work the coffee machine or the fridge, pick up a paddle, look
- * through a lookout's binoculars.
+ * whoever registered for them): say hi, take a mug, work the coffee machine or the fridge, get something from a floor's
+ * vending machine or beer fridge (by its spot), pick up a paddle, look through a lookout's binoculars.
  */
 export type Action =
   | Overlay
@@ -42,6 +45,8 @@ export type Action =
   | { kind: 'mugs' }
   | { kind: 'coffee'; op: 'place' | 'brew' | 'take' }
   | { kind: 'fridge'; op: 'door' | 'take'; snack?: SnackId }
+  | { kind: 'vending'; spot: string }
+  | { kind: 'beer'; spot: string }
   | { kind: 'paddle'; end: End }
   | { kind: 'lookout'; id: string };
 
@@ -54,8 +59,11 @@ export interface Focus {
   action: Action;
 }
 
-/** What's in your hands: a mug (and the sips of coffee in it), a snack from the fridge, or a ping-pong paddle. */
-export type Held = { kind: 'mug'; id: string; sips: number } | { kind: 'snack'; id: string; snack: SnackId; left: number } | { kind: 'paddle'; end: End };
+/**
+ * What's in your hands: a mug (and the sips of coffee in it), a snack from the fridge or the vending machine, a beer
+ * from the beer fridge (drawn as the fridge's brown bottle), or a ping-pong paddle.
+ */
+export type Held = { kind: 'mug'; id: string; sips: number } | { kind: 'snack'; id: string; snack: SnackId; left: number; beer?: boolean } | { kind: 'paddle'; end: End };
 
 export type ViewMode = 'first' | 'overview';
 /** On foot (ViewMode 'first'), whether the camera looks out of your eyes (the default) or follows behind you. */

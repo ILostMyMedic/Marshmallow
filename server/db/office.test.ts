@@ -64,28 +64,36 @@ describe('the office database', () => {
     await db.close();
   });
 
-  it("records a floor's merged PRs from a sync quietly, with the trophies they reached, dated by the merges", async () => {
+  it("records a floor's merged PRs from a sync quietly, with the trophies they reached, dated by the merges and unpaid", async () => {
     store.putFloor(floor([pull(1), pull(2), pull(3, { state: 'OPEN', mergedAt: null })]));
     office = await openOffice(null, store);
     await office.records.synced(REPO);
+    await office.awards.poke();
     const view = office.records.get();
     expect(view).toMatchObject({ total: 2, totals: { [REPO]: 2 } });
     expect(view.recent.map((w) => w.prNumber)).toEqual([2, 1]);
     expect(view.recent[0]).toMatchObject({ title: 'Feature 2', builtBy: 'Ada', testedBy: null, mergedAt: Date.parse('2026-10-02T12:00:00Z') });
     expect(view.trophies.map((t) => t.id)).toEqual(['company:1', `floor:${REPO}:1`]);
     expect(view.trophies[0].earnedAt).toBe(Date.parse('2026-10-01T12:00:00Z'));
+    expect(view.trophies.map((t) => t.reward)).toEqual([0, 0]);
     expect(of('records').at(-1)?.records.total).toBe(2);
     expect(of('trophy')).toEqual([]);
+    expect(office.ledger.balance(REPO).coins).toBe(0);
     expect(store.snapshot().records.total).toBe(2);
   });
 
-  it('announces the trophies of a merge the office makes, and a later sync of it adds nothing', async () => {
+  it('announces and pays the trophies of a merge the office makes, and a later sync of it adds nothing', async () => {
     store.putFloor(floor([pull(1, { state: 'OPEN', mergedAt: null })]));
     office = await openOffice(null, store);
     store.putWorker({ id: 'q1', name: 'Grace' } as never);
     await office.records.merged(REPO, 1, null, 'q1');
+    await office.awards.poke();
     expect(office.records.get().recent[0]).toMatchObject({ prNumber: 1, builtBy: 'Ada', testedBy: 'Grace' });
-    expect(of('trophy').map((m) => m.trophy.id)).toEqual(['company:1', `floor:${REPO}:1`]);
+    expect(of('trophy').map((m) => [m.trophy.id, m.trophy.reward])).toEqual([
+      ['company:1', 25],
+      [`floor:${REPO}:1`, 15],
+    ]);
+    expect(office.ledger.balance(REPO).coins).toBe(40);
     const published = of('records').length;
     store.patchFloor(REPO, { pulls: [pull(1)] });
     await office.records.synced(REPO);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { EMPTY_AWARD_STATS } from '../../shared/awards';
 import { EMPTY_CLOUD } from '../../shared/cloud';
-import { DEFAULT_SETTINGS, EMPTY_DESK, EMPTY_RECORDS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
+import { DEFAULT_SETTINGS, EMPTY_COINS, EMPTY_DESK, EMPTY_RECORDS, type Floor, type ServerEvent, type Snapshot, type Worker } from '../../shared/types';
 import { EMPTY_WORLD } from '../../shared/worldEvents';
 import { EMPTY_OFFICE, qaKey, reduce, type Office } from './store';
 
@@ -43,6 +44,7 @@ const floor = (id: string, n: number): Floor => ({
   qaBrief: '',
   teamSize: null,
   held: [],
+  languages: [],
   cloneStatus: 'ready',
   cloneError: null,
   issues: [],
@@ -66,6 +68,8 @@ const snapshot: Snapshot = {
   records: EMPTY_RECORDS,
   look: null,
   floorPlans: {},
+  coins: EMPTY_COINS,
+  awards: EMPTY_AWARD_STATS,
   previews: {},
   world: EMPTY_WORLD,
   desk: EMPTY_DESK,
@@ -101,6 +105,15 @@ describe('reduce', () => {
     o = fold([{ type: 'qaRemoved', floorId: 'demo/a', prNumber: 4 }, { type: 'floorRemoved', floorId: 'demo/b' }, { type: 'floor', floor: floor('demo/c', 0) }], o);
     expect(o.qa).toEqual({});
     expect(o.floors.map((f) => f.id)).toEqual(['demo/c', 'demo/a']);
+  });
+
+  it("takes every floor's coins from the snapshot, then each change to them", () => {
+    let o = fold([{ type: 'snapshot', data: snapshot }]);
+    expect(o.coins).toEqual(EMPTY_COINS);
+    const coins = { floors: { 'demo/a': { coins: 15, earned: 15 } }, recent: [{ id: 1, floorId: 'demo/a', amount: 15, reason: 'merge' as const, detail: 'PR #4 merged', prNumber: 4, at: 1 }] };
+    o = reduce(o, { type: 'coins', coins });
+    expect(o.coins.floors['demo/a'].coins).toBe(15);
+    expect(fold([{ type: 'snapshot', data: { ...snapshot, coins } }]).coins).toEqual(coins);
   });
 
   it('keeps moments for the feed without changing the state, and keeps them through a new snapshot', () => {

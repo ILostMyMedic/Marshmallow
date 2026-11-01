@@ -31,6 +31,7 @@ const floor = (over: Partial<Floor> = {}): Floor => ({
   qaBrief: '',
   teamSize: null,
   held: [],
+  languages: [],
   cloneStatus: 'ready',
   cloneError: null,
   issues: [{ number: 1, title: 'An issue', body: '', url: '', labels: [], createdAt: '' }],
@@ -100,6 +101,14 @@ describe('Store', () => {
     // log ids carry on from the saved ones
     expect(again.appendLog('w1', [{ kind: 'text', text: 'next' }])[0].id).toBe(snap.logs.w1[0].id + 1);
     await again.flush(); // not a timer's write after the folder is gone
+  });
+
+  it('loads a floor saved before it had languages with none', async () => {
+    const { languages: _l, cloneStatus: _c, cloneError: _e, issues: _i, pulls: _p, lastSync: _s, syncError: _y, ...old } = floor();
+    fs.writeFileSync(file, JSON.stringify({ floors: [old] }));
+    const store = new Store(file, about);
+    await store.load();
+    expect(store.floor('demo/app').languages).toEqual([]);
   });
 
   it("keeps a state file that isn't JSON aside and starts afresh", async () => {

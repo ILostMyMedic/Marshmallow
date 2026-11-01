@@ -43,6 +43,7 @@ describe('what E does', () => {
     expect(sipLabel(mug(2))).toBe('Sip coffee');
     expect(sipLabel({ kind: 'snack', snack: 'coldbrew' })).toBe('Sip the cold brew');
     expect(sipLabel({ kind: 'snack', snack: 'pizza' })).toBe('Bite the cold pizza');
+    expect(sipLabel({ kind: 'snack', snack: 'coldbrew', beer: true })).toBe('Sip the beer');
   });
 });
 

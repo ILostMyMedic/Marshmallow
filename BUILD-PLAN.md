@@ -285,12 +285,33 @@ The phone becomes a desktop: a bigger surface for planning with the CEO and sett
 
 ## Phase 19: coins and the shop
 
-1. Coins per floor (`server/ledger.ts`, after cubefarm's): earned from merges, first-time QA passes and fixes, idempotent from what the office already sees, kept in the database; shown on each floor and in the console.
+1. Coins per floor (`server/ledger.ts`, after cubefarm's): 10 for a merge, 5 more when its first QA round passed, 3 more when it was fixed after failing QA; paid once each (a key per payment) and only for PRs the office watched while open, so a floor's old history pays nothing; kept in the database; shown on each floor and in the console.
 2. The shop: a kiosk in the lobby and a console tab, buying per floor. Floors keep what they have; the shop sells extras (a vending machine, a beer fridge, plants, rugs, a couch, posters) and upgrades (a better coffee machine, a nicer ping-pong table).
 3. Fixed spots per floor where bought items snap in, clear of the walkways; workers use the new things (the vending machine, the beer fridge after hours).
 4. Posters with art generated from each floor's repository, unique to it.
 
-**Done when:** in the demo a floor earns coins as its PRs merge, buys a vending machine and a poster in the shop, they appear in their spots and stay after a restart, and a worker uses the vending machine.
+**Done when:** in the demo a floor earns coins as its PRs merge, buys a vending machine and a poster in the shop, they appear in their spots and stay after a restart, and a worker uses the vending machine. (Done: seen in a browser on the demo: a PR merged on pixel-todo paid 15 (the merge and its clean QA pass); the shop panel bought a vending machine into the north-east corner and a repo poster onto the north wall, which appeared there; after the server was killed and started again the machine, the poster and the purse were as they were; and workers used the vending machine (in line, a press, the drop, eating by it). Tested in `server/ledger.test.ts`, `server/shopRoutes.test.ts`, `shared/shop.test.ts`, `client/src/world/decor/spots.test.ts`, `poster.test.ts`, `vendingBreak.test.ts`, `beerBreak.test.ts` and `client/src/ui/shop/shop.test.ts`.)
+
+## Phase 20: awards
+
+Achievements beyond the merge milestones, each one a trophy with a coin reward, shown in the CEO's office. New: cubefarm's achievements (`shared/progress.ts`) pay nothing and live only in its state file.
+
+1. The awards (`shared/awards.ts`): the company's and each floor's, in families with tiers: the merge milestones the trophies have today, clean QA passes, PRs fixed after failing QA, streaks (three merges on a floor in an hour, a busy day for the company), a night-owl merge, a full team, more floors, a first purchase, a furnished floor, both upgrades, a project started from a chat, discussions settled. Each says what it takes and what it pays.
+2. Winning one (`server/db/awards.ts`, replacing the milestone check in `records.ts`): checked when what it counts changes; won once, kept as a trophy (the lobby's cabinet shows them all), announced, and paid through the ledger: a floor's award to that floor, the company's to every floor. Awards found in a floor's old history are kept but not paid, as merges aren't.
+3. The awards wall in the CEO's office: every award as a plaque, the won ones with their trophy and date, the rest greyed with how far along they are, and what each pays; E on it opens the awards panel, which lists them by family with progress bars.
+
+**Done when:** in the demo, merges and clean QA passes win awards whose coins land on the floor, the CEO's awards wall shows them won with the next ones' progress, and buying into every spot wins the furnished-floor award. (Done: seen in a browser on the demo: a clean pass won its award and paid the floor, a first purchase and five purchases won theirs, two and three floors and a project started from a chat paid every floor, the awards wall and panel showed what was won and how far along the rest are, and filling all 14 spots won "fully furnished" (+150). The trophies a floor brought in with its old merges were kept unpaid. Tested in `shared/awards.test.ts`, `server/db/awards.test.ts`, `server/db/office.test.ts`, `client/src/ui/awards/awards.test.ts` and `client/src/world/trophyShelf.test.ts`.)
+
+## Phase 21: bodies, seats and the CEO's office
+
+Asked for after playing Phases 19 and 20.
+
+1. Two body styles from the character lab (`/lab`), the chibi and the stylized human, for everyone in the office: chosen in the first-run setup and changeable in the settings; the old figure goes.
+2. The CEO on their phone holds it to their ear, not an arm across the face.
+3. The CEO's office furnished: fuller, the meeting table's chairs round it rather than through it, the milestones and the awards wall kept.
+4. Sitting down: E on a bench, a sofa, an armchair or a deckchair sits you there (E again stands up), and at the roof's fire you can toast a marshmallow on a stick.
+
+**Done when:** a new office picks a body style in the setup and everyone wears it, the settings switch it; the CEO's office looks lived in with nothing through the furniture; and you can sit on every kind of seat and toast a marshmallow at the roof's fire.
 
 ## Watch out for
 

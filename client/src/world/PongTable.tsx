@@ -1,8 +1,14 @@
 // Adapted from cubefarm client/src/world/PongTable.tsx (MIT): the table, its net, a cup of balls and the paddles hanging
 // on its side, taken down while someone plays with them; E at an end picks its paddle up to play (cubefarm's toys/
-// PingPong.tsx TableEnd); the match itself is PongMatch.tsx's. The scoreboard and the leaderboard are cut.
+// PingPong.tsx TableEnd); the match itself is PongMatch.tsx's. The scoreboard and the leaderboard are cut. A floor that
+// bought the shop's upgrade plays on a tournament table (decor/models.ts): the same size and place, so the match and
+// the errands carry on unchanged.
 import { memo, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
+import { useCanvasTexture } from './canvasTexture';
+import { tournamentLinesModel, tournamentModel, type TableSize } from './decor/models';
+import { vertexToon } from './decor/parts';
+import { SANS } from './draw';
 import { useInteractable } from './interact';
 import { PONG_TABLE } from './layout';
 import { toon } from './materials';
@@ -93,11 +99,81 @@ function HookPaddle({ end }: { end: End }) {
   );
 }
 
-/** The ping-pong table in the play area: a blue top with white lines on a grey frame and legs, and the net. */
-export const PongTable = memo(function PongTable() {
+const SIZE: TableSize = { len: T.len, wid: T.wid, top: T.top, topT: TOP_T, net: NET };
+
+/** The tournament table's net: the same fine mesh, its white band printed "MARSHMALLOW OPEN" in the floor's colour. */
+function BrandedNet({ accent }: { accent: string }) {
+  const tex = useCanvasTexture(
+    512,
+    64,
+    (ctx) => {
+      ctx.strokeStyle = 'rgba(30,30,40,0.85)';
+      ctx.lineWidth = 1.2;
+      for (let x = 0; x <= 512; x += 6) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, 64);
+        ctx.stroke();
+      }
+      for (let y = 22; y <= 64; y += 6) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(512, y);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#f8f9fa';
+      ctx.fillRect(0, 0, 512, 18);
+      ctx.fillStyle = accent;
+      ctx.font = `700 15px ${SANS}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('MARSHMALLOW  OPEN', 256, 10);
+    },
+    [accent],
+  );
+  // a face each way, so the print reads the right way round from either end
+  return (
+    <>
+      {[Math.PI / 2, -Math.PI / 2].map((turn) => (
+        <mesh key={turn} position={[0, T.top + NET.h / 2, 0]} rotation={[0, turn, 0]}>
+          <planeGeometry args={[T.wid + NET.overhang * 2, NET.h]} />
+          <meshBasicMaterial map={tex} transparent depthWrite={false} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+/** The tournament table, in the table's place: its merged frame and top (with ink), its lines and the branded net. */
+function Tournament({ accent }: { accent: string }) {
+  return (
+    <group position={[T.x, 0, T.z]}>
+      <mesh geometry={tournamentModel(SIZE, accent)} material={vertexToon} castShadow receiveShadow>
+        <Outlines thickness={0.012} color={INK} />
+      </mesh>
+      <mesh geometry={tournamentLinesModel(SIZE)} material={vertexToon} />
+      <BrandedNet accent={accent} />
+    </group>
+  );
+}
+
+/**
+ * The ping-pong table in the play area: a blue top with white lines on a grey frame and legs, and the net; at `tier` 2
+ * the tournament table, its beam in the floor's colour (`accent`).
+ */
+export const PongTable = memo(function PongTable({ tier = 1, accent = '#3a86ff' }: { tier?: number; accent?: string }) {
   const half = { x: T.len / 2, z: T.wid / 2 };
   const line = 0.02;
   const span = T.wid + NET.overhang * 2;
+  if (tier >= 2)
+    return (
+      <group>
+        <Tournament accent={accent} />
+        <HookPaddle end="west" />
+        <HookPaddle end="east" />
+        <PongMatch />
+      </group>
+    );
   return (
     <group>
       <group position={[T.x, 0, T.z]}>

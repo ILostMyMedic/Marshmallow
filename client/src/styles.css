@@ -249,6 +249,15 @@ button.link {
   margin: 6px 0;
 }
 
+/* a floor's shop on the debug page (ui/shop/ShopPanel.tsx ShopView): the game's paper in either theme */
+.debug-shop {
+  margin: 8px 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fffdf5;
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
 /* ---------- the game ---------- */
 
 .game {
@@ -1055,6 +1064,61 @@ button.link {
   text-align: center;
 }
 
+/* the office floor's coins (ui/HUD.tsx CoinChip), under the office's buttons: a click opens the shop */
+.office-bar button.office-coins {
+  border-left: 7px solid var(--floor);
+  background: #ffd166;
+  font-size: 1rem;
+}
+
+.office-bar button.office-coins:hover {
+  background: #ffdc85;
+}
+
+.office-coins-shop {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1.5px solid #1f1d2b;
+  background: #fffdf5;
+  font-size: 0.72rem;
+}
+
+/* coins just earned, floating up out of the chip */
+.office-gain {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 4px;
+  padding: 1px 8px;
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: #fff3d6;
+  color: #7a5600;
+  font: 700 0.95rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: office-gain 1.8s ease-out forwards;
+}
+
+@keyframes office-gain {
+  0% {
+    transform: translateY(10px) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(0) scale(1.1);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(-6px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-22px);
+    opacity: 0;
+  }
+}
+
 /* the help screen (ui/HelpPanel.tsx) */
 .help-group h3 {
   margin: 12px 0 6px;
@@ -1606,6 +1670,12 @@ textarea.msg-box:disabled {
 .console-btn.small {
   padding: 2px 10px;
   font-size: 0.8rem;
+}
+
+/* a floor's coins on its card (ui/console/FloorsTab.tsx): a click opens the Shop tab on it */
+.console-btn.console-coins {
+  background: #ffd166;
+  font-size: 0.9rem;
 }
 
 .console-confirm {
@@ -2164,6 +2234,11 @@ textarea.msg-box:disabled {
 
 /* the trophies and what the office shipped (ui/TrophiesPanel.tsx), also at the front desk */
 .trophies-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
   margin: 0 0 8px;
   font-size: 1.05rem;
 }

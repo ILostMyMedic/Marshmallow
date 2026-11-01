@@ -1,6 +1,8 @@
 // What the office has shipped and won (E on the lobby's trophy cabinet or its shipped wall): every trophy with its date
-// and what it was for, the company's first and then each floor's, and the latest merges, each a link to its PR.
+// and what it was for, the company's first and then each floor's, and the latest merges, each a link to its PR. A button
+// opens every award, won or not (ui/awards/AwardsPanel.tsx).
 import { useStore } from '../store';
+import { act } from '../world/actions';
 import { byLine, dateLabel, prs, whenLabel } from '../world/shipped';
 import { floorName, GONE_COLOR, trophyGroups } from '../world/trophyShelf';
 import { useView, type Overlay } from '../world/view';
@@ -22,7 +24,12 @@ export function TrophyList() {
   return (
     <div className="trophies">
       <p className="trophies-sum">
-        🚢 <b>{prs(records.total)}</b> shipped in all · 🏆 <b>{n}</b> troph{n === 1 ? 'y' : 'ies'}
+        <span>
+          🚢 <b>{prs(records.total)}</b> shipped in all · 🏆 <b>{n}</b> troph{n === 1 ? 'y' : 'ies'}
+        </span>
+        <button className="console-btn small" onClick={() => act({ kind: 'awards' })} title="Every award the company and the floors can win, what it takes and what it pays">
+          🏅 Every award
+        </button>
       </p>
       {n === 0 && <p className="trophies-empty">No trophies yet: the first merge puts one in the lobby's cabinet.</p>}
       {groups.map((g) => (

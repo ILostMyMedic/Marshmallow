@@ -1,15 +1,21 @@
-// Toon trophies (trophyShelf.ts says which shape, metal and size): a cup with handles, a star, a rocket, a gem or a
-// crown, each on a plinth. A whole shelf of them is one geometry painted by vertex colours, so the lobby's cabinet and
-// the CEO's shelf draw all theirs in one call (and one for the ink).
+// Toon trophies (trophyShelf.ts says which shape, metal and size): a cup with handles, a star, a rocket, a gem, a
+// crown, a medal on its ribbon, a plaque or a rosette, each on a plinth. A whole shelf of them is one geometry painted
+// by vertex colours, so the lobby's cabinet and the CEO's shelves draw all theirs in one call (and one for the ink).
 import * as THREE from 'three';
-import { toon } from './materials';
+import { shade, toon } from './materials';
 import { merged } from './shapes';
 import type { Metal, TrophyLook, TrophyShape } from './trophyShelf';
 
 type V3 = [number, number, number];
 
 const METAL: Record<Metal, string> = { bronze: '#d08a4a', silver: '#c8d0da', gold: '#f7c548', crystal: '#9be7ff' };
+/** A medal's or a rosette's ribbon, by its metal: red for gold, as a first place's is. */
+const RIBBON: Record<Metal, string> = { bronze: '#f4a261', silver: '#4895ef', gold: '#e63946', crystal: '#9b5de5' };
 const RED = '#e63946';
+const DARK = '#3d405b';
+const WOOD = '#6b4226';
+/** Turned to face +z: a disc's flat side towards you. */
+const FACE: V3 = [Math.PI / 2, 0, 0];
 
 /** A part in its colour (`rot` an Euler, then moved to `at`): non-indexed, so every shape merges with every other. */
 export function paint(g: THREE.BufferGeometry, color: string, at: V3, rot?: V3): THREE.BufferGeometry {
@@ -38,7 +44,9 @@ function star(outer: number, inner: number, depth: number) {
 }
 
 /** A trophy's parts, standing on y = 0 and facing +z, about 0.3 m tall before its scale. */
-function parts(shape: TrophyShape, metal: string): THREE.BufferGeometry[] {
+function parts(shape: TrophyShape, kind: Metal): THREE.BufferGeometry[] {
+  const metal = METAL[kind];
+  const ribbon = RIBBON[kind];
   const stem = (h: number) => paint(new THREE.CylinderGeometry(0.016, 0.022, h, 10), metal, [0, 0.05 + h / 2, 0]);
   switch (shape) {
     case 'cup':
@@ -73,6 +81,34 @@ function parts(shape: TrophyShape, metal: string): THREE.BufferGeometry[] {
           return [paint(new THREE.CylinderGeometry(0.001, 0.02, 0.06, 6), metal, [x, 0.14, z]), paint(new THREE.SphereGeometry(0.011, 6, 4), metal, [x, 0.175, z])];
         }),
       ];
+    case 'medal':
+      // hung on its ribbon from a little stand: a post, a bar across its top, the ribbon's V and the disc
+      return [
+        paint(new THREE.CylinderGeometry(0.008, 0.01, 0.27, 8), DARK, [0, 0.185, -0.03]),
+        paint(new THREE.BoxGeometry(0.13, 0.014, 0.014), DARK, [0, 0.315, -0.03]),
+        ...[-1, 1].map((s) => paint(new THREE.BoxGeometry(0.03, 0.15, 0.006), s < 0 ? ribbon : shade(ribbon, -0.18), [s * 0.026, 0.245, -0.012], [0, 0, s * 0.42])),
+        paint(new THREE.CylinderGeometry(0.058, 0.058, 0.014, 20), metal, [0, 0.14, 0], FACE),
+        paint(new THREE.TorusGeometry(0.044, 0.006, 6, 20), shade(metal, -0.16), [0, 0.14, 0.009]),
+        paint(star(0.026, 0.012, 0.008), shade(metal, 0.12), [0, 0.14, 0.01]),
+      ];
+    case 'plaque':
+      // a walnut board standing on the plinth, its metal plate and an emblem under it
+      return [
+        paint(new THREE.BoxGeometry(0.18, 0.24, 0.028), WOOD, [0, 0.17, -0.01]),
+        paint(new THREE.BoxGeometry(0.15, 0.03, 0.03), shade(WOOD, -0.15), [0, 0.065, -0.01]),
+        paint(new THREE.BoxGeometry(0.13, 0.085, 0.008), metal, [0, 0.215, 0.008]),
+        paint(new THREE.CylinderGeometry(0.026, 0.026, 0.01, 16), metal, [0, 0.12, 0.007], FACE),
+        paint(star(0.018, 0.008, 0.006), shade(metal, 0.15), [0, 0.12, 0.014]),
+      ];
+    case 'rosette':
+      // a ribbon rosette on a stick: two tails, the pleated ring, a lighter ring of pleats and the metal button
+      return [
+        paint(new THREE.CylinderGeometry(0.007, 0.009, 0.15, 8), DARK, [0, 0.125, -0.02]),
+        ...[-1, 1].map((s) => paint(new THREE.BoxGeometry(0.032, 0.11, 0.006), ribbon, [s * 0.03, 0.14, -0.006], [0, 0, s * 0.3])),
+        paint(new THREE.CylinderGeometry(0.078, 0.078, 0.014, 18), ribbon, [0, 0.22, 0], FACE),
+        paint(new THREE.TorusGeometry(0.06, 0.012, 6, 18), shade(ribbon, 0.25), [0, 0.22, 0.008]),
+        paint(new THREE.CylinderGeometry(0.036, 0.036, 0.02, 16), metal, [0, 0.22, 0.012], FACE),
+      ];
   }
 }
 
@@ -95,7 +131,7 @@ export function trophiesGeometry(list: readonly Placed[]): THREE.BufferGeometry 
   const out: THREE.BufferGeometry[] = [];
   for (const p of list) {
     matrix.compose(where.set(...p.at), turn.setFromAxisAngle(up, p.yaw), size.setScalar(p.look.scale));
-    const ps = [paint(new THREE.BoxGeometry(0.15, 0.05, 0.15), p.plinth, [0, 0.025, 0]), ...parts(p.look.shape, METAL[p.look.metal])];
+    const ps = [paint(new THREE.BoxGeometry(0.15, 0.05, 0.15), p.plinth, [0, 0.025, 0]), ...parts(p.look.shape, p.look.metal)];
     for (const g of ps) out.push(g.applyMatrix4(matrix));
   }
   return merged(out);

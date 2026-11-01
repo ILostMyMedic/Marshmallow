@@ -23,9 +23,10 @@ export function eAction(held: { kind: string; sips?: number; left?: number } | n
   return focusKind ? 'target' : 'empty';
 }
 
-/** The hint for E when eAction says 'sip': sip the coffee, or sip or bite the snack. */
-export function sipLabel(held: { kind: string; snack?: SnackId } | null): string {
+/** The hint for E when eAction says 'sip': sip the coffee, sip or bite the snack, or sip the beer (the beer fridge's). */
+export function sipLabel(held: { kind: string; snack?: SnackId; beer?: boolean } | null): string {
   const s = held?.kind === 'snack' && held.snack ? SNACKS[held.snack] : null;
+  if (s && held?.beer) return 'Sip the beer';
   if (s) return `${s.kind === 'drink' ? 'Sip' : 'Bite'} the ${s.short}`;
   return 'Sip coffee';
 }

@@ -1,10 +1,12 @@
 // The company's milestones on the CEO's floor, over the meeting table: a walnut board on the north wall with how much
-// the company has shipped, its trophies (icon, title, date) and each floor's total, and a low cabinet under it with
-// the trophies themselves standing on top (trophyModels.ts). Seven draw calls: the board's frame and ink, its face,
-// the cabinet and its ink, the trophies and theirs. New: not in cubefarm.
+// the company has shipped, its merge milestones (icon, title, date) and each floor's total, and a low cabinet under it
+// with those trophies standing on top (trophyModels.ts); the other awards are on the awards wall across the room
+// (AwardsWall.tsx). Seven draw calls: the board's frame and ink, its face, the cabinet and its ink, the trophies and
+// theirs. New: not in cubefarm.
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useStore } from '../store';
+import { isCompanyMilestone } from '../ui/awards/awards';
 import { useCanvasTexture } from './canvasTexture';
 import { CUT_PLANES } from './cutaway';
 import { fitText, roundRect, SANS } from './draw';
@@ -92,10 +94,11 @@ function cabinetGeometry() {
 export function CeoMilestones() {
   const records = useStore((s) => s.records);
   const floors = useStore((s) => s.floors);
+  // the merge milestones only: the other awards have their wall across the room (AwardsWall.tsx)
   const company = useMemo(
     () =>
       records.trophies
-        .filter((t) => !t.floorId)
+        .filter(isCompanyMilestone)
         .sort((a, b) => milestoneOf(a) - milestoneOf(b))
         .slice(-SHOWN),
     [records.trophies],

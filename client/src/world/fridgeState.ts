@@ -122,7 +122,7 @@ export function fridgeAction(op: 'door' | 'take', snack?: SnackId) {
   if (!isSnackId(snack)) return;
   const def = SNACKS[snack];
   if (view.held) {
-    view.showToast(view.held.kind === 'snack' ? `${SNACKS[view.held.snack].emoji} One at a time: finish that one first (E)` : '🙌 Your hands are full');
+    view.showToast(view.held.kind === 'snack' ? `${view.held.beer ? '🍺' : SNACKS[view.held.snack].emoji} One at a time: finish that one first (E)` : '🙌 Your hands are full');
     return;
   }
   if (!take(snack)) {

@@ -161,4 +161,46 @@ export const MIGRATIONS: readonly Migration[] = [
       create index discussion_messages_by_discussion on discussion_messages (discussion_id, id);
     `,
   },
+  {
+    id: 5,
+    name: 'coins',
+    sql: `
+      -- each floor's ledger: coins earned (amount > 0) and spent. An earning has a key (merge:<floor>#<pr>, …), so it
+      -- is paid once however often the office sees it; purchases and grants have none
+      create table coin_entries (
+        id serial primary key,
+        floor_id text not null,
+        key text unique,
+        amount integer not null,
+        reason text not null,
+        detail text not null default '',
+        pr_number integer,
+        at timestamptz not null default now()
+      );
+      create index coin_entries_by_floor on coin_entries (floor_id);
+
+      -- PRs the office watched while they were open: only those pay when they merge (old history never does), and their
+      -- QA so far (first: pass or fail in round 1, late when first tested after it; null before any verdict)
+      create table coin_tracks (
+        floor_id text not null,
+        pr_number integer not null,
+        first text,
+        failed boolean not null default false,
+        seen_at timestamptz not null default now(),
+        primary key (floor_id, pr_number)
+      );
+    `,
+  },
+  {
+    id: 6,
+    name: 'awards',
+    sql: `
+      -- the office's own merges, told apart from what a floor's history brings in: only these pay the merge awards, and
+      -- only these count for the streaks and the night shift
+      alter table shipped add column by_office boolean not null default false;
+
+      -- what each award paid (each floor, for the company's); 0 for one found in a floor's old history
+      alter table trophies add column reward integer not null default 0;
+    `,
+  },
 ];

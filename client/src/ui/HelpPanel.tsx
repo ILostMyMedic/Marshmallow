@@ -9,7 +9,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     title: 'Anywhere',
     rows: [
       ['Tab', 'Walk the floor, or look down on it'],
-      ['O', "The manager's console: floors, team, issues, settings"],
+      ['O', "The manager's console: floors, team, issues, the shop, settings"],
       ['P', 'Your desktop: chats with the CEO, discussions to settle, the office’s notices'],
       ['H', 'This help'],
       ['M', 'Mute or unmute the sounds'],
@@ -36,6 +36,23 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
       ['Right-drag or W A S D', 'Move'],
       ['Wheel', 'Zoom'],
       ['Click', 'Open what’s under the mouse: a person’s chip, the board, the app monitor'],
+    ],
+  },
+  {
+    title: 'Coins and the shop',
+    rows: [
+      ['Coins', 'Each floor earns its own: every merge pays, and a clean first QA pass or a fix after a failed one pays a bit more'],
+      ['E on the kiosk', 'The shop, in the lobby: buy a floor things for its spots (a vending machine, plants, posters…) and upgrades, with its coins'],
+      ['🪙 button', 'The coins of the floor you’re on, under the office’s buttons: a click opens its shop (so does the console’s Shop tab)'],
+      ['E on a vending machine', 'A can or a bar in your hands, once someone else has finished at it'],
+      ['E on a beer fridge', 'A bottle, after hours (it’s shut in the daytime)'],
+    ],
+  },
+  {
+    title: 'Awards',
+    rows: [
+      ['Awards', 'The company and each floor win them for merges, clean QA passes, comebacks, streaks, a full team, shopping and more: each one a trophy that pays coins, a floor’s to that floor and the company’s to every floor'],
+      ['E on the awards wall', 'In the CEO’s office: every award, won or not, how far along each one is and what it pays (the trophies panel’s 🏅 Every award opens it too)'],
     ],
   },
   {

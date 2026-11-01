@@ -1,49 +1,104 @@
 // The trophies as the office shows them: what each one looks like (its shape and metal from its icon, bigger for a
-// bigger milestone), where it stands in the lobby's cabinet (the company's on the top shelf, the floors' below), what
-// its plaque says, and the trophies grouped for the panel. Pure, so it's tested; TrophyCabinet.tsx draws them.
+// grander award), where it stands in the lobby's cabinet (the company's on the top shelf, the floors' below), what its
+// plaque says, and the trophies grouped for the panel. Pure, so it's tested; TrophyCabinet.tsx draws them.
 import type { Floor, RecordsView, Trophy } from '../../../shared/types';
+import { tierName, tierOf } from '../ui/awards/awards';
 
-export type TrophyShape = 'cup' | 'star' | 'rocket' | 'gem' | 'crown';
+export type TrophyShape = 'cup' | 'star' | 'rocket' | 'gem' | 'crown' | 'medal' | 'plaque' | 'rosette';
 export type Metal = 'bronze' | 'silver' | 'gold' | 'crystal';
+
+/** The metals from the least to the grandest: within an award's family, its tiers climb through them. */
+export const METALS: readonly Metal[] = ['bronze', 'silver', 'gold', 'crystal'];
 
 export interface TrophyLook {
   shape: TrophyShape;
   metal: Metal;
-  /** 1 for a first merge, up to 1.5 for a thousand. */
+  /** 1 for the smallest award, up to 1.5 for the grandest (a thousand PRs shipped). */
   scale: number;
 }
 
-// server/db/trophies.ts's icons (without emoji variation selectors): the company's rocket, cups, crown, star and gem,
-// and a floor's cup, stars and gem.
-const BY_ICON: Record<string, [TrophyShape, Metal]> = {
-  '🚀': ['rocket', 'silver'],
-  '🥉': ['cup', 'bronze'],
-  '🥈': ['cup', 'silver'],
-  '🥇': ['cup', 'gold'],
-  '🏆': ['cup', 'gold'],
-  '👑': ['crown', 'gold'],
-  '💫': ['star', 'gold'],
-  '🏛': ['gem', 'crystal'],
-  '🎉': ['cup', 'bronze'],
-  '⭐': ['star', 'silver'],
-  '🌟': ['star', 'gold'],
-  '💎': ['gem', 'crystal'],
-};
+// shared/awards.ts's icons, family by family, each family's metals climbing with its tiers.
+const LOOKS: [string, TrophyShape, Metal][] = [
+  // the company's: shipping, busy days, the night shift, growing, founding, settling things
+  ['🚀', 'rocket', 'bronze'],
+  ['🥉', 'cup', 'bronze'],
+  ['🥈', 'cup', 'silver'],
+  ['🥇', 'cup', 'gold'],
+  ['🏆', 'cup', 'gold'],
+  ['👑', 'crown', 'gold'],
+  ['💫', 'star', 'crystal'],
+  ['🏛️', 'gem', 'crystal'],
+  ['📅', 'plaque', 'bronze'],
+  ['📆', 'plaque', 'silver'],
+  ['🗓️', 'plaque', 'gold'],
+  ['🦉', 'star', 'silver'],
+  ['🌙', 'star', 'gold'],
+  ['🏢', 'cup', 'bronze'],
+  ['🏬', 'cup', 'silver'],
+  ['🏙️', 'crown', 'gold'],
+  ['💡', 'rocket', 'silver'],
+  ['🧪', 'rocket', 'gold'],
+  ['🤝', 'medal', 'silver'],
+  ['🗣️', 'medal', 'gold'],
+  // a floor's: shipping, clean passes, comebacks, hat tricks, the team, shopping, home sweet home, deluxe
+  ['🎉', 'cup', 'bronze'],
+  ['⭐', 'star', 'silver'],
+  ['🌟', 'star', 'gold'],
+  ['💎', 'gem', 'crystal'],
+  ['✅', 'rosette', 'bronze'],
+  ['🧼', 'rosette', 'silver'],
+  ['🏅', 'medal', 'gold'],
+  ['🔧', 'plaque', 'bronze'],
+  ['🛠️', 'plaque', 'silver'],
+  ['⚙️', 'plaque', 'gold'],
+  ['🎩', 'cup', 'silver'],
+  ['🪄', 'star', 'gold'],
+  ['👥', 'medal', 'bronze'],
+  ['🧑‍🤝‍🧑', 'medal', 'silver'],
+  ['🏟️', 'cup', 'gold'],
+  ['🛍️', 'rosette', 'silver'],
+  ['🧾', 'rosette', 'gold'],
+  ['🛋️', 'plaque', 'silver'],
+  ['🏠', 'cup', 'gold'],
+  ['✨', 'gem', 'gold'],
+];
 
-/** How many merges a trophy marks, from its id (`company:<n>` or `floor:<floor id>:<n>`); 1 when it doesn't say. */
+/** An emoji without its variation selectors, so "🏛️" and "🏛" are one icon. */
+const bare = (icon: string) => icon.replace(/️/g, '');
+const BY_ICON = new Map(LOOKS.map(([icon, shape, metal]) => [bare(icon), [shape, metal] as [TrophyShape, Metal]]));
+
+/** The shape and metal an icon stands for; null for one it doesn't know. */
+export const iconLook = (icon: string): [TrophyShape, Metal] | null => BY_ICON.get(bare(icon)) ?? null;
+
+/** The number after a trophy id's last ':' (the merges a milestone marks, an award's target); 1 when it doesn't say. */
 export function milestoneOf(t: Pick<Trophy, 'id'>): number {
   const n = Number(t.id.slice(t.id.lastIndexOf(':') + 1));
   return Number.isInteger(n) && n > 0 ? n : 1;
 }
 
-/** A trophy's shape, metal and size. An icon it doesn't know gets a cup, its metal by the milestone. */
-export function trophyLook(t: Pick<Trophy, 'id' | 'icon'>): TrophyLook {
+/**
+ * How grand a trophy is: its award tier's coins (the same for one found in a floor's history, which paid none), so a
+ * team of three and a thousand PRs shipped compare fairly; a trophy that isn't an award goes by its number.
+ */
+export const prestigeOf = (t: Pick<Trophy, 'id' | 'floorId'>) => tierOf(t)?.tier.reward ?? milestoneOf(t);
+
+/** The coins at which a trophy stops growing (the grandest award's), and the size it grows to. */
+const GRANDEST = 750;
+const MAX_SCALE = 1.5;
+
+/**
+ * A trophy's shape, metal and size. An award grows with its coins, on a log scale (10 coins or less: 1, 750: 1.5);
+ * an icon it doesn't know gets a cup, its metal and size by its number.
+ */
+export function trophyLook(t: Pick<Trophy, 'id' | 'icon' | 'floorId'>): TrophyLook {
   const n = milestoneOf(t);
-  const [shape, metal] = BY_ICON[t.icon.replace(/️/g, '')] ?? ['cup', n >= 50 ? 'gold' : n >= 10 ? 'silver' : 'bronze'];
-  return { shape, metal, scale: Math.round((1 + Math.log10(n) / 6) * 100) / 100 };
+  const [shape, metal] = iconLook(t.icon) ?? ['cup', n >= 50 ? 'gold' : n >= 10 ? 'silver' : 'bronze'];
+  const ref = tierOf(t);
+  const grow = ref ? Math.log10(Math.max(1, ref.tier.reward / 10)) / Math.log10(GRANDEST / 10) : Math.log10(n) / 3;
+  return { shape, metal, scale: Math.round((1 + (MAX_SCALE - 1) * Math.min(1, grow)) * 100) / 100 };
 }
 
-const byMilestone = (a: Trophy, b: Trophy) => milestoneOf(a) - milestoneOf(b) || a.earnedAt - b.earnedAt;
+const byPrestige = (a: Trophy, b: Trophy) => prestigeOf(a) - prestigeOf(b) || a.earnedAt - b.earnedAt;
 
 /** A trophy in the cabinet: its shelf (0 is the top), its place along it from the left, and how many share the shelf. */
 export interface ShelfSpot {
@@ -55,22 +110,22 @@ export interface ShelfSpot {
 
 /**
  * Where each trophy stands in a cabinet of `shelves` shelves holding `perShelf` each: the company's on the top shelf,
- * the floors' below, each floor's together in `floorOrder` (floors no longer there last), smallest milestone first. A
- * floor that would straddle two shelves moves down whole when the rest still fit. When there are more than the shelves
- * hold, the smallest milestones give way: `hidden` counts them.
+ * the floors' below, each floor's together in `floorOrder` (floors no longer there last), the least grand first
+ * (prestigeOf). A floor that would straddle two shelves moves down whole when the rest still fit. When there are more
+ * than the shelves hold, the least grand give way: `hidden` counts them.
  */
 export function shelfLayout(trophies: readonly Trophy[], floorOrder: readonly string[], perShelf: number, shelves = 3): { spots: ShelfSpot[]; hidden: number } {
-  const company = trophies.filter((t) => !t.floorId).sort(byMilestone);
+  const company = trophies.filter((t) => !t.floorId).sort(byPrestige);
   const keptCompany = company.slice(-perShelf);
   const rank = (id: string) => {
     const i = floorOrder.indexOf(id);
     return i < 0 ? floorOrder.length : i;
   };
-  const floors = trophies.filter((t) => t.floorId).sort((a, b) => rank(a.floorId!) - rank(b.floorId!) || a.floorId!.localeCompare(b.floorId!) || byMilestone(a, b));
+  const floors = trophies.filter((t) => t.floorId).sort((a, b) => rank(a.floorId!) - rank(b.floorId!) || a.floorId!.localeCompare(b.floorId!) || byPrestige(a, b));
   const room = perShelf * (shelves - 1);
   const dropped = new Set(
     [...floors]
-      .sort(byMilestone)
+      .sort(byPrestige)
       .slice(0, Math.max(0, floors.length - room))
       .map((t) => t.id),
   );
@@ -106,11 +161,14 @@ export function shelfLayout(trophies: readonly Trophy[], floorOrder: readonly st
   return { spots, hidden: company.length - keptCompany.length + dropped.size };
 }
 
-/** What the plaque under a trophy says, in two short lines: whose it is and what for. */
+/** What the plaque under a trophy says, in two short lines: whose it is and what for (a merge milestone by its count). */
 export function plaqueLines(t: Trophy, floorName: (floorId: string) => string): [string, string] {
+  const who = t.floorId ? floorName(t.floorId) : 'Company';
+  const ref = tierOf(t);
+  if (ref && ref.family.stat !== 'merges') return [who, tierName(ref.tier)];
   const n = milestoneOf(t);
-  if (!t.floorId) return ['Company', n === 1 ? 'First ship' : `${n} shipped`];
-  return [floorName(t.floorId), n === 1 ? 'First merge' : `${n} merged`];
+  if (!t.floorId) return [who, n === 1 ? 'First ship' : `${n} shipped`];
+  return [who, n === 1 ? 'First merge' : `${n} merged`];
 }
 
 /** A floor's short name ("app" for "owner/app"), or its id's when it's gone. */

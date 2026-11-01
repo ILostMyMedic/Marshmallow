@@ -1,8 +1,9 @@
 // What the guide at the front desk tells you: today's status in a few numbers, and a tour of the building, a stop per
-// floor (each repo floor, then the CEO's office and the roof terrace, then back in the lobby with what the office has
-// shipped and won), each with a card for your screen and short lines for the guide's speech bubbles. Pure: from the
-// office's state, so it's tested; TourGuide.tsx runs the tour.
+// floor (each repo floor, then the CEO's office with its milestones and awards wall, and the roof terrace, then back in
+// the lobby with what the office has shipped and won), each with a card for your screen and short lines for the
+// guide's speech bubbles. Pure: from the office's state, so it's tested; TourGuide.tsx runs the tour.
 import type { Floor, QaRecord, RecordsView, Worker } from '../../../shared/types';
+import { isCompanyMilestone, wonOf } from '../ui/awards/awards';
 import { CEO_FLOOR, LOBBY, ROOF } from './floors';
 
 export interface Office {
@@ -104,7 +105,8 @@ export function tourStops(o: Office, now: number): TourStop[] {
   const today = todayStatus(o, now);
   const total = o.records?.total ?? 0;
   const newest = o.records?.trophies.at(-1);
-  const company = o.records?.trophies.filter((t) => !t.floorId).length ?? 0;
+  const company = o.records?.trophies.filter(isCompanyMilestone).length ?? 0;
+  const awards = wonOf(o.records?.trophies ?? [], o.floors.map((f) => f.id));
   return [
     ...floors,
     {
@@ -115,8 +117,9 @@ export function tourStops(o: Office, now: number): TourStop[] {
           ? [`${ceo.name} runs the company from up here: onboarding new floors, turning briefs into issues and sizing the teams.`, busy(ceo) ? `${ceo.name} is busy right now.` : `${ceo.name} has a moment, if you want to say hi.`]
           : ["The CEO's office, waiting for a CEO. Hire one in the manager's console (O) and they'll plan the floors' work."]),
         ...(company ? [`By the meeting table: the company's milestones, and its ${company} troph${company === 1 ? 'y' : 'ies'} on the cabinet under them.`] : []),
+        `By the elevator: the awards wall, ${awards.won} of ${awards.total} won. Each award pays coins; E on the wall shows what every one takes.`,
       ],
-      say: ceo ? [`The corner office!`, `${ceo.name} runs things from here.`] : ['The corner office…', "We haven't hired a CEO yet."],
+      say: [...(ceo ? [`The corner office!`, `${ceo.name} runs things from here.`] : ['The corner office…', "We haven't hired a CEO yet."]), 'And our awards wall! 🏅'],
     },
     {
       floor: ROOF,

@@ -3,7 +3,8 @@
 import { create } from 'zustand';
 import { EMPTY_CLOUD } from '../../shared/cloud';
 import { EMPTY_WORLD, type WorldView } from '../../shared/worldEvents';
-import { DEFAULT_SETTINGS, EMPTY_DESK, EMPTY_RECORDS, isMoment, type CloudView, type DeskView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type PreviewView, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
+import { EMPTY_AWARD_STATS, type AwardStats } from '../../shared/awards';
+import { DEFAULT_SETTINGS, EMPTY_COINS, EMPTY_DESK, EMPTY_RECORDS, isMoment, type CloudView, type CoinsView, type DeskView, type Floor, type FloorItem, type LogLine, type Moment, type OfficeMessage, type PlayerLook, type QaRecord, type PreviewView, type Question, type RecordsView, type ServerEvent, type Settings, type UsageView, type Worker } from '../../shared/types';
 
 /** Log lines a tab keeps per worker. */
 const LOG_KEEP = 200;
@@ -28,6 +29,8 @@ export interface Office {
   records: RecordsView;
   look: PlayerLook | null;
   floorPlans: Record<string, FloorItem[]>;
+  coins: CoinsView; // every floor's purse and the ledger's latest lines
+  awards: AwardStats; // the counts behind the awards (shared/awards.ts)
   previews: Record<string, PreviewView>; // by floor id (server/previews.ts)
   world: WorldView; // the world events on now
   desk: DeskView; // the desktop's chats with the CEO, its project proposals and discussions
@@ -50,6 +53,8 @@ export const EMPTY_OFFICE: Office = {
   records: EMPTY_RECORDS,
   look: null,
   floorPlans: {},
+  coins: EMPTY_COINS,
+  awards: EMPTY_AWARD_STATS,
   previews: {},
   world: EMPTY_WORLD,
   desk: EMPTY_DESK,
@@ -85,6 +90,8 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
         records: d.records ?? EMPTY_RECORDS,
         look: d.look ?? null,
         floorPlans: d.floorPlans ?? {},
+        coins: d.coins ?? EMPTY_COINS,
+        awards: d.awards ?? EMPTY_AWARD_STATS,
         previews: d.previews ?? {},
         world: d.world ?? EMPTY_WORLD,
         desk: d.desk ?? EMPTY_DESK,
@@ -135,6 +142,10 @@ export function reduce<O extends Office>(o: O, ev: ServerEvent): O {
       return { ...o, world: ev.world };
     case 'desk':
       return { ...o, desk: ev.desk };
+    case 'coins':
+      return { ...o, coins: ev.coins };
+    case 'awards':
+      return { ...o, awards: ev.awards };
   }
 }
 

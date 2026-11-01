@@ -1,6 +1,7 @@
 // Words for the debug page: a worker's task and activity, and the feed's moments.
 import { ACTIVITY_ICONS } from '../../../shared/activity';
 import type { ActivityKind, Moment, Task } from '../../../shared/types';
+import { earnedWhy } from '../ui/shop/shop';
 
 export const activityIcon = (kind: ActivityKind) => ACTIVITY_ICONS[kind];
 
@@ -28,6 +29,12 @@ export function momentText(m: Moment, name: (workerId: string | null) => string)
     case 'merged':
       return `PR #${m.prNumber} merged on ${m.floorId}`;
     case 'trophy':
-      return `Trophy: ${m.trophy.icon} ${m.trophy.title}`;
+      return `Trophy: ${m.trophy.icon} ${m.trophy.title}${m.trophy.reward ? ` (pays ${m.trophy.reward} coins${m.trophy.floorId ? '' : ' to every floor'})` : ''}`;
+    case 'earned': {
+      const coins = `${m.amount} coin${m.amount === 1 ? '' : 's'}`;
+      if (m.award) return `${m.floorId} earned ${coins} for an award${m.reasons.length ? `: ${m.reasons.join(', ')}` : ''}`;
+      const why = earnedWhy(m.reasons, m.prNumber);
+      return `${m.floorId} earned ${coins}${why ? ` (${why})` : ''}${m.workerId ? `, built by ${name(m.workerId)}` : ''}`;
+    }
   }
 }

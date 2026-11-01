@@ -11,6 +11,7 @@ import { useStore } from '../store';
 import { WALK_SPEED, type Gesture } from './body';
 import { chatSay } from './Chatter';
 import type { ChatTopic } from './chatterLines';
+import './beerErrand';
 import './coffeeErrand';
 import './events/watch';
 import {
@@ -43,6 +44,7 @@ import {
   type Queued,
 } from './errands';
 import './fridgeErrand';
+import './vendingErrand';
 import { SEATS } from './layout';
 import type { Pt } from './nav';
 import { bodyState, bodyTarget, isSeated, onClaim, placeBody, say, seatBody, setBody, setErrand, trackDirector } from './people';
@@ -50,7 +52,7 @@ import './pongErrands';
 import { playerAt } from './rig';
 import './roof/roofErrand';
 import { ARRIVE, arrivalPath, CABIN, CHAT, CHAT_VENUES, DOORS_SECONDS, exitPath, floorNews, headingTo, huddle, LEAVE, nearest, pickTopic, planChat, topicPr } from './socials';
-import { findPath, spot as spotById, standable, steer, walkways, type Body, type FloorKind, type Spot } from './walkways';
+import { findPath, heldUp, spot as spotById, standable, steer, walkways, type Body, type FloorKind, type Spot } from './walkways';
 
 type Phase = 'seated' | 'leaving' | 'there' | 'returning' | 'sitting' | 'exiting';
 
@@ -429,15 +431,15 @@ export function ErrandDirector({
         tx = x;
         tz = z;
         hd = bodyState(p.id)?.heading ?? face;
-        p.waited += dt;
       } else if (s.speed < 1 || s.side !== 0) {
         // Aim a little ahead, slowed and stepped aside (+side is to the walker's right).
         tx = x + (ux * s.speed - uz * s.side) * CARROT;
         tz = z + (uz * s.speed + ux * s.side) * CARROT;
         sp = speed * Math.min(1, Math.max(0.2, Math.hypot(s.speed, s.side)));
-        p.waited = 0;
-      } else p.waited = 0;
-      // Stuck behind someone for a while: walk on through (people only; the player is always waited for).
+      }
+      // Stuck behind someone for a while, standing or crawling: walk on through (people only; the player is always
+      // waited for).
+      p.waited = heldUp(p.waited, s, dt);
       if (p.waited > 3) {
         p.ghost = 1.5;
         p.waited = 0;

@@ -1,7 +1,7 @@
-// The lobby's trophy cabinet against the west wall: every trophy the office has won (trophyShelf.ts lays them out, the
-// company's on the top shelf and the floors' below, each on a plinth in its floor's colour), a plaque under each, and a
-// card saying the first merge goes here while it's empty. E on it (or a click in the overview) lists them all
-// (ui/TrophiesPanel.tsx). A trophy won while you're in the lobby pops confetti out of it. Seven draw calls: the cabinet
+// The lobby's trophy cabinet against the west wall: the trophies the office has won, its awards (trophyShelf.ts lays
+// them out, the company's on the top shelf and the floors' below, each on a plinth in its floor's colour; when there
+// are more than it holds, the grandest stay), a plaque under each, and a card saying the first merge goes here while
+// it's empty. E on it (or a click in the overview) lists them all (ui/TrophiesPanel.tsx). A trophy won while you're in the lobby pops confetti out of it. Seven draw calls: the cabinet
 // and its ink, the glass, the trophies and their ink, the plaques and the sign (the card while empty, the confetti while
 // it flies).
 // Adapted from cubefarm client/src/world/decor/RewardsCorner.tsx (MIT): the trophy shelf's cups and plaques, as one
@@ -27,13 +27,13 @@ import { floorName, GONE_COLOR, plaqueLines, shelfLayout, trophyLook } from './t
 const { x: CX, z: CZ, w: W, l: L, h: H } = TROPHIES;
 /** The shelves' tops, top first: the company's, then the floors' two (the bottom one is the base). */
 const SHELF_Y = [1.43, 0.78, 0.12];
-const PER_SHELF = 9;
+const PER_SHELF = 14;
 const SPACING = (L - 0.5) / PER_SHELF;
 const WOOD = '#9c6b45';
 const COMPANY_PLINTH = '#2b2d42';
 /** The plaques: strips along the shelves' front edges, each a row of one canvas (its pixels square on the strip). */
 const STRIP = { l: L - 0.12, h: 0.09 };
-const PLAQUE = { w: 2048, row: Math.round((2048 * STRIP.h) / STRIP.l) };
+const PLAQUE = { w: 3072, row: Math.round((3072 * STRIP.h) / STRIP.l) };
 
 /** Along a shelf, from the left as you face the cabinet (west, so your left is +z): the cabinet's z for slot `slot` of `of`. */
 const slotZ = (slot: number, of: number) => -(slot - (of - 1) / 2) * SPACING;

@@ -2,18 +2,22 @@
 // few seconds, then beeps; then take your coffee. The rules are in coffee.ts; this draws them and plays the sounds.
 // There is one machine on screen (only the current floor is drawn), so its state lives here and a floor change starts
 // it afresh. Workers on a coffee break (coffeeBreak.ts) use it too, through `machine`: one brew at a time, the player
-// first. window.__mmCoffee reports it and __mmCoffeeDo works it, for QA and Playwright.
+// first. window.__mmCoffee reports it and __mmCoffeeDo works it, for QA and Playwright. A floor that bought the shop's
+// upgrade has a chrome espresso machine instead (decor/models.ts): the same slot, spout and button, so it works the same.
 // Adapted from cubefarm client/src/world/CoffeeMachine.tsx (MIT).
 import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { noise, tone, type Vec3 } from '../ui/sfx';
 import { onAction } from './actions';
+import { espressoModel } from './decor/models';
+import { vertexToon } from './decor/parts';
 import { BREW, BREW_CUES, EMPTY, canPlace, cuesPassed, level, placeMug, pouring, pressButton, progress, takeMug, tick, FULL_SIPS, type BrewState } from './coffee';
 import { PLAYER, type Mug, type Slot } from './coffeeBreak';
 import { useInteractable } from './interact';
 import { glow, toon } from './materials';
 import { MUG_SIZE, MugLook, Steam, mugColor } from './mugLook';
+import { INK, Outlines } from './Outlines';
 import { playerAt } from './rig';
 import { Box, Cyl } from './Toon';
 import { useView } from './view';
@@ -185,8 +189,8 @@ const lightOff = toon('#ced4da');
 const lightBrewing = glow('#ffb703');
 const lightReady = glow('#80ed99');
 
-/** The coffee machine, standing on the counter at `position` (the counter top under its middle), its front facing -x. */
-export function CoffeeMachine({ position }: { position: [number, number, number] }) {
+/** The coffee machine, standing on the counter at `position` (the counter top under its middle), its front facing -x; tier 2 is the espresso machine. */
+export function CoffeeMachine({ position, tier = 1 }: { position: [number, number, number]; tier?: number }) {
   const [view, setView] = useState(state);
   const heldSips = useView((s) => (s.held?.kind === 'mug' ? s.held.sips : null));
   const root = useRef<THREE.Group>(null);
@@ -293,10 +297,18 @@ export function CoffeeMachine({ position }: { position: [number, number, number]
     <group ref={root} position={position}>
       {/* rumbles while it brews */}
       <group ref={body}>
-        <Box size={[0.45, 0.55, 0.4]} position={[0.05, 0.28, 0]} color="#343a40" outline />
-        {/* head over the drip tray, and its spout */}
-        <Box size={[0.22, 0.1, 0.28]} position={[SLOT.x + 0.01, SPOUT_Y + 0.07, 0]} color="#495057" outline />
-        <Cyl r={0.018} h={0.03} position={[SLOT.x, SPOUT_Y + 0.005, 0]} color="#adb5bd" />
+        {tier >= 2 ? (
+          <mesh geometry={espressoModel(SPOUT_Y)} material={vertexToon} castShadow receiveShadow>
+            <Outlines thickness={0.012} color={INK} />
+          </mesh>
+        ) : (
+          <>
+            <Box size={[0.45, 0.55, 0.4]} position={[0.05, 0.28, 0]} color="#343a40" outline />
+            {/* head over the drip tray, and its spout */}
+            <Box size={[0.22, 0.1, 0.28]} position={[SLOT.x + 0.01, SPOUT_Y + 0.07, 0]} color="#495057" outline />
+            <Cyl r={0.018} h={0.03} position={[SLOT.x, SPOUT_Y + 0.005, 0]} color="#adb5bd" />
+          </>
+        )}
         {/* power light */}
         <mesh position={[-0.2, 0.39, 0.13]} rotation={[0, -Math.PI / 2, 0]} material={glow('#ff6b6b')}>
           <circleGeometry args={[0.02, 12]} />

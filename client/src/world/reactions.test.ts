@@ -9,7 +9,7 @@ const seats = new Map([
   ['linus', { seatX: 0, seatZ: 4.6 }],
   ['far', { seatX: 20, seatZ: 0 }],
 ]);
-const passed: Moment = { type: 'qaPassed', at: 1, floorId: 'o/r', prNumber: 5, qaWorkerId: 'grace' };
+const passed: Moment = { type: 'qaPassed', at: 1, floorId: 'o/r', prNumber: 5, qaWorkerId: 'grace', round: 1 };
 const merged: Moment = { type: 'merged', at: 2, floorId: 'o/r', prNumber: 5, devWorkerId: 'ada' };
 
 describe('reactions', () => {

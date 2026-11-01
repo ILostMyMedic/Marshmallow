@@ -141,7 +141,7 @@ export function outsideLayers(t: number, kind: FloorKindOf = 'office'): OutsideL
 // ---------- bursts, rate-limited ----------
 
 /** Shortest gaps (seconds) between bird calls, cars and cricket phrases (per cricket), whatever the dice say. */
-export const MIN_GAP = { bird: 2.5, car: 8, cricket: 1.2 } as const;
+export const MIN_GAP = { bird: 2.5, car: 8, cricket: 3 } as const;
 
 /** Seconds until the next bird call (one of a few birds about), for `birds` 0-1 and a roll in [0, 1); Infinity without birds. */
 export function nextBirdIn(birds: number, roll: number): number {
@@ -158,7 +158,8 @@ export function nextCarIn(perMin: number, roll: number): number {
 /** Seconds of rest before a cricket's next phrase, for `crickets` 0-1; Infinity without crickets. */
 export function nextCricketIn(crickets: number, roll: number): number {
   if (crickets < 0.05) return Infinity;
-  return MIN_GAP.cricket + (0.5 + 4 * clamp01(roll)) / crickets;
+  // long rests between phrases: a constant chirping read as a ringing
+  return MIN_GAP.cricket + (2 + 8 * clamp01(roll)) / crickets;
 }
 
 /** Seconds before looking again for a burst that isn't due at all (no birds at night, no crickets by day). */

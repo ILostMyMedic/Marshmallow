@@ -7,12 +7,15 @@ import type { Store } from './store.ts';
 
 const FLOOR_COLORS = ['#ff8a5b', '#4fb3e8', '#8fd14f', '#c77dff', '#ffc93c', '#ff6fb5', '#2ec4b6', '#f25f5c'];
 const REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
+/** How often a sync also asks GitHub for the floor's languages (one more gh call, so not every sync). */
+export const LANGUAGES_EVERY_MS = 60 * 60_000;
 
 const oneLine = (err: unknown) => (err instanceof Error ? err.message : String(err)).split('\n')[0];
 
 export class Floors {
   private syncing = new Map<string, Promise<Floor>>();
   private again = new Set<string>(); // floors asked to sync while a sync ran
+  private languagesAt = new Map<string, number>(); // when each floor's languages were last asked for (a start asks again)
   /** Hears each floor that synced (the pipeline: reconcile QA records, advance merges). */
   onSynced: ((floorId: string) => void) | null = null;
 
@@ -49,6 +52,7 @@ export class Floors {
       qaBrief: '',
       teamSize: null,
       held: [],
+      languages: meta.languages,
       cloneStatus: 'cloning',
       cloneError: null,
       issues: [],
@@ -57,6 +61,7 @@ export class Floors {
       syncError: null,
     };
     this.store.putFloor(floor);
+    this.languagesAt.set(floor.id, Date.now());
     void this.clone(floor.id);
     void this.sync(floor.id).catch(() => undefined);
     return floor;
@@ -120,6 +125,18 @@ export class Floors {
     if (this.store.hasFloor(id)) this.store.patchFloor(id, patch);
   }
 
+  /** The floor's languages, asked for again when they're an hour old; tabs hear only of a change. A failure waits its hour. */
+  private async refreshLanguages(id: string, now: number) {
+    if (now - (this.languagesAt.get(id) ?? -Infinity) < LANGUAGES_EVERY_MS) return;
+    this.languagesAt.set(id, now);
+    try {
+      const { languages } = await this.backend.github.repoMeta(this.store.floor(id).fullName);
+      if (this.store.hasFloor(id) && JSON.stringify(languages) !== JSON.stringify(this.store.floor(id).languages)) this.store.patchFloor(id, { languages });
+    } catch {
+      // the next hour's sync tries again
+    }
+  }
+
   private async fetch(id: string): Promise<Floor> {
     const { fullName } = this.store.floor(id);
     const at = Date.now();
@@ -132,6 +149,7 @@ export class Floors {
       const floor = this.store.patchFloor(id, { issues, pulls, lastSync: at, syncError: null });
       if (filed.length) this.store.moment({ type: 'issuesFiled', at, floorId: id, numbers: filed });
       this.onSynced?.(id);
+      void this.refreshLanguages(id, at);
       return floor;
     } catch (err) {
       if (err instanceof HttpError || !this.store.hasFloor(id)) throw err;

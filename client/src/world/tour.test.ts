@@ -49,14 +49,17 @@ describe('the tour', () => {
 
   it('ends in the lobby with how much the office has shipped and its newest trophy', () => {
     const trophies = [
-      { id: 'company:1', floorId: null, icon: '🚀', title: 'First ship', detail: '', earnedAt: 1 },
-      { id: 'floor:o/app:10', floorId: 'o/app', icon: '⭐', title: 'app: 10 merged', detail: '', earnedAt: 2 },
+      { id: 'company:1', floorId: null, icon: '🚀', title: 'First ship', detail: '', earnedAt: 1, reward: 25 },
+      { id: 'floor:o/app:10', floorId: 'o/app', icon: '⭐', title: 'app: 10 merged', detail: '', earnedAt: 2, reward: 40 },
     ];
     const stops = tourStops({ ...office([floor()], []), records: { total: 12, trophies } }, NOW);
     const lobby = stops.at(-1)!;
     expect(lobby.say).toEqual(["That's the tour!", '12 PRs shipped so far! 🚢', 'Our newest trophy: ⭐ app: 10 merged', 'Come back any time. 👋']);
     expect(lobby.card[2]).toBe('12 PRs shipped in all (the shipped wall lists the latest), and the newest trophy in the cabinet: ⭐ app: 10 merged.');
-    expect(stops.find((s) => s.floor === CEO_FLOOR)!.card.at(-1)).toContain("its 1 trophy on the cabinet");
+    const ceo = stops.find((s) => s.floor === CEO_FLOOR)!;
+    expect(ceo.card.at(-2)).toContain('its 1 trophy on the cabinet');
+    expect(ceo.card.at(-1)).toBe('By the elevator: the awards wall, 2 of 40 won. Each award pays coins; E on the wall shows what every one takes.');
+    expect(ceo.say.at(-1)).toBe('And our awards wall! 🏅');
     expect(tourStops(office([], []), NOW).at(-1)!.say).toEqual(["That's the tour!", 'Come back any time. 👋']);
   });
 });

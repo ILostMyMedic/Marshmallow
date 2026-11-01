@@ -22,6 +22,7 @@ import { handleHook, handleMcp, hooksReady, releaseClis, setOfficeUrl } from './
 import { Terminals } from './sessions/terminals.ts';
 import { route } from './route.ts';
 import { EFFORTS, settingsPatch } from './settings.ts';
+import { shopRoutes } from './shopRoutes.ts';
 import { Store } from './store.ts';
 import { worldRoutes } from './worldRoutes.ts';
 
@@ -105,6 +106,8 @@ app.post('/api/ceo', route((req) => pipeline.ctx.ceo.hire(str(req.body?.model).t
 app.delete('/api/ceo', route(() => pipeline.ctx.ceo.letGo()));
 app.post('/api/ceo/message', route((req) => pipeline.ctx.ceo.message(str(req.body?.text))));
 app.use('/api', deskRoutes(pipeline.ctx, office.desk, projects));
+// The shop: buying for a floor and moving what it bought (each answers the floor's coins and/or plan); the demo grants coins
+app.use('/api', shopRoutes(store, office.shop, office.ledger, DEMO));
 app.post('/api/floors/:floor/sync', route((req) => floors.sync(String(req.params.floor))));
 // A floor's preview: its app run from a worktree of its own on the floor's port. Each answers the floor's PreviewView;
 // a start on a port another program holds is a 409. The PATCH takes { command?, port? }: {port} in a command is filled
@@ -209,7 +212,7 @@ app.post(
 );
 app.post('/api/workers/:id/sign-in', route((req) => pipeline.ctx.cloud.startSignIn(String(req.params.id))));
 if (demo) app.post('/api/demo/expire-sign-ins', route(() => pipeline.ctx.cloud.expireSignIns()));
-if (demo) app.use('/api/demo', demoRoutes(store, demo, pipeline));
+if (demo) app.use('/api/demo', demoRoutes(store, demo, pipeline, office));
 // The world events on demand (?event=, __mmEvents): in real mode too, since they change nothing but the sky
 app.use('/api/world', worldRoutes(office.world));
 app.use(

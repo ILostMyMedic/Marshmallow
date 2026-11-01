@@ -1,0 +1,243 @@
+/* The awards (ui/awards/AwardsPanel.tsx): the game's cartoon look (paper, ink outlines, hard shadows, Fredoka for
+   headings) with the group's colour (--floor) as its accent; won tiers bright, the rest greyed. */
+
+.awards {
+  --ink: #1f1d2b;
+  --muted: #5c6078;
+  --floor: #ffd166;
+  color-scheme: light;
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.awards-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 10px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fff8e1;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.awards-won {
+  flex: none;
+  font: 600 1.25rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.awards-won b {
+  font-size: 1.6rem;
+}
+
+.awards-paid {
+  color: #3d405b;
+}
+
+/* ---------- the company's tab and each floor's ---------- */
+
+.awards-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 4px;
+}
+
+.awards-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 5px 3px 3px;
+  border: 2px solid #c9c0ae;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 600 0.92rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.awards-tab:hover {
+  background: #fff3d6;
+}
+
+.awards-tab.on {
+  border-color: var(--ink);
+  background: color-mix(in srgb, var(--tab) 22%, #ffffff);
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.awards-tab .console-floor-no {
+  width: 24px;
+  height: 24px;
+  font-size: 0.78rem;
+}
+
+.awards-tab-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+
+.awards-tab-count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fff3d6;
+  color: #7a5600;
+  font-size: 0.8rem;
+}
+
+.awards-note {
+  margin: 8px 0;
+  color: var(--muted);
+}
+
+/* ---------- a family a row: icon and name, its tiers, the bar to the next ---------- */
+
+.awards-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.awards-row {
+  display: grid;
+  grid-template-columns: 48px minmax(150px, 210px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-left: 8px solid var(--floor);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+@media (max-width: 760px) {
+  .awards-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .awards-track {
+    grid-column: 1 / -1;
+  }
+}
+
+.awards-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--floor) 22%, #fffdf5);
+  font-size: 1.6rem;
+}
+
+.awards-icon.none {
+  border-color: #c9c0ae;
+  background: #f4f1ea;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.awards-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+.awards-what strong {
+  font: 600 1.02rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.awards-what small {
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.awards-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.awards-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 10px 3px 4px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--floor) 16%, #fffdf5);
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.awards-chip.todo {
+  border: 2px dashed #c9c0ae;
+  background: #f7f5f0;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.awards-chip-icon {
+  font-size: 1.25rem;
+}
+
+.awards-chip.todo .awards-chip-icon {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.awards-chip-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.awards-chip-text b {
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+
+.awards-chip-text small {
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.awards-chip.won .awards-chip-text small {
+  color: #3d405b;
+}
+
+.awards-bar {
+  height: 12px;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #eeeae0;
+}
+
+.awards-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffd166, #f4a300);
+  transition: width 0.4s ease-out;
+}
+
+.awards-bar.done span {
+  background: linear-gradient(90deg, #8ce99a, #2f9e44);
+}
+
+.awards-progress {
+  margin: 4px 0 0;
+  color: #3d405b;
+  font-size: 0.85rem;
+}

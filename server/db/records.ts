@@ -1,11 +1,11 @@
 // What the office has shipped and won, kept in its database: every merged PR, from the pipeline's merges as they happen
-// (who built and tested it known then) and from each floor's sync (so merges made outside the office count too), and
-// the milestones they reach (trophies.ts). The latest stay in memory for the tabs' snapshot; tabs get each change, and
-// a trophy won by a merge just made is announced (one found in old history isn't news).
+// (who built and tested it known then; marked as the office's own) and from each floor's sync (so merges made outside
+// the office count too), and the trophies the awards (awards.ts) won. The latest stay in memory for the tabs' snapshot,
+// and tabs get each change; after each write the awards look again.
 import { EMPTY_RECORDS, type RecordsView, type ShippedWork, type Trophy } from '../../shared/types.ts';
 import type { Store } from '../store.ts';
 import type { Db } from './db.ts';
-import { builderFromBranch, milestones, type Milestone } from './trophies.ts';
+import { builderFromBranch } from './trophies.ts';
 
 /** Merges the snapshot carries, newest first. */
 export const RECENT = 30;
@@ -20,23 +20,26 @@ interface ShippedRow {
   merged_at: Date;
 }
 
-interface TrophyRow {
+export interface TrophyRow {
   id: string;
   floor_id: string | null;
   icon: string;
   title: string;
   detail: string;
   earned_at: Date;
+  reward: number;
 }
 
 const shippedOf = (r: ShippedRow): ShippedWork => ({ floorId: r.floor_id, prNumber: r.pr_number, title: r.title, url: r.url, builtBy: r.built_by, testedBy: r.tested_by, mergedAt: r.merged_at.getTime() });
-const trophyOf = (r: TrophyRow): Trophy => ({ id: r.id, floorId: r.floor_id, icon: r.icon, title: r.title, detail: r.detail, earnedAt: r.earned_at.getTime() });
+export const trophyOf = (r: TrophyRow): Trophy => ({ id: r.id, floorId: r.floor_id, icon: r.icon, title: r.title, detail: r.detail, earnedAt: r.earned_at.getTime(), reward: r.reward });
 const keyOf = (floorId: string, prNumber: number) => `${floorId}#${prNumber}`;
 
 export class Records {
   private view: RecordsView = EMPTY_RECORDS;
   private known = new Set<string>(); // every PR recorded, so a sync only writes the new ones
   private writing: Promise<unknown> = Promise.resolve();
+  /** After each write: the awards look at what's changed (office.ts sets it). */
+  onRecorded: () => void = () => {};
 
   constructor(
     private readonly db: Db,
@@ -53,7 +56,7 @@ export class Records {
     this.view = await this.read();
   }
 
-  /** A merge the office made (the pipeline's moment): it's recorded with who built and tested it, and its trophies announced. */
+  /** A merge the office made (the pipeline's moment): it's recorded as the office's own, with who built and tested it. */
   merged(floorId: string, prNumber: number, devWorkerId: string | null, qaWorkerId: string | null = null): Promise<void> {
     if (!this.store.hasFloor(floorId)) return Promise.resolve();
     const floor = this.store.floor(floorId);
@@ -82,52 +85,53 @@ export class Records {
   }
 
   // One write at a time: a merge's moment and the next sync can arrive together.
-  private queue(works: ShippedWork[], announce: boolean): Promise<void> {
-    const next = this.writing.then(() => this.record(works, announce));
+  private queue(works: ShippedWork[], byOffice: boolean): Promise<void> {
+    const next = this.writing.then(() => this.record(works, byOffice));
     this.writing = next.catch(() => undefined);
     return next;
   }
 
-  private async record(works: ShippedWork[], announce: boolean) {
+  private async record(works: ShippedWork[], byOffice: boolean) {
     await this.db.transaction(async (tx) => {
       for (const w of works) {
         // A row the sync found first keeps its GitHub time and gains who built and tested it from the office's merge.
         await tx.query(
-          `insert into shipped (floor_id, pr_number, title, url, built_by, tested_by, merged_at) values ($1, $2, $3, $4, $5, $6, $7)
+          `insert into shipped (floor_id, pr_number, title, url, built_by, tested_by, merged_at, by_office) values ($1, $2, $3, $4, $5, $6, $7, $8)
            on conflict (floor_id, pr_number) do update set title = excluded.title, url = excluded.url,
-             built_by = coalesce(shipped.built_by, excluded.built_by), tested_by = coalesce(shipped.tested_by, excluded.tested_by)`,
-          [w.floorId, w.prNumber, w.title, w.url, w.builtBy, w.testedBy, new Date(w.mergedAt)],
+             built_by = coalesce(shipped.built_by, excluded.built_by), tested_by = coalesce(shipped.tested_by, excluded.tested_by),
+             by_office = shipped.by_office or excluded.by_office`,
+          [w.floorId, w.prNumber, w.title, w.url, w.builtBy, w.testedBy, new Date(w.mergedAt), byOffice],
         );
       }
     });
     for (const w of works) this.known.add(keyOf(w.floorId, w.prNumber));
-    const won = await this.award();
+    await this.refresh();
+    this.onRecorded();
+  }
+
+  /** The demo's reset: everything shipped and won goes (the reseeded fake GitHub hands out the same PR numbers again). */
+  clear(): Promise<void> {
+    const next = this.writing.then(async () => {
+      await this.db.transaction(async (tx) => {
+        await tx.query('delete from shipped');
+        await tx.query('delete from trophies');
+      });
+      this.known.clear();
+      await this.refresh();
+    });
+    this.writing = next.catch(() => undefined);
+    return next;
+  }
+
+  /** Once the writes queued so far are done (before the database closes). */
+  idle(): Promise<void> {
+    return this.writing.then(() => undefined);
+  }
+
+  /** Reads the view again (after a write here, or a trophy won) and sends it to the tabs. */
+  async refresh() {
     this.view = await this.read();
     this.store.publish({ type: 'records', records: this.view });
-    if (announce) for (const trophy of won) this.store.moment({ type: 'trophy', at: Date.now(), trophy });
-  }
-
-  /** Awards the milestones reached and not yet held, each dated by the merge that reached it. */
-  private async award(): Promise<Trophy[]> {
-    const counts = (await this.db.query<{ floor_id: string; n: number }>('select floor_id, count(*)::int as n from shipped group by floor_id')).rows;
-    const perFloor = Object.fromEntries(counts.map((c) => [c.floor_id, c.n]));
-    const total = counts.reduce((sum, c) => sum + c.n, 0);
-    const held = new Set((await this.db.query<{ id: string }>('select id from trophies')).rows.map((r) => r.id));
-    const won: Trophy[] = [];
-    for (const m of milestones(total, perFloor, (id) => this.floorName(id))) {
-      if (held.has(m.id)) continue;
-      const earnedAt = await this.reachedAt(m);
-      await this.db.query('insert into trophies (id, floor_id, icon, title, detail, earned_at) values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing', [m.id, m.floorId, m.icon, m.title, m.detail, earnedAt]);
-      won.push({ id: m.id, floorId: m.floorId, icon: m.icon, title: m.title, detail: m.detail, earnedAt: earnedAt.getTime() });
-    }
-    return won;
-  }
-
-  private async reachedAt(m: Milestone): Promise<Date> {
-    const rows = m.floorId
-      ? await this.db.query<{ merged_at: Date }>('select merged_at from shipped where floor_id = $1 order by merged_at asc offset $2 limit 1', [m.floorId, m.count - 1])
-      : await this.db.query<{ merged_at: Date }>('select merged_at from shipped order by merged_at asc offset $1 limit 1', [m.count - 1]);
-    return rows.rows[0]?.merged_at ?? new Date();
   }
 
   private async read(): Promise<RecordsView> {
@@ -139,9 +143,5 @@ export class Records {
 
   private nameOf(workerId: string | null): string | null {
     return workerId && this.store.hasWorker(workerId) ? this.store.worker(workerId).name : null;
-  }
-
-  private floorName(floorId: string): string {
-    return this.store.hasFloor(floorId) ? this.store.floor(floorId).fullName.split('/').pop()! : floorId;
   }
 }

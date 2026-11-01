@@ -11,7 +11,8 @@ import { messageCue, momentCue } from './notifyRules';
 import { deskLines, deskToast, errorToast, MAX_TOASTS, messageToast, momentToast, questionToast, toastMs, type ToastLine } from './officeToasts';
 
 /** One moment's identity, for telling the new ones from those already shown. */
-const keyOf = (m: Moment) => `${m.type}:${m.at}:${'prNumber' in m ? m.prNumber : 'worker' in m ? m.worker.id : 'trophy' in m ? m.trophy.id : m.numbers.join(',')}`;
+const keyOf = (m: Moment) =>
+  `${m.type}:${m.at}:${m.type === 'earned' ? `${m.floorId}#${m.prNumber}` : 'prNumber' in m ? m.prNumber : 'worker' in m ? m.worker.id : 'trophy' in m ? m.trophy.id : m.numbers.join(',')}`;
 
 interface Seen {
   moments: Set<string>;

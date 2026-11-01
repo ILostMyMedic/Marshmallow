@@ -1,6 +1,7 @@
-// The debug page: the CEO, the world events outside, every floor with its workers, queue and pull requests, the
-// office's messages and the latest moments. It stays on as the admin view once the game exists. In the demo it can also
-// hire and let go of pretend workers, and fake Claude's usage warning or limit (server/demoRoutes.ts).
+// The debug page: the CEO, the world events outside, every floor with its coins, shop, workers, queue and pull requests,
+// the office's messages and the latest moments. It stays on as the admin view once the game exists. In the demo it can
+// also hire and let go of pretend workers, give a floor coins, and fake Claude's usage warning or limit
+// (server/demoRoutes.ts).
 import { Fragment, useEffect, useState } from 'react';
 import { DAY_MODES, isBusy, type DayMode, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
 import { BOX_SIZE_INFO, BOX_SIZES } from '../../../shared/cloud';
@@ -11,6 +12,7 @@ import { qaKey, useStore } from '../store';
 import { activityIcon, momentText, taskText } from './describe';
 import { eventGroups, eventHint, logLine, nextPick, span, timeLeft, type WorldLogEntry } from './worldDebug';
 import { LiveTerminal } from '../ui/LiveTerminal';
+import { ShopView } from '../ui/shop/ShopPanel';
 
 type Run = (method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown) => void;
 
@@ -327,7 +329,10 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
     .filter((w) => w.floorId === floor.id)
     .sort((a, b) => a.desk - b.desk);
   const defaultModel = useStore((s) => s.settings.defaultModel);
+  const purse = useStore((s) => s.coins.floors[floor.id]);
+  const demo = useStore((s) => s.demo);
   const [openTerm, setOpenTerm] = useState<string | null>(null);
+  const [shop, setShop] = useState(false);
   const name = (id: string | null) => (id && workers[id]?.name) || '—';
   const fp = floorPath(floor.id);
 
@@ -352,7 +357,21 @@ function FloorSection({ floor, run }: { floor: Floor; run: Run }) {
             </button>
           </span>
         )}
+        <span className="pill" title="Coins to spend, and earned in all">
+          🪙 {purse?.coins ?? 0} · {purse?.earned ?? 0} earned
+        </span>
+        {demo && (
+          <button title="Give this floor 100 coins (demo only)" onClick={() => run('POST', `/api/floors/${fp}/coins/grant`, { amount: 100 })}>
+            🪙 +100
+          </button>
+        )}
+        <button onClick={() => setShop(!shop)}>{shop ? 'Hide the shop' : '🛍 Shop'}</button>
       </div>
+      {shop && (
+        <div className="debug-shop">
+          <ShopView floorId={floor.id} tabs={false} />
+        </div>
+      )}
       <p className="muted">
         {plural(team.length, 'worker')} · {plural(floor.issues.length, 'open issue')} · clone {floor.cloneStatus}
         {floor.cloneError && ` (${floor.cloneError})`}

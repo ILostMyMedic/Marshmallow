@@ -19,6 +19,7 @@ import { Chatter } from './Chatter';
 import { City } from './City';
 import { WorldEvents } from './events/WorldEvents';
 import { CeoFloor } from './CeoFloor';
+import { planRects } from './decor/spots';
 import { useRide } from './elevatorRide';
 import { elevationOf, isFloor, kindOf, stops, topStorey } from './floors';
 import { ceoColliders, lobbyColliders, officeColliders, shellColliders } from './layout';
@@ -180,7 +181,12 @@ export function Game() {
     if (loaded && picked !== shown) setFloor(shown);
   }, [loaded, picked, shown, setFloor]);
   // the elevator's doorway opens and shuts with its doors (elevatorRide.ts elevatorShut)
-  const colliders = useMemo(() => (kind === 'lobby' ? lobbyColliders(false) : kind === 'ceo' ? ceoColliders(false) : kind === 'roof' ? roofColliders() : officeColliders(false)), [kind]);
+  // an office floor's bought furniture blocks you too (rugs and wall art don't)
+  const plan = useStore((s) => (floor ? s.floorPlans[floor.id] : undefined));
+  const colliders = useMemo(
+    () => (kind === 'lobby' ? lobbyColliders(false) : kind === 'ceo' ? ceoColliders(false) : kind === 'roof' ? roofColliders() : [...officeColliders(false), ...planRects(plan ?? [])]),
+    [kind, plan],
+  );
   // what the camera following you stays inside: the room's walls (none round the roof terrace)
   const walls = useMemo(() => (kind === 'roof' ? [] : shellColliders(kind === 'lobby' ? 'lobby' : kind === 'ceo' ? 'ceo' : 'office')), [kind]);
 

@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { GhRepoSummary, IssueInfo, PullInfo } from '../../shared/types.ts';
 import type { GitHubApi, IssueComment, PrDetails, RepoMeta } from '../backend/backend.ts';
 import { CommandError, gh, ghJson } from '../exec.ts';
+import { languageShares } from './languages.ts';
 
 /**
  * A read the board syncs on, tried twice: GitHub's API blips (a 502, a GraphQL timeout on the PRs' checks) and a gh
@@ -47,15 +48,16 @@ export async function listMyRepos(owner?: string): Promise<GhRepoSummary[]> {
 }
 
 export async function repoMeta(fullName: string): Promise<RepoMeta> {
-  const raw = await ghJson<{ nameWithOwner: string; description: string | null; url: string; defaultBranchRef: { name: string } | null }>([
+  const raw = await ghJson<{ nameWithOwner: string; description: string | null; url: string; defaultBranchRef: { name: string } | null; languages: { size: number; node: { name: string } | null }[] | null }>([
     'repo',
     'view',
     fullName,
     '--json',
-    'nameWithOwner,description,url,defaultBranchRef',
+    'nameWithOwner,description,url,defaultBranchRef,languages',
   ]);
+  const languages = languageShares((raw.languages ?? []).map((l) => ({ name: l.node?.name ?? '', size: l.size })));
   // An empty repository has no default branch yet: 'main' is what its first push will likely make.
-  return { nameWithOwner: raw.nameWithOwner, description: raw.description ?? '', url: raw.url, defaultBranch: raw.defaultBranchRef?.name || 'main', empty: !raw.defaultBranchRef };
+  return { nameWithOwner: raw.nameWithOwner, description: raw.description ?? '', url: raw.url, defaultBranch: raw.defaultBranchRef?.name || 'main', empty: !raw.defaultBranchRef, languages };
 }
 
 export async function listIssues(fullName: string): Promise<IssueInfo[]> {

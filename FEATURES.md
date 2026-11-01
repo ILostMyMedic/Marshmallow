@@ -168,6 +168,7 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [ ] **Follow cam** on a worker · S
 - [ ] **Throw balls** (Rapier physics) · M → `toys/balls.tsx`
 - [x] **Coffee mug and fridge snacks** for the player · M
+- [ ] **Sitting down** on benches, sofas, armchairs and deckchairs, and toasting marshmallows at the roof's fire · M (new)
 - [x] **Ping-pong against a worker** · L
 - [ ] **Jukebox** with synthesized songs · L → `client/src/ui/music.ts`, `jukeboxSongs.ts`
 - [ ] **Foam blasters** · M
@@ -181,6 +182,7 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 
 - [x] **Shipped work**: every merged PR kept (floor, title, who built and tested it, when), backfilled from GitHub when a floor connects; the lobby shows a shipped wall and the floors' totals · M (new: not in cubefarm)
 - [x] **Achievements** on a trophy shelf: the company's and each floor's milestones (first merge, 10, 50, 100 merges, a floor's first week…), in the lobby's trophy cabinet and on the CEO's floor · M
+- [x] **Awards**: achievements beyond merges (clean QA passes, fixes, streaks, a full team, a furnished floor, a project started from a chat…), each a trophy that pays coins, on an awards wall in the CEO's office with how far along each one is · M (new)
 - [x] **Your look on the server**: the same in every browser, kept in the database · S
 - [x] **The environment's state, office-wide**: the office clock's mode as an office setting, and the world events chosen by the server and kept in the database, so every tab sees the same sky and a reload doesn't start it over · M (new)
 - [x] **Floor plans**: each floor's items and the spots they stand in, starting with what every floor has today · M (new)

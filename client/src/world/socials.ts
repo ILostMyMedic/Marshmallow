@@ -116,7 +116,7 @@ const visit: Errand = {
 const stroll: Errand = {
   name: 'stroll',
   when: (w, s) => w.role === 'ceo' && s.floor === 'ceo' && isFree(w.status) && restless(s),
-  spot: ['window-*', 'lounge', 'bar', 'globe'],
+  spot: ['window-*', 'lounge', 'bar', 'globe', 'awards'],
   steps: [
     { gesture: 'none', seconds: 3 },
     { gesture: 'none', seconds: 2, turn: 0.6 },

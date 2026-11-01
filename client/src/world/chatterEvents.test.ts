@@ -63,8 +63,8 @@ describe('momentNews', () => {
   it('has the author say their PR is up, the tester give the verdict, and a merge cheered by a teammate', () => {
     const ws = office([worker('ada'), worker('grace')]).workers;
     expect(momentNews({ type: 'prOpened', at: T, floorId: 'o/r', prNumber: 5, workerId: 'ada', issueNumber: 1 }, ws)).toEqual([{ who: 'ada', event: { kind: 'prOpened', pr: 5 }, delay: 0, priority: 'event' }]);
-    expect(momentNews({ type: 'qaFailed', at: T, floorId: 'o/r', prNumber: 5, qaWorkerId: 'grace' }, ws)[0]).toMatchObject({ who: 'grace', event: { kind: 'qaFailed', pr: 5 } });
-    expect(momentNews({ type: 'qaPassed', at: T, floorId: 'o/r', prNumber: 5, qaWorkerId: null }, ws)).toEqual([]);
+    expect(momentNews({ type: 'qaFailed', at: T, floorId: 'o/r', prNumber: 5, qaWorkerId: 'grace', round: 1 }, ws)[0]).toMatchObject({ who: 'grace', event: { kind: 'qaFailed', pr: 5 } });
+    expect(momentNews({ type: 'qaPassed', at: T, floorId: 'o/r', prNumber: 5, qaWorkerId: null, round: 1 }, ws)).toEqual([]);
     const merged = momentNews({ type: 'merged', at: T, floorId: 'o/r', prNumber: 5, devWorkerId: 'ada' }, ws);
     expect(merged.map((s) => s.event.kind)).toEqual(['merged', 'congrats']);
     expect(merged[1]).toMatchObject({ who: 'ada', near: true, event: { to: 'Ada' } });

@@ -1,6 +1,7 @@
 // The lobby: the way in. The front desk faces you as you step out of the elevator, with Mia the guide behind it
 // (TourGuide.tsx; E on the desk talks to her: ui/FrontDeskPanel.tsx); the company's name and a screen with today's
-// news on the wall behind her; the floor directory by the elevator (E: the elevator's buttons); the trophy cabinet
+// news on the wall behind her; the floor directory by the elevator (E: the elevator's buttons) and the shop's kiosk
+// across from it (decor/ShopKiosk.tsx); the trophy cabinet
 // (TrophyCabinet.tsx) and, facing it across the room, the shipped wall (ShippedWall.tsx); a corner to sit in; rugs and
 // plants.
 // Adapted from cubefarm client/src/world/Lobby.tsx (MIT): the front desk and the directory (its trophy cabinet grew into
@@ -10,6 +11,7 @@ import { memo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { useCanvasTexture } from './canvasTexture';
+import { ShopKiosk } from './decor/ShopKiosk';
 import { roundRect, SANS } from './draw';
 import { kindOf, LOBBY, stops } from './floors';
 import { useInteractable } from './interact';
@@ -234,6 +236,7 @@ export const Lobby = memo(function Lobby({ top }: { top: number }) {
       <FrontDesk />
       <TodayBoard />
       <Directory />
+      <ShopKiosk />
       <TrophyCabinet />
       <ShippedWall />
       <Couch position={[LOBBY_COUCH.x, 0, LOBBY_COUCH.z]} rotationY={Math.PI / 2} color="#2a9d8f" />

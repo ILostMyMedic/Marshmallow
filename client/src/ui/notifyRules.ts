@@ -1,14 +1,14 @@
 // The notification sounds' decisions, pure (no WebAudio, so they're tested): which cue each piece of news gets (a merge,
-// a PR opened, QA's verdict, a worker in trouble, a question, a message on the desktop…), which one wins when several
-// arrive together, and how often one may play. notifySfx.ts plays them; Toasts.tsx spots the news. New in Marshmallow,
-// after cubefarm's event cues (client/src/ui/sfx.ts `cue`).
+// a PR opened, QA's verdict, coins earned, a worker in trouble, a question, a message on the desktop…), which one wins
+// when several arrive together, and how often one may play. notifySfx.ts plays them; Toasts.tsx spots the news. New in
+// Marshmallow, after cubefarm's event cues (client/src/ui/sfx.ts `cue`).
 
 import type { Moment, OfficeMessage } from '../../../shared/types';
 
-export type Cue = 'trouble' | 'question' | 'merged' | 'message' | 'failed' | 'notice' | 'passed' | 'opened' | 'joined' | 'issues';
+export type Cue = 'trouble' | 'question' | 'merged' | 'message' | 'failed' | 'notice' | 'passed' | 'coins' | 'opened' | 'joined' | 'issues';
 
 /** How much each cue matters: when news arrives together, the highest plays. */
-export const RANK: Record<Cue, number> = { trouble: 7, question: 6, merged: 5, message: 4, failed: 3, notice: 2, passed: 2, opened: 1, joined: 1, issues: 0 };
+export const RANK: Record<Cue, number> = { trouble: 7, question: 6, merged: 5, message: 4, failed: 3, notice: 2, passed: 2, coins: 2, opened: 1, joined: 1, issues: 0 };
 
 /** Cues arriving within this long (ms) of each other are one moment: the most important of them plays. */
 export const GATHER_MS = 150;
@@ -34,6 +34,8 @@ export function momentCue(type: Moment['type']): Cue {
       return 'notice';
     case 'trophy':
       return 'merged';
+    case 'earned':
+      return 'coins';
   }
 }
 

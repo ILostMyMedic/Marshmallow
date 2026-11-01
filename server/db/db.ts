@@ -3,10 +3,12 @@
 // discussions (migrations.ts has the tables). The live
 // office stays in the state file. Its folder is <home>/db (demo-db for the demo); tests open one in memory.
 import fs from 'node:fs';
-import { PGlite } from '@electric-sql/pglite';
+import { PGlite, type Transaction } from '@electric-sql/pglite';
 import { MIGRATIONS, type Migration } from './migrations.ts';
 
 export type Db = PGlite;
+/** A transaction in progress (db.transaction's callback gets one): writes that go together. */
+export type Tx = Transaction;
 
 /** Opens the database in `dir` (creating it the first time), or in memory when `dir` is null, with its tables up to date. */
 export async function openDb(dir: string | null, migrations: readonly Migration[] = MIGRATIONS): Promise<Db> {

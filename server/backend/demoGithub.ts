@@ -5,8 +5,10 @@
 // Adapted from cubefarm server/demo.ts (MIT).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import type { GhRepoSummary, IssueInfo, PullInfo } from '../../shared/types.ts';
+import type { GhRepoSummary, IssueInfo, PullInfo, RepoLanguage } from '../../shared/types.ts';
+import { seeded } from '../../shared/worldEvents.ts';
 import { writeJsonAtomic } from '../files.ts';
+import { languageShares } from '../github/languages.ts';
 import type { GitHubApi, IssueComment, PrDetails, RepoMeta } from './backend.ts';
 
 interface FakeRepo {
@@ -66,6 +68,34 @@ const SEED: { fullName: string; description: string; issues: [string, string][] 
 ];
 
 const CHECKS = ['CI / build', 'Vercel'];
+
+// The kinds of codebase the demo's repositories are made of: each repository gets one, by its name.
+const LANGUAGE_MIXES: readonly string[][] = [
+  ['TypeScript', 'CSS', 'HTML', 'JavaScript'],
+  ['JavaScript', 'CSS', 'HTML', 'Shell'],
+  ['TypeScript', 'JavaScript', 'Dockerfile', 'Shell'],
+  ['Python', 'HTML', 'CSS', 'JavaScript', 'Dockerfile'],
+  ['TypeScript', 'Vue', 'SCSS', 'HTML'],
+  ['TypeScript', 'Svelte', 'CSS', 'HTML', 'JavaScript'],
+  ['JavaScript', 'TypeScript', 'SCSS', 'HTML', 'Shell'],
+];
+
+/** A demo repository's languages, made up from its name: the same on every start, different from repository to repository. */
+export function fakeLanguages(fullName: string): RepoLanguage[] {
+  let seed = 2166136261;
+  for (const c of fullName.toLowerCase()) seed = Math.imul(seed ^ c.charCodeAt(0), 16777619);
+  const mix = LANGUAGE_MIXES[(seed >>> 0) % LANGUAGE_MIXES.length];
+  const rand = seeded(seed);
+  // Each a fraction of the one before, so the mix's first is the biggest.
+  let size = 40_000 + Math.floor(rand() * 60_000);
+  return languageShares(
+    mix.map((name) => {
+      const out = { name, size };
+      size = Math.max(1, Math.floor(size * (0.12 + rand() * 0.5)));
+      return out;
+    }),
+  );
+}
 /** Who the demo acts as, and the organisation it belongs to (the seeded repositories' owner). */
 export const DEMO_LOGIN = 'demo-manager';
 const DEMO_ORGS = ['demo-co'];
@@ -119,7 +149,7 @@ export class FakeGitHub implements GitHubApi {
 
   async repoMeta(fullName: string): Promise<RepoMeta> {
     const r = this.repo(fullName);
-    return { nameWithOwner: r.fullName, description: r.description, url: `https://github.com/${r.fullName}`, defaultBranch: 'main', empty: false };
+    return { nameWithOwner: r.fullName, description: r.description, url: `https://github.com/${r.fullName}`, defaultBranch: 'main', empty: false, languages: fakeLanguages(r.fullName) };
   }
 
   // Like gh repo create --add-readme: a README's commit on main, and no issues yet.

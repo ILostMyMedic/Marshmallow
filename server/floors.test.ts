@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerEvent } from '../shared/types.ts';
 import { createDemoBackend, type DemoBackend } from './backend/demo.ts';
-import { Floors } from './floors.ts';
+import { fakeLanguages } from './backend/demoGithub.ts';
+import { Floors, LANGUAGES_EVERY_MS } from './floors.ts';
 import { Store } from './store.ts';
 
 const REPO = 'demo-co/pixel-todo';
@@ -90,5 +91,31 @@ describe('Floors', () => {
     await floors.sync(REPO);
     expect(store.floor(REPO).syncError).toBe('HTTP 502: Bad Gateway');
     expect(store.floor(REPO).issues.length).toBeGreaterThan(0); // keeps what it had
+  });
+
+  it("keeps the repository's languages from the connect, and asks again on a sync an hour later or after a restart", async () => {
+    const meta = vi.spyOn(backend.github, 'repoMeta');
+    await floors.connect(REPO);
+    expect(store.floor(REPO).languages).toEqual(fakeLanguages(REPO));
+    await floors.sync(REPO);
+    await floors.sync(REPO);
+    expect(meta).toHaveBeenCalledTimes(1); // the connect's
+    meta.mockResolvedValueOnce({ ...(await backend.github.repoMeta(REPO)), languages: [{ name: 'Rust', share: 1 }] });
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + LANGUAGES_EVERY_MS);
+    try {
+      await floors.sync(REPO);
+      await wait(10);
+    } finally {
+      vi.mocked(Date.now).mockRestore();
+    }
+    expect(store.floor(REPO).languages).toEqual([{ name: 'Rust', share: 1 }]);
+    await store.flush();
+    const restarted = new Store(path.join(dir, 'state.json'), { version: '0', demo: true });
+    await restarted.load();
+    expect(restarted.floor(REPO).languages).toEqual([{ name: 'Rust', share: 1 }]);
+    await new Floors(restarted, backend).sync(REPO);
+    await wait(10);
+    expect(restarted.floor(REPO).languages).toEqual(fakeLanguages(REPO));
   });
 });

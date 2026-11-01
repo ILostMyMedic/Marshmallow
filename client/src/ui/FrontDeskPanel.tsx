@@ -1,14 +1,17 @@
 // The front desk (E on it in the lobby): Mia says hello, shows today in numbers (world/tour.ts todayStatus) and what
-// the office has shipped and won (ui/TrophiesPanel.tsx), offers the tour (world/TourGuide.tsx), lists every floor with
-// what it's building and who's on it, each a ride away, and points the way to the manager's console.
+// the office has shipped and won (ui/TrophiesPanel.tsx, and a link to every award), offers the tour
+// (world/TourGuide.tsx), lists every floor with what it's building and who's on it, each a ride away, and points the
+// way to the manager's console.
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
+import { act } from '../world/actions';
 import { rideTo } from '../world/elevatorRide';
 import { CEO_FLOOR, ROOF } from '../world/floors';
 import { dateLabel, prs } from '../world/shipped';
 import { clip, names, todayStatus, tourStops } from '../world/tour';
 import { useTour } from '../world/tourState';
 import { useView } from '../world/view';
+import { wonOf } from './awards/awards';
 import { showTab } from './console/nav';
 import { Panel } from './Panel';
 import { TrophyList } from './TrophiesPanel';
@@ -19,8 +22,10 @@ export function FrontDeskPanel() {
   const floors = useStore((s) => s.floors);
   const workers = useStore((s) => s.workers);
   const qa = useStore((s) => s.qa);
+  const purses = useStore((s) => s.coins.floors);
   const records = useStore((s) => s.records);
   const newest = records.trophies.at(-1);
+  const awards = wonOf(records.trophies, floors.map((f) => f.id));
   const close = useView((s) => s.closeOverlay);
   const go = (floor: number) => {
     close();
@@ -65,6 +70,12 @@ export function FrontDeskPanel() {
           ) : (
             <span>🏆 The trophy cabinet is waiting for your first merge</span>
           )}
+          <span>
+            🏅 <b>{awards.won}</b> of {awards.total} awards won ·{' '}
+            <button className="link" onClick={() => act({ kind: 'awards' })}>
+              see every award
+            </button>
+          </span>
         </p>
         <details className="frontdesk-trophies">
           <summary>Every trophy, and what we shipped lately</summary>
@@ -105,7 +116,7 @@ export function FrontDeskPanel() {
                     <p>{clip(f.summary || f.description || f.mission || 'One of our projects.', 140)}</p>
                     <small>
                       {team.length ? `${names(team.map((w) => w.name), 4)} · ` : 'No team yet · '}
-                      {f.issues.length} open issues · {inQa} in QA
+                      {f.issues.length} open issues · {inQa} in QA · 🪙 {purses[f.id]?.coins ?? 0}
                     </small>
                   </div>
                   <button onClick={() => go(f.floor)}>Take me there</button>

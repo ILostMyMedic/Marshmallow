@@ -2,7 +2,7 @@
 // machines and Claude Code sessions. The demo backend (demo.ts) fakes all of it, so `--demo` and the tests run with
 // no GitHub, git, npm or Claude usage.
 // Adapted from cubefarm server/backend.ts (MIT).
-import type { GhRepoSummary, IssueInfo, PullInfo } from '../../shared/types.ts';
+import type { GhRepoSummary, IssueInfo, PullInfo, RepoLanguage } from '../../shared/types.ts';
 import type { MachineProvider } from '../machines/machines.ts';
 import type { BoxApi } from '../machines/box/box.ts';
 import type { PreviewBackend } from '../previewRunner.ts';
@@ -17,6 +17,8 @@ export interface RepoMeta {
   defaultBranch: string;
   /** No commits yet, so no default branch: workers' desks, which start from origin/<default branch>, can't be set up. */
   empty: boolean;
+  /** Its languages, biggest first, as shares that add up to 1 (server/github/languages.ts). */
+  languages: RepoLanguage[];
 }
 
 export interface PrDetails {

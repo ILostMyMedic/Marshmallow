@@ -130,7 +130,7 @@ describe('starting an approved project', () => {
 
   it('refuses an empty repository and a taken name, saying so in the chat, until the card is right', async () => {
     const { id } = await card({ new_repo_name: undefined, existing_repo: 'demo-co/recipe-box' });
-    vi.spyOn(backend.github, 'repoMeta').mockResolvedValueOnce({ nameWithOwner: 'demo-co/recipe-box', description: '', url: 'https://github.com/demo-co/recipe-box', defaultBranch: 'main', empty: true });
+    vi.spyOn(backend.github, 'repoMeta').mockResolvedValueOnce({ nameWithOwner: 'demo-co/recipe-box', description: '', url: 'https://github.com/demo-co/recipe-box', defaultBranch: 'main', empty: true, languages: [] });
     await projects.approve(id);
     await projects.settle();
     expect(await desk.proposal(id)).toMatchObject({ status: 'failed', floorId: null, error: 'demo-co/recipe-box is empty. Workers start from its default branch, so it needs a first commit (a README will do)' });

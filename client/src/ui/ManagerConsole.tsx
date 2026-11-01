@@ -1,5 +1,5 @@
-// The manager's console: the floors, the team, the issues and the office's settings, everything the debug page does,
-// over the game. O, the HUD's Office button or the front desk opens it; the tab and floor live in its overlay
+// The manager's console: the floors, the team, the issues, the shop and the office's settings, everything the debug
+// page does, over the game. O, the HUD's Office button or the front desk opens it; the tab and floor live in its overlay
 // (console/nav.ts), and a refused command shows at the top. Adapted from cubefarm client/src/ui/ManagerConsole.tsx (MIT).
 // Cut: mission control, the CEO's own tab (the CEO is on Team, their chats on the desktop), the time-lapse and the
 // accessibility tab.
@@ -12,6 +12,7 @@ import { IssuesTab } from './console/IssuesTab';
 import { lastTab, rememberTab, showTab } from './console/nav';
 import { clearProblem, useProblem } from './console/run';
 import { SettingsTab } from './console/SettingsTab';
+import { ShopView } from './shop/ShopPanel';
 import { TeamTab } from './console/TeamTab';
 import { Panel } from './Panel';
 
@@ -19,6 +20,7 @@ const TABS: [ConsoleTab, string][] = [
   ['floors', '🏢 Floors'],
   ['team', '👥 Team'],
   ['issues', '📋 Issues'],
+  ['shop', '🪙 Shop'],
   ['settings', '⚙️ Settings'],
 ];
 
@@ -62,6 +64,7 @@ export function ManagerConsole({ tab, floorId }: { tab?: ConsoleTab; floorId?: s
           {current === 'floors' && <FloorsTab floorId={floorId} />}
           {current === 'team' && <TeamTab floorId={floorId} />}
           {current === 'issues' && <IssuesTab floorId={floorId} />}
+          {current === 'shop' && <ShopView floorId={floorId} onPick={(id) => showTab('shop', id)} />}
           {current === 'settings' && <SettingsTab />}
         </div>
       </div>

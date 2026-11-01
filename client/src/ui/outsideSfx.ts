@@ -39,9 +39,9 @@ const TICK_MS = 100;
  * Each layer's gain at full level, before the master volume. The noise layers are narrow (a few hundred Hz of white
  * noise), so they need big gains: the air averages about 0.025 (-32 dBFS) out on a balcony, a third of that indoors.
  */
-const GAIN = { wind: 0.17, city: 0.2, wash: 0.07, car: 0.25, bird: 0.05, cricket: 0.02 };
+const GAIN = { wind: 0.17, city: 0.2, wash: 0.07, car: 0.25, bird: 0.05, cricket: 0.007 };
 /** Their loudest moments after filtering, for __mmSfx. */
-const PEAK = { air: 0.17, car: 0.075, bird: 0.05, cricket: 0.02 };
+const PEAK = { air: 0.17, car: 0.075, bird: 0.05, cricket: 0.007 };
 const BIRDS = 3;
 const CRICKETS = 2;
 /** Seconds of silence before the graph is cut off from the mixer. */
@@ -307,7 +307,8 @@ function play(v: Voice, t0: number, n: Note, peak: number, glides: boolean) {
     v.osc.frequency.setValueAtTime(n.from, s);
     v.osc.frequency.exponentialRampToValueAtTime(n.to, s + n.dur);
   }
-  const attack = Math.min(0.012, n.dur / 3);
+  // crickets' pulses get a softer edge than a bird's notes, so a chirp doesn't click
+  const attack = glides ? Math.min(0.012, n.dur / 3) : n.dur / 2.5;
   v.gain.gain.setValueAtTime(0, s);
   v.gain.gain.linearRampToValueAtTime(peak * n.peak, s + attack);
   if (!glides) v.gain.gain.setValueAtTime(peak * n.peak, s + n.dur - attack);
@@ -430,7 +431,8 @@ function buildOutside(c: BaseAudioContext, out: AudioNode): Graph {
   };
   const birds = Array.from({ length: BIRDS }, () => voice('sine', 3000));
   const crickets = Array.from({ length: CRICKETS }, (_, i) => {
-    const v = voice('sine', 4300 + i * 380);
+    // lower than they were (4.3 and 4.7 kHz), where a pure tone stops piercing
+    const v = voice('sine', 3700 + i * 260);
     if (v.pan) v.pan.pan.value = i ? 0.55 : -0.45;
     return v;
   });

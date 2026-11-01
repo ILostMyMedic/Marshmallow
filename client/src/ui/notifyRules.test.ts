@@ -10,6 +10,11 @@ describe('momentCue and messageCue', () => {
     expect(momentCue('issuesFiled')).toBe('issues');
     expect(momentCue('hired')).toBe('joined');
     expect(momentCue('left')).toBe('notice');
+    expect(momentCue('earned')).toBe('coins');
+  });
+
+  it("lets a merge's chime win over the coins it earned, arriving together", () => {
+    expect(better('coins', 'merged')).toBe('merged');
   });
 
   it("rings the phone for the CEO's replies and the office's notices, not for your own messages", () => {

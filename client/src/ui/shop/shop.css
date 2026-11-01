@@ -1,0 +1,373 @@
+/* The shop (ui/shop/ShopPanel.tsx): the game's cartoon look (paper, ink outlines, hard shadows, Fredoka for headings
+   and buttons) with the floor's colour (--floor) as its accent. Buttons, hints and chips are the console's. */
+
+.shop {
+  --ink: #1f1d2b;
+  --muted: #5c6078;
+  --floor: #ff8a5b;
+  color-scheme: light; /* paper in either theme, so its selects are too */
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.shop-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.shop-empty p {
+  margin: 0;
+}
+
+/* ---------- the floor tabs ---------- */
+
+.shop-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.shop-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 5px 3px 3px;
+  border: 2px solid #c9c0ae;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 600 0.92rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.shop-tab:hover {
+  background: #fff3d6;
+}
+
+.shop-tab.on {
+  border-color: var(--ink);
+  background: color-mix(in srgb, var(--tab) 22%, #ffffff);
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.shop-tab .console-floor-no {
+  width: 24px;
+  height: 24px;
+  font-size: 0.78rem;
+}
+
+.shop-tab-coins {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fff3d6;
+  color: #7a5600;
+  font-size: 0.8rem;
+}
+
+/* ---------- the catalogue, with what's on the floor and the ledger beside it ---------- */
+
+.shop-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 310px);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .shop-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.shop-purse {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 2px solid var(--ink);
+  border-left: 10px solid var(--floor);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--floor) 10%, #fffdf5);
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.shop-coins {
+  flex: none;
+  padding: 2px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #ffd166;
+  box-shadow: 0 2px 0 var(--ink);
+  font: 700 1.45rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.shop-group {
+  margin-top: 14px;
+}
+
+.shop-h {
+  margin: 0 0 8px;
+  font: 600 1.02rem Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.shop-group > .shop-h {
+  padding-bottom: 3px;
+  border-bottom: 3px solid color-mix(in srgb, var(--floor) 45%, transparent);
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 10px;
+}
+
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+/* what can't be bought now steps back; what's owned is ticked off */
+.shop-item-full,
+.shop-item-poor,
+.shop-item-needs,
+.shop-item-missing {
+  background: #faf7f0;
+  box-shadow: none;
+}
+
+.shop-item-full .shop-icon,
+.shop-item-needs .shop-icon,
+.shop-item-missing .shop-icon {
+  filter: grayscale(0.7);
+  opacity: 0.7;
+}
+
+.shop-item-owned {
+  border-color: #1f7a3a;
+  background: #f1fbf3;
+  box-shadow: 0 2px 0 #1f7a3a;
+}
+
+.shop-item-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.shop-item-head strong {
+  margin-right: 6px;
+}
+
+.shop-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--floor) 18%, #fffdf5);
+  font-size: 1.45rem;
+}
+
+.shop-icon.small {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 1.05rem;
+}
+
+.shop-price {
+  flex: none;
+  padding: 1px 9px;
+  border: 1.5px solid #e0a800;
+  border-radius: 999px;
+  background: #fff3d6;
+  color: #7a5600;
+  font: 700 0.85rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.shop-blurb {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.shop-item-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.shop-select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 2px solid #c9c0ae;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ink);
+  font: 0.82rem system-ui, sans-serif;
+}
+
+.shop-select:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.7);
+}
+
+.shop-state {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eeeae0;
+  color: #3d405b;
+  font: 600 0.8rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: right;
+}
+
+.shop-state-poor {
+  background: #fff3d6;
+  color: #7a5600;
+}
+
+.shop-state-owned {
+  background: #e3fbe7;
+  color: #1f7a3a;
+}
+
+.shop-state-needs,
+.shop-state-missing {
+  background: #ffe9d6;
+  color: #8a4a12;
+}
+
+/* what the last click came to, beside it */
+.shop-done,
+.shop-bad {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+}
+
+.shop-done {
+  background: #e3fbe7;
+  color: #1f5f33;
+  animation: shop-pop 0.25s ease-out;
+}
+
+.shop-bad {
+  background: #ffe0e6;
+  color: #7a1f2b;
+}
+
+@keyframes shop-pop {
+  from {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+}
+
+/* ---------- on this floor, and the ledger ---------- */
+
+.shop-side {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shop-card {
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.shop-placed,
+.shop-ledger {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shop-placed li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1.5px dashed #ece4d4;
+}
+
+.shop-placed li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.shop-placed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.shop-move {
+  display: block;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+}
+
+.shop-up {
+  border-color: #e0a800;
+  background: #fff3d6;
+  color: #7a5600;
+}
+
+.shop-ledger {
+  gap: 5px;
+}
+
+.shop-ledger li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.86rem;
+}
+
+.shop-ledger b {
+  min-width: 4.2ch;
+  text-align: right;
+  font-family: Fredoka, "Segoe UI", system-ui, sans-serif;
+}
+
+.shop-ledger b.in {
+  color: #1f7a3a;
+}
+
+.shop-ledger b.out {
+  color: #b3261e;
+}
+
+.shop-ledger small {
+  color: var(--muted);
+  white-space: nowrap;
+}

@@ -250,8 +250,13 @@ export const RECEPTION_CHAIR = { x: 0, z: RECEPTION.z - 1.05 };
 export const TODAY_BOARD = { w: 6.4, h: 2.2, y: 1.15, z: -HALF_D + 0.06 };
 /** The floor directory on the south wall, west of the elevator's doors (you read it facing south). */
 export const DIRECTORY = { x: -(ELEVATOR.doorHalf + 2.1), w: 2.2, h: 2.4, y: 0.5, z: HALF_D - 0.05 };
-/** The trophy cabinet against the west wall (TrophyCabinet.tsx), and the lounge corner by the east wall (a couch facing west, a table). */
-export const TROPHIES = { x: -HALF_W + 0.35, z: -7.5, w: 0.6, l: 3.6, h: 2.1 };
+/** The shop's kiosk (decor/ShopKiosk.tsx), mirroring the directory east of the elevator: its middle, size and height, facing north. */
+export const SHOP_KIOSK = { x: ELEVATOR.doorHalf + 2.1, z: HALF_D - 0.38, w: 1.1, d: 0.62, h: 1.9 };
+/**
+ * The trophy cabinet against the west wall (TrophyCabinet.tsx), long enough for the awards (between the corner's plant
+ * and the window), and the lounge corner by the east wall (a couch facing west, a table).
+ */
+export const TROPHIES = { x: -HALF_W + 0.35, z: -7.5, w: 0.6, l: 5.4, h: 2.1 };
 /** The shipped wall on the east wall, between the corner and the window, facing the trophies: its face x, middle z, size and bottom y. */
 export const SHIPPED_WALL = { x: HALF_W - 0.06, z: -7.2, w: 6.2, h: 2.5, y: 0.75 };
 export const LOBBY_COUCH = { x: HALF_W - 0.9, z: 7.2 };
@@ -279,6 +284,7 @@ export function lobbyColliders(doorway = true): Rect[] {
     rect(TROPHIES.x, TROPHIES.z, TROPHIES.w, TROPHIES.l),
     rect(LOBBY_COUCH.x, LOBBY_COUCH.z, 1.1, 3.2),
     rect(LOBBY_TABLE.x, LOBBY_TABLE.z, 0.9, 1.4),
+    rect(SHOP_KIOSK.x, SHOP_KIOSK.z, SHOP_KIOSK.w, SHOP_KIOSK.d),
     ...LOBBY_PLANTS.map(plantRect),
   ];
 }
@@ -313,6 +319,12 @@ export const EXEC_PLANTS: [number, number, number][] = [
 /** The company's milestones on the north wall over the meeting table, and the low cabinet under it with their trophies. */
 export const EXEC_MILESTONES = { x: 8.5, w: 4.4, h: 1.8, y: 1.45, z: -HALF_D + 0.06 };
 export const EXEC_TROPHIES = { x: 8.5, z: -HALF_D + 0.3, w: 4.4, d: 0.5, h: 0.9 };
+/**
+ * The awards wall (AwardsWall.tsx) on the south wall west of the elevator, facing north across the room to the CEO's
+ * desk: the board w by h with its bottom y up and its face z, and the low shelf under it with the newest awards' trophies.
+ */
+export const EXEC_AWARDS = { x: -7.4, w: 6, h: 1.85, y: 1.42, z: HALF_D - 0.06 };
+export const EXEC_AWARD_SHELF = { x: -7.4, z: HALF_D - 0.3, w: 6, d: 0.5, h: 0.85 };
 
 /** The meeting table's chairs: x, z and which way they face (a yaw, 0 facing -Z). */
 export function meetingChairs(): [number, number, number][] {
@@ -342,6 +354,7 @@ export function ceoColliders(doorway = true): Rect[] {
     rect(EXEC_BAR.x, EXEC_BAR.z, 0.6, 1.1),
     rect(EXEC_GLOBE.x, EXEC_GLOBE.z, 0.7, 0.7),
     rect(EXEC_TROPHIES.x, EXEC_TROPHIES.z, EXEC_TROPHIES.w, EXEC_TROPHIES.d),
+    rect(EXEC_AWARD_SHELF.x, EXEC_AWARD_SHELF.z, EXEC_AWARD_SHELF.w, EXEC_AWARD_SHELF.d),
     ...EXEC_PLANTS.map(plantRect),
   ];
 }

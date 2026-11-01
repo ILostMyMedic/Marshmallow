@@ -1,10 +1,10 @@
 // Adapted from cubefarm client/src/world/walkways.test.ts (MIT): without the toys, the dog and the lobby's furniture.
 import { describe, expect, it } from 'vitest';
 import { KANBAN_KEYS } from './draw';
-import { BOARD, PLAYER_RADIUS, SEATS, elevatorDoorway, lobbyColliders, officeColliders, pongTableRect } from './layout';
+import { BOARD, EXEC_AWARD_SHELF, PLAYER_RADIUS, SEATS, ceoColliders, elevatorDoorway, lobbyColliders, officeColliders, pongTableRect } from './layout';
 import { BALCONY, BALCONY_OUT, HALF_W, SIDE_OPENINGS, SIDES, sideSign } from './layout';
 import { segmentClear, type Pt } from './nav';
-import { WALK_R, WALK_SPEED, findPath, spot, standable, steer, walkways, type Body, type FloorKind, type Mover, type Walkways } from './walkways';
+import { CRAWL, WALK_R, WALK_SPEED, findPath, heldUp, spot, standable, steer, walkways, type Body, type FloorKind, type Mover, type Walkways } from './walkways';
 
 const FLOORS: FloorKind[] = ['office', 'lobby'];
 const DT = 1 / 60;
@@ -57,7 +57,29 @@ describe('named spots', () => {
     const w = walkways('ceo');
     expect(w.homes.map((s) => s.id)).toEqual(['ceo']);
     const home = spot(w, 'ceo')!;
-    for (const id of ['elevator', 'lounge', 'bar', 'globe', 'window-w0']) expect(findPath(w, home, spot(w, id)!), id).not.toBeNull();
+    for (const id of ['elevator', 'lounge', 'bar', 'globe', 'awards', 'window-w0']) expect(findPath(w, home, spot(w, id)!), id).not.toBeNull();
+  });
+
+  it("every CEO spot is somewhere to stand, reached from their desk round the furniture (the awards wall's shelf included)", () => {
+    const w = walkways('ceo');
+    const solid = [...ceoColliders(), elevatorDoorway()];
+    const home = spot(w, 'ceo')!;
+    expect(new Set(w.spots.map((s) => s.id)).size).toBe(w.spots.length);
+    for (const to of w.spots) {
+      expect(standable(w, to.x, to.z), to.id).toBe(true);
+      const path = findPath(w, home, to);
+      expect(path, to.id).not.toBeNull();
+      let at: Pt = home;
+      for (const p of path!) {
+        expect(segmentClear(solid, at, p, WALK_R), to.id).toBe(true);
+        at = p;
+      }
+    }
+    // the awards spot looks at the wall, a step back from its shelf
+    const awards = spot(w, 'awards')!;
+    expect(Math.sin(awards.facing)).toBeCloseTo(1);
+    expect(EXEC_AWARD_SHELF.z - EXEC_AWARD_SHELF.d / 2 - awards.z).toBeGreaterThan(WALK_R);
+    expect(standable(w, EXEC_AWARD_SHELF.x, EXEC_AWARD_SHELF.z)).toBe(false);
   });
 });
 
@@ -216,5 +238,37 @@ describe('steer', () => {
     const me: Mover = { id: 'a', x: 0, z: 0, dx: 1, dz: 0 };
     const st = steer(me, [], { x: WALK_R + PLAYER_RADIUS + 0.1, z: 0 }, () => false);
     expect(st).toEqual({ speed: 0, side: 0, wait: true });
+  });
+});
+
+describe('held up', () => {
+  it('counts waiting, and crawling with nowhere to step aside; walking on or stepping aside starts it again', () => {
+    expect(heldUp(1, { speed: 0, side: 0, wait: true }, 0.5)).toBe(1.5);
+    expect(heldUp(1, { speed: CRAWL / 2, side: 0, wait: false }, 0.5)).toBe(1.5);
+    expect(heldUp(1, { speed: CRAWL / 2, side: 0.7, wait: false }, 0.5)).toBe(0);
+    expect(heldUp(1, { speed: 0.6, side: 0, wait: false }, 0.5)).toBe(0);
+    expect(heldUp(1, { speed: 1, side: 0, wait: false }, 0.5)).toBe(0);
+  });
+
+  it('catches a walker stalled behind someone standing in a gap too narrow to step round, though it never waits', () => {
+    // as ErrandDirector's follow steers a body: aim a little ahead (CARROT 0.8 m times the speed steer allows), at no
+    // less than a fifth of walking speed; body.ts's walkTo counts a target within 3 cm as reached and goes no further
+    const open = (_: number, z: number) => Math.abs(z) < 0.05;
+    const other: Body = { id: 'b', x: 0.9, z: 0 };
+    const me = { id: 'a', x: 0, z: 0 };
+    let waited = 0;
+    let stopped = false;
+    let longest = 0;
+    for (let i = 0; i < 60 * 4; i++) {
+      const s = steer({ ...me, dx: 1, dz: 0 }, [other], null, open);
+      stopped ||= s.wait;
+      const ahead = s.speed * 0.8;
+      if (ahead >= 0.03) me.x += Math.min(ahead, WALK_SPEED * Math.max(0.2, s.speed) * DT);
+      waited = heldUp(waited, s, DT);
+      longest = Math.max(longest, waited);
+    }
+    expect(stopped).toBe(false); // never waiting outright: the old count never started
+    expect(me.x).toBeLessThan(other.x - 2 * WALK_R); // nor through them, either
+    expect(longest).toBeGreaterThan(3); // so now, after 3 s, it walks on through
   });
 });

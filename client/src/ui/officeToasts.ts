@@ -1,9 +1,12 @@
 // What the office's toasts say (Toasts.tsx shows them): a line for each moment the server sends (a merge, a PR opened,
-// QA's verdict, new issues, a hire or a leaver), a worker whose session failed, a question from a worker, and the CEO's
-// words (in a chat, a discussion or a job report) and the office's notices while the desktop is shut. Pure, so the tests check every line. Adapted from cubefarm
+// QA's verdict, new issues, a hire or a leaver, an award won with its coins, coins a floor earned), a worker whose
+// session failed, a question from a worker, and the CEO's words (in a chat, a discussion or a job report) and the
+// office's notices while the desktop is shut. Pure, so the tests check every line. Adapted from cubefarm
 // server/swarm.ts's toasts and client/src/store.ts's pushToast (MIT): built in the browser from what the server already
-// sends, and the update, usage, alarm and coin toasts are cut.
-import type { DeskMessage, DeskView, Floor, Moment, OfficeMessage, Question, Worker } from '../../../shared/types';
+// sends, and the update, usage and alarm toasts are cut.
+import type { DeskMessage, DeskView, Floor, Moment, OfficeMessage, Question, Trophy, Worker } from '../../../shared/types';
+import { tierName, tierOf } from './awards/awards';
+import { earnedWhy } from './shop/shop';
 
 export type ToastLevel = 'info' | 'good' | 'warn' | 'error';
 
@@ -31,6 +34,17 @@ export const floorName = (floors: Floor[], id: string | null) => {
 
 const nameOf = (workers: Record<string, Worker>, id: string | null) => (id && workers[id]?.name) || null;
 
+/**
+ * An award won, with what it paid: "🏆 Hat trick (pixel-todo) · +30 🪙", "🏆 Second floor · +30 🪙 to every floor"; no
+ * coins for one found in a floor's history. A trophy that isn't an award goes by its title.
+ */
+export function trophyText(t: Trophy, floors: Floor[]): string {
+  const ref = tierOf(t);
+  const name = ref ? `${tierName(ref.tier)}${t.floorId ? ` (${floorName(floors, t.floorId)})` : ''}` : t.title;
+  const pays = t.reward > 0 ? ` · +${t.reward} 🪙${t.floorId ? '' : ' to every floor'}` : '';
+  return `🏆 ${name}${pays}`;
+}
+
 /** The toast for moment `m`, or null for none. */
 export function momentToast(m: Moment, floors: Floor[], workers: Record<string, Worker>): ToastLine | null {
   switch (m.type) {
@@ -53,7 +67,13 @@ export function momentToast(m: Moment, floors: Floor[], workers: Record<string, 
     case 'left':
       return { level: 'info', text: m.worker.role === 'ceo' ? `👔 ${m.worker.name} left the company` : `📦 ${m.worker.name} left ${floorName(floors, m.worker.floorId)}` };
     case 'trophy':
-      return { level: 'good', text: `🏆 Trophy: ${m.trophy.icon} ${m.trophy.title}` };
+      return { level: 'good', text: trophyText(m.trophy, floors) };
+    case 'earned': {
+      // an award's coins: its trophy's toast says what it paid (the coin chip still counts them in)
+      if (m.award) return null;
+      const why = earnedWhy(m.reasons, m.prNumber);
+      return { level: 'good', text: `🪙 +${m.amount} for ${floorName(floors, m.floorId)}${why ? `: ${why}` : ''}` };
+    }
   }
 }
 

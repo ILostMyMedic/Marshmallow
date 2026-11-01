@@ -1,6 +1,6 @@
 // Adapted from cubefarm client/src/world/layout.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { BALCONY, BALCONY_OUT, collide, DESK, DESK_ROWS, deskPosition, deskRotation, EAST_DESKS, EAST_ROTATION, FLOOR_HEIGHT, floorElevation, HALF_D, HALF_W, isEastDesk, lobbyColliders, MAX_DESKS, officeColliders, outsideAt, outsideColliders, PLAYER_RADIUS, rect, SEATS, shellColliders, SIDE_DOOR, SIDE_OPENINGS, sideDoorway, sideSign, SIDES, SPAWN, WALL_H, WALL_T, WINDOW, type Rect } from './layout';
+import { BALCONY, BALCONY_OUT, ceoColliders, collide, DESK, DESK_ROWS, deskPosition, deskRotation, EAST_DESKS, EAST_ROTATION, ELEVATOR, EXEC_AWARD_SHELF, EXEC_AWARDS, EXEC_PLANTS, FLOOR_HEIGHT, floorElevation, HALF_D, HALF_W, isEastDesk, lobbyColliders, MAX_DESKS, officeColliders, outsideAt, outsideColliders, PLAYER_RADIUS, rect, SEATS, shellColliders, SIDE_DOOR, SIDE_OPENINGS, sideDoorway, sideSign, SIDES, SPAWN, WALL_H, WALL_T, WINDOW, type Rect } from './layout';
 
 describe('the desks', () => {
   it('numbers the grid first, then the east wall: a desk for every seat on a floor', () => {
@@ -117,6 +117,30 @@ describe('collide', () => {
       const { x, z } = deskPosition(s);
       expect(office.some((b) => b.minX === x - (DESK.d + 0.1) / 2 && b.minZ === z - (DESK.w + 0.1) / 2), `desk ${s}`).toBe(true);
     }
+  });
+});
+
+describe("the CEO's awards wall", () => {
+  it('hangs on the south wall west of the elevator, clear of the corner plant, under the ceiling', () => {
+    const left = EXEC_AWARDS.x - EXEC_AWARDS.w / 2;
+    const right = EXEC_AWARDS.x + EXEC_AWARDS.w / 2;
+    expect(right).toBeLessThan(-ELEVATOR.doorHalf - 1);
+    for (const [px, pz, s] of EXEC_PLANTS) if (pz > 0) expect(left > px + 0.6 * s || right < px - 0.6 * s, `plant at ${px}`).toBe(true);
+    expect(EXEC_AWARDS.z).toBeGreaterThan(HALF_D - 0.15); // on the wall, so it goes with it in the cutaway
+    expect(EXEC_AWARDS.y + EXEC_AWARDS.h).toBeLessThan(WALL_H - 0.2);
+    expect(EXEC_AWARD_SHELF.h).toBeLessThan(EXEC_AWARDS.y);
+  });
+
+  it('stands its shelf in the way, against the wall, without touching anything else on the floor', () => {
+    const shelf = rect(EXEC_AWARD_SHELF.x, EXEC_AWARD_SHELF.z, EXEC_AWARD_SHELF.w, EXEC_AWARD_SHELF.d);
+    const rects = ceoColliders();
+    expect(rects).toContainEqual(shelf);
+    expect(shelf.maxZ).toBeLessThanOrEqual(HALF_D);
+    // the walls (which reach z = HALF_D) aside
+    const others = rects.filter((b) => !(b.minX === shelf.minX && b.maxX === shelf.maxX && b.minZ === shelf.minZ) && b.maxZ < HALF_D - 0.01);
+    expect(others.filter((b) => touches(b, shelf))).toEqual([]);
+    expect(walk({ x: EXEC_AWARD_SHELF.x, z: EXEC_AWARD_SHELF.z - 2 }, { x: EXEC_AWARD_SHELF.x, z: HALF_D }, rects).z).toBeCloseTo(shelf.minZ - PLAYER_RADIUS);
+    expect(collide(SPAWN.x, SPAWN.z, rects)).toEqual({ x: SPAWN.x, z: SPAWN.z });
   });
 });
 

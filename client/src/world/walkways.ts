@@ -5,8 +5,9 @@
 // Pure (no three.js): the grid and A* are nav.ts's, sized for a person. Headings follow nav's: facing h looks along
 // (cos h, sin h), so 0 is east, π/2 south (+z), π west, -π/2 north. (body.ts's headings differ: errands.ts converts.)
 
+import { reservedRects, slotSpots } from './decor/spots';
 import { kanbanColumnSpan, KANBAN_KEYS } from './draw';
-import { BOARD, ceoColliders, deskPosition, EXEC_BAR, EXEC_COFFEE, EXEC_DESK, EXEC_GLOBE, HALF_D, HALF_W, isEastDesk, lobbyColliders, officeColliders, PLAYER_RADIUS, RECEPTION, PONG_TABLE, SEATS, sideDoorway, SIDE_OPENINGS, SIDES, WALL_T, type FloorKind, type Rect } from './layout';
+import { BOARD, ceoColliders, deskPosition, EXEC_AWARD_SHELF, EXEC_BAR, EXEC_COFFEE, EXEC_DESK, EXEC_GLOBE, HALF_D, HALF_W, isEastDesk, lobbyColliders, officeColliders, PLAYER_RADIUS, RECEPTION, PONG_TABLE, SEATS, sideDoorway, SIDE_OPENINGS, SIDES, WALL_T, type FloorKind, type Rect } from './layout';
 import { clear, makeNav, planPath, type Nav, type Pt } from './nav';
 
 export type { FloorKind };
@@ -101,6 +102,8 @@ function officeSpots(): Spot[] {
     elevatorSpot(),
     // not the west window at z 8 (the couch) or the east one at z -2 (behind the east wall's desks)
     ...windowSpots([-8, 0], [-8]),
+    // in front of each of the shop's big spots, whatever stands there (a vending machine's line, the beer fridge)
+    ...slotSpots(),
   ];
 }
 
@@ -111,7 +114,7 @@ function lobbySpots(): Spot[] {
 
 /**
  * The CEO's floor: behind their desk, which faces the room (south), where they get up; the lounge, the bar cart, the
- * globe, the elevator and the windows, for their strolls.
+ * globe, the awards wall, the elevator and the windows, for their strolls.
  */
 function ceoSpots(): Spot[] {
   return [
@@ -119,6 +122,8 @@ function ceoSpots(): Spot[] {
     { id: 'lounge', x: EXEC_COFFEE.x + 1.3, z: EXEC_COFFEE.z, facing: WEST },
     { id: 'bar', x: EXEC_BAR.x - 1.1, z: EXEC_BAR.z, facing: EAST },
     { id: 'globe', x: EXEC_GLOBE.x + 0.9, z: EXEC_GLOBE.z + 0.7, facing: WEST },
+    // a step back from the awards wall's shelf, taking it in
+    { id: 'awards', x: EXEC_AWARD_SHELF.x + 0.8, z: EXEC_AWARD_SHELF.z - EXEC_AWARD_SHELF.d / 2 - 1.1, facing: SOUTH },
     elevatorSpot(),
     ...windowSpots(SIDE_OPENINGS.ceo.west.windows.slice(0, 2), SIDE_OPENINGS.ceo.east.windows),
   ];
@@ -126,10 +131,14 @@ function ceoSpots(): Spot[] {
 
 // ---------- the walk grid ----------
 
-/** Everything people steer round: the floor's colliders inside the walls (the balconies are off-limits) and the side doorways. */
+/**
+ * Everything people steer round: the floor's colliders inside the walls (the balconies are off-limits), the side
+ * doorways and, on an office floor, the shop's floor and big spots, filled or not (decor/spots.ts).
+ */
 export function walkRects(floor: FloorKind): Rect[] {
   const out = (floor === 'office' ? officeColliders() : floor === 'ceo' ? ceoColliders() : lobbyColliders()).filter((r) => Math.abs(r.minX + r.maxX) / 2 < HALF_W + WALL_T);
   for (const side of SIDES) out.push(sideDoorway(floor, side));
+  if (floor === 'office') out.push(...reservedRects());
   return out;
 }
 
@@ -224,3 +233,14 @@ export function steer(me: Mover, walkers: Body[], player: Pt | null, open: (x: n
   }
   return { speed, side: 0, wait: speed === 0 };
 }
+
+/** Slowed to under this share of walking speed with nowhere to step aside: as good as standing still. */
+export const CRAWL = 0.15;
+
+/**
+ * How long a walker has been held up behind someone, after this step (`waited` before it). Waiting outright counts, and
+ * so does crawling: slowed nearly to a stop with its sidestep blocked, it inches up until the spot it aims for is too
+ * close to walk to (body.ts) and stalls there, a little short of stopping, so it would never count as waiting (nor walk
+ * on through). Walking on, or stepping aside, starts the count again.
+ */
+export const heldUp = (waited: number, s: Steering, dt: number) => (s.wait || (s.side === 0 && s.speed < CRAWL) ? waited + dt : 0);

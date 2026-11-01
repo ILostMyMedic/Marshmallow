@@ -1,6 +1,6 @@
 // The notification sounds (notifyRules.ts picks which): a phone buzz and chime for a new message or notice, a ping for
 // a worker's question, a happy chime for a merge, a soft blip for a PR opened or QA passed, a soft "womp" when QA
-// fails, a low tone for a worker in trouble, a jingle for a new hire. Without a place: they're for you, wherever you
+// fails, a low tone for a worker in trouble, a jingle for a new hire, a coin "ka-ching" for coins earned or spent. Without a place: they're for you, wherever you
 // are. News arriving together plays one cue, the most important. Toasts.tsx calls cue(). Adapted from cubefarm
 // client/src/ui/sfx.ts (MIT): its event cues, chirp and welcome jingle; the buzz, the ping and the blips are new.
 
@@ -52,6 +52,12 @@ const PLAY: Record<Cue, () => void> = {
   },
   // a PR passed QA: a soft bright three-note blip
   passed: () => [880, 1108.7, 1318.5].forEach((freq, i) => tone({ ...A, name: 'cue:passed', freq, type: 'triangle', at: i * 0.07, dur: 0.2, peak: 0.07 })),
+  // coins earned or spent: a bright two-note coin "ka-ching"
+  coins: () => {
+    tone({ ...A, name: 'cue:coins', freq: 987.8, type: 'square', dur: 0.08, peak: 0.035, attack: 0.003 });
+    tone({ ...A, name: 'cue:coins', freq: 1318.5, type: 'square', at: 0.08, dur: 0.38, peak: 0.035, attack: 0.003 });
+    noise({ ...A, name: 'cue:coins', at: 0.08, dur: 0.2, peak: 0.015, filter: 'bandpass', freq: 5000, q: 1.5, attack: 0.005 });
+  },
   // a PR opened: a soft two-note blip
   opened: () => [880, 1174.7].forEach((freq, i) => tone({ ...A, name: 'cue:opened', freq, type: 'sine', at: i * 0.09, dur: 0.18, peak: 0.07 })),
   // someone joined: a small welcome jingle

@@ -1,13 +1,18 @@
 // One floor of the building: its room and the building around it, a desk for every seat (each worker at the desk their
 // `desk` number names, with a lamp that comes on at night, the rest vacant), the whiteboard, the app monitor, the lounge with its couch, the kitchenette, the water cooler,
-// the clock, the ping-pong table, the gong and the plants, all where cubefarm has them, and the errand director
-// sending people out to them. The lobby (Lobby.tsx) and the CEO's floor (CeoFloor.tsx) are floors of their own.
+// the clock, the ping-pong table, the gong and the plants, all where cubefarm has them, what the floor bought in the
+// shop (decor/Decor.tsx; the kit's upgrades change the coffee machine's and the table's looks), the coin bursts, and
+// the errand director sending people out to them. The lobby (Lobby.tsx) and the CEO's floor (CeoFloor.tsx) are floors
+// of their own.
 // Adapted from cubefarm client/src/world/OfficeFloor.tsx (MIT): signs are cut.
 import { memo, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Floor, Worker } from '../../../shared/types';
 import { useStore } from '../store';
 import { AppMonitor } from './AppMonitor';
+import { CoinBurst } from './decor/CoinBurst';
+import { Decor } from './decor/Decor';
+import { kitTier } from './decor/spots';
 import { Desk } from './Desk';
 import { ErrandDirector } from './ErrandDirector';
 import { Gong } from './Gong';
@@ -46,6 +51,8 @@ export const OfficeFloor = memo(function OfficeFloor({ floor, top }: { floor: Fl
     return m;
   }, [workers]);
   const color = floor.color;
+  // what the floor bought: its extras in their spots, and the kit's upgrades (the same places, a better look)
+  const plan = useStore((s) => s.floorPlans[floor.id]);
   return (
     <group>
       <Shell kind="office" accent={color} floorColor={FLOOR_WOOD} />
@@ -62,12 +69,14 @@ export const OfficeFloor = memo(function OfficeFloor({ floor, top }: { floor: Fl
       <AppMonitor floor={floor} />
       <Couch position={at(COUCH)} rotationY={-Math.PI / 2} color={shade(color, -0.05)} />
       <CoffeeTable position={at(COFFEE_TABLE)} rotationY={Math.PI / 2} />
-      <Kitchenette position={at(KITCHEN)} floor={floor.floor} />
+      <Kitchenette position={at(KITCHEN)} floor={floor.floor} coffeeTier={kitTier(plan, 'coffee-machine')} />
       <WaterCooler position={at(COOLER)} />
       <WallClock position={[CLOCK.x, CLOCK.y, CLOCK.z]} />
-      <PongTable />
+      <PongTable tier={kitTier(plan, 'pingpong-table')} accent={color} />
       <Gong floorId={floor.id} />
       <MergeConfetti floorId={floor.id} color={color} workers={workers} />
+      <CoinBurst floorId={floor.id} workers={workers} />
+      <Decor floor={floor} />
       {OFFICE_PLANTS.map(([x, z, s]) => (
         <Plant key={`${x},${z}`} position={[x, 0, z]} scale={s} pot={x > 0 && z > 0 ? '#8338ec' : undefined} />
       ))}

@@ -282,7 +282,7 @@ export class Qa {
       mergeRetryAt: null,
       alerted: false,
     };
-    store.moment({ type: pass ? 'qaPassed' : 'qaFailed', at: Date.now(), floorId, prNumber: n, qaWorkerId: workerId });
+    store.moment({ type: pass ? 'qaPassed' : 'qaFailed', at: Date.now(), floorId, prNumber: n, qaWorkerId: workerId, round: rec.round });
     // stuck() moves it to needs-human itself, so the manager hears about it as it gets there.
     if (outcome === 'needs-human') return stuck(this.ctx, current, patch, `it failed QA ${rec.round - rec.retests} times`);
     const updated = store.patchQa(floorId, n, { ...patch, status: outcome === 'conflict' ? 'failed' : outcome });

@@ -60,6 +60,7 @@ describe('the tour', () => {
     expect(ceo.card.at(-2)).toContain('its 1 trophy on the cabinet');
     expect(ceo.card.at(-1)).toBe('By the elevator: the awards wall, 2 of 40 won. Each award pays coins; E on the wall shows what every one takes.');
     expect(ceo.say.at(-1)).toBe('And our awards wall! 🏅');
+    expect(ceo.card.some((c) => c.includes('putting green') && c.includes('fish tank'))).toBe(true);
     expect(tourStops(office([], []), NOW).at(-1)!.say).toEqual(["That's the tour!", 'Come back any time. 👋']);
   });
 });

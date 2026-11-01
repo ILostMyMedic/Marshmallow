@@ -71,12 +71,14 @@ export const SHOP: readonly ShopEntry[] = [
   { type: 'extra', id: 'vending-machine', name: 'Vending machine', icon: '🥤', blurb: 'Cans and snacks at the press of a button. The team will use it.', kind: 'big', price: 120 },
   { type: 'extra', id: 'beer-fridge', name: 'Beer fridge', icon: '🍺', blurb: 'Glass-fronted and humming. Opens after hours.', kind: 'big', price: 150 },
   { type: 'extra', id: 'sofa', name: 'Sofa', icon: '🛋️', blurb: 'A second sofa for the floor, in its colour.', kind: 'big', price: 90 },
+  { type: 'extra', id: 'beanbags', name: 'Beanbags', icon: '🫘', blurb: 'Two big squashy beanbags to sink into.', kind: 'big', price: 60 },
+  { type: 'extra', id: 'hoop', name: 'Basketball hoop', icon: '🏀', blurb: 'A hoop on the wall and a ball to shoot. The team will shoot a few too.', kind: 'big', price: 110 },
   { type: 'extra', id: 'plant', name: 'Potted plant', icon: '🪴', blurb: 'A leafy plant in a bright pot.', kind: 'floor', price: 20 },
   { type: 'extra', id: 'fig', name: 'Fiddle-leaf fig', icon: '🌳', blurb: 'A tall indoor tree for a corner.', kind: 'floor', price: 40 },
-  { type: 'extra', id: 'beanbags', name: 'Beanbags', icon: '🫘', blurb: 'Two squashy beanbags.', kind: 'floor', price: 35 },
   { type: 'extra', id: 'rug', name: 'Rug', icon: '🟫', blurb: 'A patterned rug in the floor’s colours.', kind: 'rug', price: 30 },
   { type: 'extra', id: 'poster', name: 'Repo poster', icon: '🖼️', blurb: 'Art made from this floor’s repository: its name, languages and colour. No two floors alike.', kind: 'wall', price: 30 },
   { type: 'extra', id: 'neon', name: 'Neon sign', icon: '💡', blurb: 'The repository’s name in glowing tubes.', kind: 'wall', price: 80 },
+  { type: 'extra', id: 'dartboard', name: 'Dartboard', icon: '🎯', blurb: 'A dartboard at the proper height, with three darts. The team will throw a few too.', kind: 'wall', price: 45 },
   { type: 'upgrade', id: 'espresso-machine', name: 'Espresso machine', icon: '☕', blurb: 'Swaps the coffee machine for a chrome espresso machine.', item: 'coffee-machine', tier: 2, price: 100 },
   { type: 'upgrade', id: 'tournament-table', name: 'Tournament ping-pong table', icon: '🏓', blurb: 'Swaps the ping-pong table for a tournament one.', item: 'pingpong-table', tier: 2, price: 120 },
 ];
@@ -109,9 +111,9 @@ export function checkPurchase(plan: readonly FloorItem[], coins: number, entryId
   if (entry.type === 'upgrade') {
     const current = plan.find((i) => i.item === entry.item);
     if (!current) return { ok: false, error: `This floor has no ${entry.item.replace(/-/g, ' ')} to upgrade` };
-    if (current.tier >= entry.tier) return { ok: false, error: `This floor already has the ${entry.name}` };
-    if (current.tier !== entry.tier - 1) return { ok: false, error: `The ${entry.name} needs the upgrade before it first` };
-    if (coins < entry.price) return { ok: false, error: `The ${entry.name} costs ${entry.price} coins; this floor has ${coins}` };
+    if (current.tier >= entry.tier) return { ok: false, error: `This floor already has the ${entry.name.toLowerCase()}` };
+    if (current.tier !== entry.tier - 1) return { ok: false, error: `The ${entry.name.toLowerCase()} needs the upgrade before it first` };
+    if (coins < entry.price) return { ok: false, error: `${entry.name}: ${entry.price} coins, and this floor has ${coins}` };
     return { ok: true, entry, spot: current.spot, item: entry.item, tier: entry.tier, price: entry.price };
   }
   const price = priceOf(entry.price, ownedCount(plan, entry.id));
@@ -119,13 +121,13 @@ export function checkPurchase(plan: readonly FloorItem[], coins: number, entryId
   if (spot) {
     target = spotOf(spot);
     if (!target) return { ok: false, error: `There's no spot called "${spot}"` };
-    if (target.kind !== entry.kind) return { ok: false, error: `A ${entry.name.toLowerCase()} doesn't go in ${target.label.toLowerCase()}` };
+    if (target.kind !== entry.kind) return { ok: false, error: `The ${entry.name.toLowerCase()} can't go in ${target.label.toLowerCase()}` };
     if (plan.some((i) => i.spot === target!.id)) return { ok: false, error: `${target.label} already has something in it` };
   } else {
     target = freeSpots(plan, entry.kind)[0];
-    if (!target) return { ok: false, error: `This floor has no room for another ${entry.name.toLowerCase()}` };
+    if (!target) return { ok: false, error: `No spot left on this floor for the ${entry.name.toLowerCase()}` };
   }
-  if (coins < price) return { ok: false, error: `A ${entry.name.toLowerCase()} costs ${price} coins; this floor has ${coins}` };
+  if (coins < price) return { ok: false, error: `${entry.name}: ${price} coins, and this floor has ${coins}` };
   return { ok: true, entry, spot: target.id, item: entry.id, tier: 1, price };
 }
 
@@ -142,6 +144,42 @@ export function checkMove(plan: readonly FloorItem[], from: string, to: string):
   return null;
 }
 
-/** A floor's plan with only what the catalogue still knows (rows from an older catalogue are left out). */
+/** Whether `item` (a catalogue extra) goes in a spot of kind `kind`. */
+const goesIn = (item: string, kind: SpotKind) => SHOP.some((e) => e.type === 'extra' && e.id === item && e.kind === kind);
+
+/**
+ * A floor's plan with only what the catalogue still knows: rows from an older catalogue are left out, an item it no
+ * longer sells and one standing in a kind of spot it no longer goes in (resettle moves those).
+ */
 export const knownItems = (plan: readonly FloorItem[]) =>
-  plan.filter((i) => spotOf(i.spot) && (spotOf(i.spot)!.kind === 'kit' || SHOP.some((e) => e.type === 'extra' && e.id === i.item)));
+  plan.filter((i) => {
+    const spot = spotOf(i.spot);
+    return !!spot && (spot.kind === 'kit' || goesIn(i.item, spot.kind));
+  });
+
+/**
+ * What a floor's plan needs once the catalogue sells an extra for another kind of spot (the beanbags grew into a big
+ * one): each such item, oldest first, moves to a free spot of its new kind, or, with none free, goes back to the shop
+ * for a refund. Spots holding rows the catalogue forgot count as free (a move replaces them).
+ */
+export function resettle(plan: readonly FloorItem[]): { moves: { from: string; to: string; item: string }[]; refunds: { spot: string; item: string }[] } {
+  // every spot with something the catalogue sells in it is taken (an outgrown item's too, until it moves out)
+  const taken = new Set(plan.filter((i) => spotOf(i.spot)?.kind === 'kit' || shopEntry(i.item)?.type === 'extra').map((i) => i.spot));
+  const moves: { from: string; to: string; item: string }[] = [];
+  const refunds: { spot: string; item: string }[] = [];
+  const outgrown = plan.filter((i) => {
+    const spot = spotOf(i.spot);
+    const e = shopEntry(i.item);
+    return !!spot && spot.kind !== 'kit' && e?.type === 'extra' && e.kind !== spot.kind;
+  });
+  for (const i of [...outgrown].sort((a, b) => a.since - b.since)) {
+    const kind = (shopEntry(i.item) as ShopExtra).kind;
+    const to = SHOP_SPOTS.find((s) => s.kind === kind && !taken.has(s.id));
+    taken.delete(i.spot);
+    if (to) {
+      taken.add(to.id);
+      moves.push({ from: i.spot, to: to.id, item: i.item });
+    } else refunds.push({ spot: i.spot, item: i.item });
+  }
+  return { moves, refunds };
+}

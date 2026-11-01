@@ -1,8 +1,8 @@
 // The roof terrace, the elevator's top stop (roofLayout.ts has its plan and colliders): a garden along the north
 // parapet, a decking lounge with deck chairs under string lights on the east half, a fire pit with benches round it on
-// the west, coin-op binoculars at the railing on every side, and the hut over the elevator, all open to the sky and the
-// city (Game.tsx's, lowered under it). Idle people come up for a break (RoofPeople.tsx). Mounted in place of a floor,
-// only while you're up here.
+// the west (and marshmallows to toast on it), coin-op binoculars at the railing on every side, and the hut over the
+// elevator, all open to the sky and the city (Game.tsx's, lowered under it). Idle people come up for a break
+// (RoofPeople.tsx). Mounted in place of a floor, only while you're up here.
 // Adapted from cubefarm client/src/world/roof/Roof.tsx (MIT): the grill, the telescope, the billboards, the sounds, the
 // perch and the probe are cut; the fireplace and the lookouts are new.
 import { useEffect } from 'react';
@@ -14,8 +14,10 @@ import { DeckChairs } from './DeckChairs';
 import { Fireplace } from './Fireplace';
 import { Garden } from './Garden';
 import { Lookouts } from './Lookouts';
+import { Marshmallows } from './Marshmallows';
 import { RoofDeck } from './RoofDeck';
 import { RoofPeople } from './RoofPeople';
+import { RoofSeason } from '../seasons/RoofSeason';
 import { StringLights } from './StringLights';
 
 /** The hut's trim and the elevator's lit button. */
@@ -34,8 +36,10 @@ export function Roof({ top }: { top: number }) {
       <DeckChairs />
       <StringLights />
       <Fireplace />
+      <Marshmallows />
       <Lookouts />
       <RoofPeople />
+      <RoofSeason />
     </group>
   );
 }

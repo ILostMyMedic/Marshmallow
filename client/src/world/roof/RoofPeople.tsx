@@ -1,8 +1,9 @@
 // Who is up on the roof (roofBreaks.ts): someone on a break steps out of the elevator, strolls to their seat and settles
 // in (leaning back in a deck chair, on a bench by the fire, or stood at a lookout's binoculars), trading the odd emoji
 // with whoever's near, until their time's up (or work comes in, and they hurry off) and they go back down; the CEO paces
-// the south railing on a call. While you're up here, now and then someone free comes up on their own, a few at most.
-// Their bodies are people.ts's, like everyone's; this only drives them.
+// the south railing on a call. Some of those by the fire toast a marshmallow (Toaster.tsx). While you're up here, now
+// and then someone free comes up on their own, a few at most, never to the seat you're in. Their bodies are people.ts's,
+// like everyone's; this only drives them.
 // Adapted from cubefarm client/src/world/roof/RoofPeople.tsx (MIT): the probe, the night's emoji and the elevator's
 // ding are cut; the benches, the lookouts, the name tags and the chatter are new.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -20,19 +21,24 @@ import { clear, type Pt } from '../nav';
 import { bodyState, bodyTarget, placeBody, say, seatBody, setBody } from '../people';
 import { playerAt } from '../rig';
 import { CABIN, DOORS_SECONDS } from '../socials';
+import { useView } from '../view';
 import { steer, WALK_R, WALK_SPEED, type Body, type Mover } from '../walkways';
 import { RECLINE } from './DeckChairs';
+import { heatAt, stickTip } from './marshmallow';
 import { chatPick, endVisit, freeSeat, planVisit, roofEmoji, roofVisits, startVisit, updateVisit, visitStage, type RoofVisit, type VisitKind } from './roofBreaks';
-import { CALL_HEADING, CALL_SPOTS, findRoofPath, FIRE_STAND, LIFT, lookoutSeat, roofNav, ROOF_SEATS, seatById, type RoofSeat } from './roofLayout';
+import { CALL_HEADING, CALL_SPOTS, DECK_CHAIRS, findRoofPath, FIRE_STAND, LIFT, lookoutSeat, roofNav, ROOF_SEATS, seatById, type RoofSeat } from './roofLayout';
+import { Toaster, TOASTER_REACH } from './Toaster';
 
 const NORTH = 0; // body headings: 0 faces −z
 const HIP = 0.5; // a desk chair's seat height (Character.tsx), where the recline pivots
-const SINK = 0.16; // a deck chair sits that much lower
+const SINK = HIP - DECK_CHAIRS.hip; // a deck chair sits that much lower
 /** Seconds between rolls for someone coming up while you're here, and the chances per roll. */
 const ROLL = { every: 6, breakChance: 0.2, callChance: 0.06, ride: 2.5 };
 const ALREADY_UP = 3000; // ms: a visit that started this long before you got here is already settled in
 /** Seconds between someone settled saying something (one of them, if they've company), and how long a bubble lasts. */
 const CHAT = { every: [3.5, 7] as const, seconds: 2.6 };
+/** The chance someone sitting by the fire toasts marshmallows while they're there. */
+const TOAST_CHANCE = 0.6;
 
 type Stage = 'riding' | 'doors' | 'walk' | 'sitting' | 'seated' | 'looking' | 'call' | 'leave';
 
@@ -57,10 +63,10 @@ interface Walker {
 /** A walk from `from` to `to` round the furniture (straight there when the grid has no way). */
 const route = (from: Pt, to: Pt): Pt[] => findRoofPath(from, to) ?? [to];
 const standable = (x: number, z: number) => clear(roofNav().rects, x, z, WALK_R);
-/** The player's lookout as a seat, while they look through one. */
+/** The player's seat up here, so nobody's sent to it: the lookout they look through, or the seat they sit in (seats.ts ids are ROOF_SEATS's). */
 const playerSeat = () => {
   const lens = lookingThrough();
-  return lens ? lookoutSeat(lens.id) : null;
+  return lens ? lookoutSeat(lens.id) : (useView.getState().seated?.id ?? null);
 };
 
 /** Someone in a deck chair: they lean back with it while they sit. */
@@ -96,6 +102,7 @@ const TAG_OVER_HEAD: [number, number, number] = [0, 1.75, 0];
  */
 function Visitor({ worker, seat }: { worker: Worker; seat: RoofSeat | null }) {
   const shirt = useMemo(() => seededAppearance({ seed: worker.seed, role: worker.role }).shirt, [worker.seed, worker.role]);
+  const [toasts] = useState(() => Math.random() < TOAST_CHANCE);
   const tag = <NameTag worker={worker} color={shirt} />;
   if (seat?.kind === 'chair') {
     return (
@@ -110,6 +117,7 @@ function Visitor({ worker, seat }: { worker: Worker; seat: RoofSeat | null }) {
       <Character worker={worker} standAt={seat?.kind === 'fire' ? FIRE_STAND : undefined} seatedTag={TAG_OVER_HEAD}>
         {tag}
       </Character>
+      {seat?.kind === 'fire' && toasts && <Toaster id={worker.id} heat={heatAt(stickTip(seat.x, seat.z, seat.heading, TOASTER_REACH))} />}
     </group>
   );
 }
@@ -290,8 +298,8 @@ export function RoofPeople() {
       switch (w.stage) {
         case 'riding': {
           if (!v || now < v.arrive) break;
-          // you're at their lookout: another seat, or straight back down if there's none
-          if (w.seat?.kind === 'lookout' && w.seat.id === playerSeat()) {
+          // you're in their seat (or at their lookout): another, or straight back down if there's none
+          if (w.seat && w.seat.id === playerSeat()) {
             const other = freeSeat(visits, ROOF_SEATS, playerSeat(), Math.random());
             if (!other) {
               endVisit(w.id);

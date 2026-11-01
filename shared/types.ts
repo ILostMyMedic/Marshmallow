@@ -2,6 +2,7 @@
 // The game reads the same stream later, so workers carry what it needs from day one: status, activity, idleSince, seed.
 // Adapted from cubefarm shared/types.ts (MIT).
 import type { AwardStats } from './awards.ts';
+import type { SeasonSetting } from './seasons.ts';
 import type { WorldView } from './worldEvents.ts';
 
 /** Where a worker stands, as far as the pipeline is concerned. */
@@ -235,11 +236,18 @@ export interface Settings {
   defaultModel: string; // a Claude model, or `ollama/<name>`
   defaultEffort: EffortLevel;
   dayMode: DayMode; // the office clock, which the game's sky, light and rituals follow in every tab
+  bodyStyle: BodyStyle; // how everyone in the office is drawn, in every tab
+  season: SeasonSetting; // the season outside (shared/seasons.ts): the office's date, or one shown now, in every tab
+  inkOutlines: boolean; // ink outlines round the furniture and the people, in every tab; off saves their draw calls
 }
 
 export const DAY_MODES = ['cycle', 'clock', 'day'] as const;
 /** 'cycle': a whole day every 30 minutes; 'clock': each viewer's own local time; 'day': always mid-afternoon. */
 export type DayMode = (typeof DAY_MODES)[number];
+
+export const BODY_STYLES = ['chibi', 'human'] as const;
+/** 'chibi': a big head on a small round body; 'human': a stylized human, slim and tall. */
+export type BodyStyle = (typeof BODY_STYLES)[number];
 
 export const DEFAULT_SETTINGS: Settings = {
   managerName: '',
@@ -253,6 +261,9 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultModel: 'claude-opus-5-5',
   defaultEffort: 'medium',
   dayMode: 'cycle',
+  bodyStyle: 'human',
+  season: 'auto',
+  inkOutlines: true,
 };
 
 /** The last usage warning Claude gave: which limit ("weekly limit"), how full it was (0-100), when it resets, and when it came. */
@@ -340,8 +351,11 @@ export interface FloorItem {
   since: number;
 }
 
-/** Why coins came or went: a merge, its clean first QA pass, a PR fixed after failing QA, an award, the shop, the demo's gift. */
-export type CoinReason = 'merge' | 'clean-qa' | 'fixed' | 'award' | 'purchase' | 'grant';
+/**
+ * Why coins came or went: a merge, its clean first QA pass, a PR fixed after failing QA, an award, the shop, the demo's
+ * gift, or a purchase paid back (the catalogue moved it to a kind of spot the floor had no room in).
+ */
+export type CoinReason = 'merge' | 'clean-qa' | 'fixed' | 'award' | 'purchase' | 'grant' | 'refund';
 
 /** A line in a floor's ledger (server/ledger.ts): coins earned (amount > 0) or spent. */
 export interface CoinEntry {

@@ -1,5 +1,5 @@
 // What sits on top of the 3D view: in first person the crosshair, what E does with what it's on, what you can do with
-// what you hold, and how to look round; in the overview, how to get about; either way a passing note (view.ts toast)
+// what you hold (a game in hand: its score and wind-up meter, GameHud.tsx; and how to get up from a seat), and how to look round; in the overview, how to get about; either way a passing note (view.ts toast)
 // and the office's buttons (the console, the desktop with a count of what's new on it, help), with the coins of the
 // office floor you're on.
 // Adapted from cubefarm client/src/ui/HUD.tsx (MIT).
@@ -9,10 +9,12 @@ import { useStore } from '../store';
 import { act } from '../world/actions';
 import { toggleWalk } from '../world/Player';
 import { momentsSince } from '../world/reactions';
+import { toastWord } from '../world/roof/marshmallow';
 import { sipLabel } from '../world/sip';
 import { newsLine } from './desktop/desk';
 import { useDesktopNews } from './desktop/seen';
 import { togglePanel } from './OfficeKeys';
+import { GameHud } from './GameHud';
 import { PongHud } from './PongHud';
 import { TourCard } from './TourCard';
 import { useView, type Held } from '../world/view';
@@ -21,10 +23,12 @@ const TOAST_MS = 2600;
 /** How long coins just earned float by the coin chip (ms). */
 const GAIN_MS = 1800;
 
-/** What you can do with what's in your hands. */
-function heldHint(h: Exclude<Held, { kind: 'paddle' }>) {
-  if (h.kind === 'mug' && h.sips === 0) return 'Empty: refill it at the machine · G: put it down';
-  return `E: ${sipLabel(h)} · G: put it down`;
+/** What you can do with what's in your hands (and sitting down, how to get up). */
+function heldHint(h: Exclude<Held, { kind: 'paddle' | 'game' }>, seated: boolean) {
+  const up = seated ? ' · WASD: stand up' : '';
+  if (h.kind === 'marshmallow') return `🍡 ${toastWord(h.toast, h.alight ? 1 : 0)} · E: eat it · G: drop it${up}`;
+  if (h.kind === 'mug' && h.sips === 0) return `Empty: refill it at the machine · G: put it down${up}`;
+  return `E: ${sipLabel(h)} · G: put it down${up}`;
 }
 
 function Toast() {
@@ -116,6 +120,7 @@ export function HUD() {
   const overlay = useView((s) => s.overlay);
   const held = useView((s) => s.held);
   const hover = useView((s) => s.hover);
+  const seated = useView((s) => s.seated !== null);
   if (overlay) return null;
   if (mode === 'overview')
     return (
@@ -136,9 +141,11 @@ export function HUD() {
       <TourCard />
       <OfficeBar />
       {locked && !playing && <div className={`crosshair${focus ? ' on' : ''}`} />}
-      {focus && locked && !playing && <div className="hud-use">E / Click: {focus.label}</div>}
+      {focus && locked && !playing && <div className="hud-use">{held?.kind === 'game' ? 'E' : 'E / Click'}: {focus.label}</div>}
       {playing && <PongHud />}
-      {locked && held && held.kind !== 'paddle' && <div className="hud-hint">{heldHint(held)}</div>}
+      {locked && held?.kind === 'game' && <GameHud held={held} />}
+      {locked && held && held.kind !== 'paddle' && held.kind !== 'game' && <div className="hud-hint">{heldHint(held, seated)}</div>}
+      {locked && seated && !held && <div className="hud-hint">WASD: stand up · V: 1st / 3rd person</div>}
       {!locked && <div className="hud-hint">Click to look around · WASD to walk, Shift to run · V: 1st / 3rd person · C: your look · Tab: overview · M: sound</div>}
     </>
   );

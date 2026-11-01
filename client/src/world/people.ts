@@ -3,7 +3,8 @@
 
 // The people controller: where each worker's body should be (body.ts). Nobody listed here sits at their desk. Plain
 // module state, read by Character.tsx every frame, so moving someone never re-renders React.
-// window.__mmPeople.list() reports where everyone is and which errand (errands.ts) they're on, for QA and Playwright.
+// window.__mmPeople.list() reports where everyone is and which errand (errands.ts) they're on, for QA and Playwright;
+// place(), pose(), say(), mug(), snack() and food() stage someone for a check (a gesture, a bubble, something in hand).
 
 import { WALK_SPEED, type BodyMode, type BodyState, type BodyTarget, type Gesture } from './body';
 import type { SnackId } from './fridge';
@@ -245,6 +246,22 @@ const probe = {
   errands() {
     return director?.() ?? null;
   },
+  /** For checks: stand someone somewhere doing a gesture (setBody's fields), or send them back to their chair. */
+  pose(id: string, patch: Partial<Omit<BodyTarget, 'teleport'>> | null) {
+    if (patch) setBody(id, patch);
+    else seatBody(id);
+  },
+  /** For checks: someone stood at (x, z) facing `heading` at once (doing `gesture`). */
+  place(id: string, x: number, z: number, heading = 0, gesture: Gesture = 'none') {
+    placeBody(id, x, z, heading);
+    setBody(id, { gesture });
+  },
+  /** For checks: a bubble over someone, and a mug in their hand. */
+  say: (id: string, text: string | null, seconds?: number) => say(id, text, seconds),
+  mug: (id: string, on: boolean) => setHandMug(id, on ? { id: `probe-${id}`, sips: 3 } : null),
+  /** For checks: a snack (fridge.ts) or lunch (ritualSchedule.ts) in someone's hand; null takes it away. */
+  snack: (id: string, snack: SnackId | null) => setHandSnack(id, snack ? { snack, left: 3 } : null),
+  food: (id: string, f: Food | null) => setHandFood(id, f),
 };
 
 if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__mmPeople = probe;

@@ -26,8 +26,8 @@ export interface CoinTrack {
   seenAt: number;
 }
 
-/** What a floor can earn for: everything but spending and the demo's gifts. */
-export type EarnReason = Exclude<CoinReason, 'purchase' | 'grant'>;
+/** What a floor can earn for: everything but spending, the demo's gifts and refunds. */
+export type EarnReason = Exclude<CoinReason, 'purchase' | 'grant' | 'refund'>;
 
 /** A line a payout writes, paid once per key. */
 export interface Payment {
@@ -193,6 +193,11 @@ export class Ledger {
     await tx.query('insert into coin_entries (floor_id, amount, reason, detail) values ($1, $2, $3, $4)', [floorId, -amount, 'purchase', detail]);
   }
 
+  /** A purchase paid back (floorPlans.ts resettle: no room for it now), in that step's transaction: the purse grows, what the floor earned doesn't. */
+  async refund(tx: Tx, floorId: string, amount: number, detail: string) {
+    await tx.query('insert into coin_entries (floor_id, amount, reason, detail) values ($1, $2, $3, $4)', [floorId, amount, 'refund', detail]);
+  }
+
   /** Reads the view again after a write, and sends it to the tabs. */
   async refresh() {
     this.view = await this.read();
@@ -284,7 +289,7 @@ export class Ledger {
   private async read(): Promise<CoinsView> {
     const sums = (
       await this.db.query<{ floor_id: string; coins: number; earned: number }>(
-        `select floor_id, sum(amount)::int as coins, coalesce(sum(amount) filter (where amount > 0 and reason <> 'grant'), 0)::int as earned
+        `select floor_id, sum(amount)::int as coins, coalesce(sum(amount) filter (where amount > 0 and reason not in ('grant', 'refund')), 0)::int as earned
          from coin_entries group by floor_id`,
       )
     ).rows;

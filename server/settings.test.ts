@@ -11,6 +11,12 @@ describe('settingsPatch', () => {
     });
     expect(settingsPatch(null)).toEqual({});
     expect(settingsPatch({ dayMode: 'clock' })).toEqual({ dayMode: 'clock' });
+    expect(settingsPatch({ bodyStyle: 'chibi' })).toEqual({ bodyStyle: 'chibi' });
+    expect(settingsPatch({ bodyStyle: 'human' })).toEqual({ bodyStyle: 'human' });
+    expect(settingsPatch({ season: 'christmas' })).toEqual({ season: 'christmas' });
+    expect(settingsPatch({ season: 'auto' })).toEqual({ season: 'auto' });
+    expect(settingsPatch({ inkOutlines: false })).toEqual({ inkOutlines: false });
+    expect(settingsPatch({ inkOutlines: true })).toEqual({ inkOutlines: true });
   });
 
   it('refuses what is out of shape', () => {
@@ -19,5 +25,11 @@ describe('settingsPatch', () => {
     expect(() => settingsPatch({ defaultModel: '  ' })).toThrow(/model name/);
     expect(() => settingsPatch({ defaultEffort: 'turbo' })).toThrow(/defaultEffort/);
     expect(() => settingsPatch({ dayMode: 'night' })).toThrow(/dayMode/);
+    expect(() => settingsPatch({ bodyStyle: 'blocks' })).toThrow(/bodyStyle must be one of chibi, human/);
+    expect(() => settingsPatch({ bodyStyle: 1 })).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => settingsPatch({ season: 'monsoon' })).toThrow(/season must be one of auto, spring/);
+    expect(() => settingsPatch({ season: null })).toThrow(expect.objectContaining({ status: 400 }));
+    expect(() => settingsPatch({ inkOutlines: 'no' })).toThrow(/inkOutlines must be true or false/);
+    expect(() => settingsPatch({ inkOutlines: 0 })).toThrow(expect.objectContaining({ status: 400 }));
   });
 });

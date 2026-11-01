@@ -2,8 +2,8 @@
 // floor, and the chips show only in the overview.
 
 // The overview's status chips: a small label over every desk with its person's name and what they're doing, the same
-// size on screen at any zoom (sizeAttenuation off) and drawn over everything. A click on one opens their terminal
-// (picking.ts).
+// size on screen at any zoom (sizeAttenuation off) and drawn over everything; it goes with them while they're up and
+// about (an errand, the CEO's strolls). A click on one opens their terminal (picking.ts).
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -14,6 +14,7 @@ import { roundRect, SANS } from './draw';
 import { CEO_FLOOR, kindOf } from './floors';
 import { deskPosition, EXEC_DESK } from './layout';
 import { CHIP_COLORS, CHIP_LABELS, chipFor, type ChipKind } from './overviewInfo';
+import { bodyState, isHidden } from './people';
 import { pickables } from './picking';
 import { useView, type Focus } from './view';
 
@@ -51,6 +52,33 @@ function drawChip(ctx: CanvasRenderingContext2D, name: string, kind: ChipKind) {
   ctx.fillText(line, x0 + 48, h / 2 + 1);
 }
 
+/** Where a chip belongs when its person is at their desk (Chip sets it; follow reads it). */
+interface Home {
+  id: string;
+  x: number;
+  z: number;
+  placed: boolean;
+}
+
+/**
+ * Each chip over its person: over their desk, or over them wherever they are while they're up and about, eased so
+ * standing up doesn't jump it. Someone not drawn here (the CEO off round the floors) keeps theirs at the desk.
+ */
+function follow(g: THREE.Group, dt: number) {
+  const k = 1 - Math.exp(-dt * 10);
+  for (const c of g.children) {
+    const home = c.userData.home as Home | undefined;
+    if (!home) continue;
+    const b = bodyState(home.id);
+    const up = !!b && b.stage !== 'seated' && !isHidden(home.id);
+    const x = up ? b.x : home.x;
+    const z = up ? b.z : home.z;
+    if (!home.placed) c.position.set(x, CHIP.y, z);
+    else c.position.set(c.position.x + (x - c.position.x) * k, CHIP.y, c.position.z + (z - c.position.z) * k);
+    home.placed = true;
+  }
+}
+
 const Chip = memo(function Chip({ worker, x, z }: { worker: Worker; x: number; z: number }) {
   const kind = chipFor(worker);
   const tex = useCanvasTexture(CHIP.w, CHIP.h, (ctx) => drawChip(ctx, worker.name, kind), [worker.name, kind]);
@@ -65,6 +93,10 @@ const Chip = memo(function Chip({ worker, x, z }: { worker: Worker; x: number; z
     pickables.add(s);
     return () => void pickables.delete(s);
   }, [worker.id, worker.name]);
+  useEffect(() => {
+    const s = ref.current;
+    if (s) s.userData.home = { id: worker.id, x, z, placed: !!s.userData.home } satisfies Home;
+  }, [worker.id, x, z]);
   return <sprite ref={ref} material={material} position={[x, CHIP.y, z]} scale={[scale.x, scale.y, 1]} renderOrder={20} />;
 });
 
@@ -86,10 +118,11 @@ export function OverviewChips({ floor }: { floor: number }) {
   }, [floor, floors, workers]);
   const group = useRef<THREE.Group>(null);
   const last = useRef({ k: 0, h: 0 });
-  useFrame(({ camera, size }) => {
+  useFrame(({ camera, size }, delta) => {
     const g = group.current;
     if (!g) return;
     g.visible = useView.getState().mode === 'overview';
+    if (g.visible) follow(g, Math.min(delta, 0.1));
     seen.camera = camera;
     seen.w = size.width;
     seen.h = size.height;

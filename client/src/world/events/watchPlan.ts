@@ -68,6 +68,10 @@ export function watchBeats(id: EventId, roll: number): Beat[] {
       return [look, { gesture: 'point', seconds: 2.5, say: '🚒' }, { gesture: 'gasp', seconds: 2, say: '😮' }, { gesture: 'none', seconds: 2 }];
     case 'foodtruck':
       return [look, { gesture: 'point', seconds: 3, say: pick(['🍔', '🌮', '🤤']) }, { gesture: 'none', seconds: 3 }];
+    case 'aurora':
+      return [look, { gesture: 'gasp', seconds: 2.5, say: pick(['😍', '✨', '🌌']) }, { gesture: 'point', seconds: 3.5, say: '🌌' }, { gesture: 'none', seconds: 4 }, { gesture: 'none', seconds: 2 }];
+    case 'fireworks':
+      return [look, { gesture: 'point', seconds: 2.5, say: '🎆' }, { gesture: 'cheer', seconds: 3, say: pick(['🎉', '🥳', '🎇']) }, { gesture: 'clap', seconds: 2.5 }, { gesture: 'cheer', seconds: 2.5, say: '🎆' }, { gesture: 'none', seconds: 1.5 }];
   }
 }
 

@@ -1,6 +1,7 @@
 // The manager's console's forms as plain data: the settings form and the patch its Save sends, the repositories you
 // could still connect, and a typed repository checked before it goes to the server.
-import type { BoxSize, DayMode, EffortLevel, Floor, GhRepoSummary, MachineHost, Settings } from '../../../../shared/types';
+import type { SeasonSetting } from '../../../../shared/seasons';
+import type { BodyStyle, BoxSize, DayMode, EffortLevel, Floor, GhRepoSummary, MachineHost, Settings } from '../../../../shared/types';
 
 export const EFFORTS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -18,6 +19,9 @@ export interface SettingsForm {
   defaultModel: string;
   defaultEffort: EffortLevel;
   dayMode: DayMode;
+  bodyStyle: BodyStyle;
+  inkOutlines: boolean;
+  season: SeasonSetting;
   machineKind: MachineHost;
   boxSize: BoxSize;
   boxLimit: string;
@@ -38,6 +42,9 @@ export function settingsForm(s: Settings): SettingsForm {
     defaultModel: s.defaultModel,
     defaultEffort: s.defaultEffort,
     dayMode: s.dayMode,
+    bodyStyle: s.bodyStyle,
+    inkOutlines: s.inkOutlines,
+    season: s.season,
     machineKind: s.cloud.machineKind,
     boxSize: s.cloud.boxSize,
     boxLimit: String(s.cloud.boxLimit),
@@ -85,6 +92,9 @@ export function settingsPatch(form: SettingsForm, now: Settings): { patch: Parti
   else if (model !== now.defaultModel) patch.defaultModel = model;
   if (form.defaultEffort !== now.defaultEffort) patch.defaultEffort = form.defaultEffort;
   if (form.dayMode !== now.dayMode) patch.dayMode = form.dayMode;
+  if (form.bodyStyle !== now.bodyStyle) patch.bodyStyle = form.bodyStyle;
+  if (form.inkOutlines !== now.inkOutlines) patch.inkOutlines = form.inkOutlines;
+  if (form.season !== now.season) patch.season = form.season;
   const boxLimit = whole(form.boxLimit, LIMITS.boxLimit);
   if (typeof boxLimit === 'string') problems.boxLimit = boxLimit;
   else {

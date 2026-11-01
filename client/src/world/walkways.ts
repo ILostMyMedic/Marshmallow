@@ -5,9 +5,9 @@
 // Pure (no three.js): the grid and A* are nav.ts's, sized for a person. Headings follow nav's: facing h looks along
 // (cos h, sin h), so 0 is east, π/2 south (+z), π west, -π/2 north. (body.ts's headings differ: errands.ts converts.)
 
-import { reservedRects, slotSpots } from './decor/spots';
+import { reservedRects, slotSpots, wallSlotSpots } from './decor/spots';
 import { kanbanColumnSpan, KANBAN_KEYS } from './draw';
-import { BOARD, ceoColliders, deskPosition, EXEC_AWARD_SHELF, EXEC_BAR, EXEC_COFFEE, EXEC_DESK, EXEC_GLOBE, HALF_D, HALF_W, isEastDesk, lobbyColliders, officeColliders, PLAYER_RADIUS, RECEPTION, PONG_TABLE, SEATS, sideDoorway, SIDE_OPENINGS, SIDES, WALL_T, type FloorKind, type Rect } from './layout';
+import { BOARD, ceoColliders, deskPosition, EXEC_AWARD_SHELF, EXEC_BAR, EXEC_CHESS, EXEC_COFFEE, EXEC_DESK, EXEC_GLOBE, EXEC_GREEN, EXEC_POOL, EXEC_SHELVES, EXEC_TANK, EXEC_WEEK, HALF_D, HALF_W, isEastDesk, lobbyColliders, officeColliders, PLAYER_RADIUS, RECEPTION, PONG_TABLE, SEATS, sideDoorway, SIDE_OPENINGS, SIDES, WALL_T, type FloorKind, type Rect } from './layout';
 import { clear, makeNav, planPath, type Nav, type Pt } from './nav';
 
 export type { FloorKind };
@@ -102,8 +102,10 @@ function officeSpots(): Spot[] {
     elevatorSpot(),
     // not the west window at z 8 (the couch) or the east one at z -2 (behind the east wall's desks)
     ...windowSpots([-8, 0], [-8]),
-    // in front of each of the shop's big spots, whatever stands there (a vending machine's line, the beer fridge)
+    // in front of each of the shop's big spots, whatever stands there (a vending machine's line, the beer fridge, where
+    // to shoot at a hoop from), and out from each wall spot, where to throw at a dartboard from
     ...slotSpots(),
+    ...wallSlotSpots(),
   ];
 }
 
@@ -113,19 +115,31 @@ function lobbySpots(): Spot[] {
 }
 
 /**
- * The CEO's floor: behind their desk, which faces the room (south), where they get up; the lounge, the bar cart, the
- * globe, the awards wall, the elevator and the windows, for their strolls.
+ * The CEO's floor: behind their desk, which faces the room (south), where they get up; and for their strolls the
+ * lounge, the coffee bar's espresso machine, the globe, the awards wall, the bookcases, the putting green's tee, the
+ * fish tank, the chess and pool tables, the week's whiteboard, the elevator and the windows.
  */
 function ceoSpots(): Spot[] {
+  const g = EXEC_GREEN;
   return [
     { id: 'ceo', x: EXEC_DESK.x, z: EXEC_DESK.z - STAND_BACK, facing: SOUTH },
     { id: 'lounge', x: EXEC_COFFEE.x + 1.3, z: EXEC_COFFEE.z, facing: WEST },
-    { id: 'bar', x: EXEC_BAR.x - 1.1, z: EXEC_BAR.z, facing: EAST },
+    { id: 'bar', x: EXEC_BAR.x - EXEC_BAR.d / 2 - 0.55, z: EXEC_BAR.z - EXEC_BAR.l / 2 + 0.55, facing: EAST },
     { id: 'globe', x: EXEC_GLOBE.x + 0.9, z: EXEC_GLOBE.z + 0.7, facing: WEST },
     // a step back from the awards wall's shelf, taking it in
     { id: 'awards', x: EXEC_AWARD_SHELF.x + 0.8, z: EXEC_AWARD_SHELF.z - EXEC_AWARD_SHELF.d / 2 - 1.1, facing: SOUTH },
+    { id: 'library', x: EXEC_SHELVES.x, z: EXEC_SHELVES.z + EXEC_SHELVES.d / 2 + 0.75, facing: NORTH },
+    // on the green's tee, lining up a putt at the hole
+    { id: 'putt', x: g.x + g.w / 2 - 0.45, z: g.z, facing: WEST },
+    { id: 'fish', x: EXEC_TANK.x, z: EXEC_TANK.z - EXEC_TANK.d / 2 - 0.85, facing: SOUTH },
+    // beside the chess table, studying the game; at the pool table's east end
+    { id: 'chess', x: EXEC_CHESS.x, z: EXEC_CHESS.z + 1.1, facing: NORTH },
+    { id: 'pool', x: EXEC_POOL.x + EXEC_POOL.w / 2 + 0.55, z: EXEC_POOL.z, facing: WEST },
+    // between the whiteboard and the table's end chair, reading it
+    { id: 'whiteboard', x: EXEC_WEEK.x - 0.95, z: EXEC_WEEK.z, facing: EAST },
     elevatorSpot(),
-    ...windowSpots(SIDE_OPENINGS.ceo.west.windows.slice(0, 2), SIDE_OPENINGS.ceo.east.windows),
+    // the north-west window's south end (the reading nook has the north end), the middle west one and both east ones
+    ...windowSpots([-7.3, SIDE_OPENINGS.ceo.west.windows[1]], SIDE_OPENINGS.ceo.east.windows),
   ];
 }
 

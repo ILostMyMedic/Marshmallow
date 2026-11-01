@@ -1,11 +1,28 @@
 // Each floor's plan: what stands in its spots. Every floor starts with the kit every office floor has always had; the
 // shop (server/shop.ts) sells extras into the free spots and upgrades the kit. A floor that leaves keeps its plan, for
 // when it's connected again. Tabs see only what the catalogue still knows (shared/shop.ts knownItems): a row an older
-// catalogue wrote stays in the database but is left out, and a purchase or a move into its spot replaces it.
-import { knownItems } from '../../shared/shop.ts';
+// catalogue wrote stays in the database but is left out, and a purchase or a move into its spot replaces it. An item the
+// catalogue now sells for another kind of spot (the beanbags, grown big) is moved to one as the office opens, or paid
+// back when there's no room for it (resettle).
+import { knownItems, resettle, shopEntry } from '../../shared/shop.ts';
 import type { FloorItem } from '../../shared/types.ts';
+import type { Ledger } from '../ledger.ts';
 import type { Store } from '../store.ts';
 import type { Db, Tx } from './db.ts';
+
+/**
+ * What a floor paid for the `item` standing in `spot`: its place among the floor's rows of that item by age matches its
+ * place among the purchase lines named `name` (the catalogue's name, which a purchase writes), in order, since nothing is
+ * ever sold back. 0 when there's no line for it.
+ */
+export function paidFor(rows: readonly FloorItem[], lines: readonly { detail: string; amount: number }[], spot: string, item: string, name: string): number {
+  const nth = rows
+    .filter((r) => r.item === item)
+    .sort((a, b) => a.since - b.since)
+    .findIndex((r) => r.spot === spot);
+  const line = lines.filter((l) => l.detail === name)[nth];
+  return nth >= 0 && line ? Math.max(0, -line.amount) : 0;
+}
 
 /** What every office floor has from the start, by spot. */
 export const DEFAULT_KIT: readonly { spot: string; item: string }[] = [
@@ -78,6 +95,40 @@ export class FloorPlans {
       await tx.query('update floor_items set spot = $3 where floor_id = $1 and spot = $2', [floorId, from, to]);
     });
     return this.reload(floorId);
+  }
+
+  /**
+   * Puts what the catalogue now sells for another kind of spot where it goes now (shared/shop.ts resettle): into a free
+   * spot of its kind, or, with none free, out of the plan with what it cost paid back. Runs once as the office opens, in
+   * the ledger's line of writes; returns the floors it changed.
+   */
+  async resettle(ledger: Ledger): Promise<string[]> {
+    const changed: string[] = [];
+    for (const [floorId, rows] of [...this.plans]) {
+      const r = resettle(rows);
+      if (!r.moves.length && !r.refunds.length) continue;
+      const lines = r.refunds.length
+        ? (await this.db.query<{ detail: string; amount: number }>("select detail, amount from coin_entries where floor_id = $1 and reason = 'purchase' order by at, id", [floorId])).rows
+        : [];
+      await this.db.transaction(async (tx) => {
+        for (const m of r.moves) {
+          await tx.query('delete from floor_items where floor_id = $1 and spot = $2', [floorId, m.to]); // a row the catalogue forgot
+          await tx.query('update floor_items set spot = $3 where floor_id = $1 and spot = $2', [floorId, m.from, m.to]);
+        }
+        for (const f of r.refunds) {
+          const name = shopEntry(f.item)?.name ?? f.item;
+          const amount = paidFor(rows, lines, f.spot, f.item, name);
+          await tx.query('delete from floor_items where floor_id = $1 and spot = $2', [floorId, f.spot]);
+          if (amount > 0) await ledger.refund(tx, floorId, amount, `${name} paid back: no room for them now`);
+        }
+      });
+      for (const m of r.moves) console.log(`  ${floorId}: the ${m.item} moved from ${m.from} to ${m.to} (the shop sells them for that kind of spot now)`);
+      for (const f of r.refunds) console.log(`  ${floorId}: the ${f.item} in ${f.spot} went back to the shop, paid back (no free spot of their kind)`);
+      changed.push(floorId);
+      await this.reload(floorId);
+    }
+    if (changed.length) await ledger.refresh();
+    return changed;
   }
 
   /** Reads a floor's plan again after a write, and sends it to the tabs. */

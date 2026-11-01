@@ -1,7 +1,8 @@
 // The outside ambience's pure decisions (no WebAudio, so they're unit tested): how loud and how muffled the outside is
 // from where you stand (out on a balcony or up on the roof, inside by an open side door or a window, or deep in the
 // office), which layers the time of day brings (birds by day, the city at dusk, crickets at night, more wind on the
-// roof), how often its bursts may come, and the shape of each bird call and cricket phrase. outsideSfx.ts plays them.
+// roof) and the season leans on (shared/seasons.ts: snow softens the city and quiets the birds, no crickets in winter),
+// how often its bursts may come, and the shape of each bird call and cricket phrase. outsideSfx.ts plays them.
 // Adapted from cubefarm client/src/ui/outsideMix.ts (MIT): much louder indoors (a muffled bed rather than near silence),
 // the windows, the lobby's street, the CEO's floor and the fire's crackle are new; the clock is dayTime.ts's.
 
@@ -118,23 +119,34 @@ export interface OutsideLayers {
   carsPerMin: number;
 }
 
+/** The season's lean on the layers, as multipliers (SeasonLook's `sound`). */
+export interface SeasonSound {
+  wind: number;
+  birds: number;
+  crickets: number;
+  city: number;
+}
+
+const AS_ALWAYS: SeasonSound = { wind: 1, birds: 1, crickets: 1, city: 1 };
+
 /**
  * The layers at day phase t (0 midnight, 0.5 noon): birds by day with a dawn chorus, the city loudest at dusk, crickets
- * and a quieter, deeper city at night; on the roof, more wind; in the lobby, more street.
+ * and a quieter, deeper city at night; on the roof, more wind; in the lobby, more street. `season` leans on them: the
+ * snow brings the wind and muffles the city and its cars.
  */
-export function outsideLayers(t: number, kind: FloorKindOf = 'office'): OutsideLayers {
+export function outsideLayers(t: number, kind: FloorKindOf = 'office', season: SeasonSound = AS_ALWAYS): OutsideLayers {
   const night = nightFactor(t);
   const x = t - Math.floor(t);
   const dusk = 1 - smoothstep(0.015, 0.06, Math.abs(x - 0.765));
   const dawn = 1 - smoothstep(0.01, 0.05, Math.abs(x - 0.27));
   const street = kind === 'lobby';
   return {
-    wind: lerp(1, 0.8, night) * (kind === 'roof' ? ROOF_WIND : 1),
-    city: clamp01(lerp(0.75, 0.45, night) + 0.25 * dusk) * (street ? STREET.city : 1),
-    birds: clamp01((1 - night) * (1 - 0.6 * dusk) + 0.3 * dawn),
-    crickets: smoothstep(0.35, 1, night),
+    wind: lerp(1, 0.8, night) * (kind === 'roof' ? ROOF_WIND : 1) * season.wind,
+    city: clamp01(lerp(0.75, 0.45, night) + 0.25 * dusk) * (street ? STREET.city : 1) * season.city,
+    birds: clamp01(((1 - night) * (1 - 0.6 * dusk) + 0.3 * dawn) * season.birds),
+    crickets: smoothstep(0.35, 1, night) * clamp01(season.crickets),
     cityHz: lerp(240, 120, night),
-    carsPerMin: (lerp(2.5, 0.6, night) + 1.5 * dusk) * (street ? STREET.cars : 1),
+    carsPerMin: (lerp(2.5, 0.6, night) + 1.5 * dusk) * (street ? STREET.cars : 1) * season.city,
   };
 }
 

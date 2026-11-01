@@ -33,6 +33,8 @@ export function queueFidget(id: string, fidget: Queued['fidget'], x = 0, z = 0) 
 let last: Moment | null = null;
 
 if (typeof window !== 'undefined') {
+  // for checks: play a fidget at someone's desk (window.__mmFidget(id, 'facepalm'))
+  (window as unknown as Record<string, unknown>).__mmFidget = queueFidget;
   useStore.subscribe((state, prev) => {
     if (!prev.loaded) {
       last = state.moments.at(-1) ?? null; // the first snapshot: nothing just happened

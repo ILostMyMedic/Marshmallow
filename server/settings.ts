@@ -1,6 +1,7 @@
 // The office's settings as the manager changes them (PATCH /api/settings): each field checked, the rest left alone.
 import { cloudSettings } from '../shared/cloud.ts';
-import { DAY_MODES, type DayMode, type EffortLevel, type Settings } from '../shared/types.ts';
+import { SEASON_SETTINGS, type SeasonSetting } from '../shared/seasons.ts';
+import { BODY_STYLES, DAY_MODES, type BodyStyle, type DayMode, type EffortLevel, type Settings } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 
 export const EFFORTS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -34,6 +35,18 @@ export function settingsPatch(body: unknown, now?: Settings): Partial<Settings> 
   if (b.dayMode !== undefined) {
     if (!DAY_MODES.includes(b.dayMode as DayMode)) throw new HttpError(400, `dayMode must be one of ${DAY_MODES.join(', ')}`);
     patch.dayMode = b.dayMode as DayMode;
+  }
+  if (b.bodyStyle !== undefined) {
+    if (!BODY_STYLES.includes(b.bodyStyle as BodyStyle)) throw new HttpError(400, `bodyStyle must be one of ${BODY_STYLES.join(', ')}`);
+    patch.bodyStyle = b.bodyStyle as BodyStyle;
+  }
+  if (b.season !== undefined) {
+    if (!SEASON_SETTINGS.includes(b.season as SeasonSetting)) throw new HttpError(400, `season must be one of ${SEASON_SETTINGS.join(', ')}`);
+    patch.season = b.season as SeasonSetting;
+  }
+  if (b.inkOutlines !== undefined) {
+    if (typeof b.inkOutlines !== 'boolean') throw new HttpError(400, 'inkOutlines must be true or false');
+    patch.inkOutlines = b.inkOutlines;
   }
   if (b.setupDone !== undefined) patch.setupDone = b.setupDone === true;
   if (b.autoscale !== undefined) patch.autoscale = b.autoscale === true;

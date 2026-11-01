@@ -335,7 +335,9 @@ export function mirrorX(g: THREE.BufferGeometry) {
 
 function mergeAll(parts: THREE.BufferGeometry[]) {
   if (!parts.length) return null;
-  if (parts.some((p) => !p.index)) parts = parts.map((p) => (p.index ? p.toNonIndexed() : p));
+  // merging needs all parts indexed or none: give the few that aren't (a rounded box) an index of their own, rather than
+  // unrolling every other part to three vertices a triangle (three times the skinning work)
+  if (parts.some((p) => !p.index)) parts = parts.map((p) => (p.index ? p : p.setIndex(Array.from({ length: p.attributes.position.count }, (_, i) => i))));
   const out = mergeGeometries(parts);
   if (!out) throw new Error('could not merge a lab body');
   parts.forEach((p) => p.dispose());

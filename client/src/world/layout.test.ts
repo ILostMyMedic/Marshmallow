@@ -1,6 +1,6 @@
 // Adapted from cubefarm client/src/world/layout.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { BALCONY, BALCONY_OUT, ceoColliders, collide, DESK, DESK_ROWS, deskPosition, deskRotation, EAST_DESKS, EAST_ROTATION, ELEVATOR, EXEC_AWARD_SHELF, EXEC_AWARDS, EXEC_PLANTS, FLOOR_HEIGHT, floorElevation, HALF_D, HALF_W, isEastDesk, lobbyColliders, MAX_DESKS, officeColliders, outsideAt, outsideColliders, PLAYER_RADIUS, rect, SEATS, shellColliders, SIDE_DOOR, SIDE_OPENINGS, sideDoorway, sideSign, SIDES, SPAWN, WALL_H, WALL_T, WINDOW, type Rect } from './layout';
+import { BALCONY, BALCONY_OUT, CEO_SEATS, ceoColliders, collide, DESK, DESK_ROWS, deskPosition, deskRotation, EAST_DESKS, EAST_ROTATION, ELEVATOR, EXEC_ART, EXEC_AWARD_SHELF, EXEC_AWARDS, EXEC_BAR, EXEC_CLOCK, EXEC_MEETING, EXEC_MILESTONES, EXEC_PLANTS, EXEC_RUGS, EXEC_TALL_PLANTS, FLOOR_HEIGHT, floorElevation, HALF_D, HALF_W, isEastDesk, LOBBY_SPAWN, lobbyColliders, MAX_DESKS, MEETING_CHAIR, meetingChairs, officeColliders, outsideAt, outsideColliders, PICTURE_ASPECT, PLAYER_RADIUS, RECEPTION, rect, SEATS, shellColliders, SIDE_DOOR, SIDE_OPENINGS, sideDoorway, sideSign, SIDES, SPAWN, WALL_H, WALL_T, WINDOW, type Rect, type Wall } from './layout';
 
 describe('the desks', () => {
   it('numbers the grid first, then the east wall: a desk for every seat on a floor', () => {
@@ -56,7 +56,7 @@ const box: Rect = { minX: 0, maxX: 2, minZ: 0, maxZ: 2 };
 /** True when a circle of radius r at (x, z) overlaps any rect (touching doesn't count). */
 const overlaps = (p: { x: number; z: number }, rects: Rect[], r = R) => rects.some((b) => p.x > b.minX - r && p.x < b.maxX + r && p.z > b.minZ - r && p.z < b.maxZ + r);
 const touches = (b: Rect, c: Rect) => b.minX < c.maxX && b.maxX > c.minX && b.minZ < c.maxZ && b.maxZ > c.minZ;
-const all = (kind: 'office' | 'lobby') => (kind === 'office' ? officeColliders() : lobbyColliders());
+const all = (kind: 'office' | 'lobby' | 'ceo') => (kind === 'office' ? officeColliders() : kind === 'ceo' ? ceoColliders() : lobbyColliders());
 /** Walks towards `b` in steps of at most 0.1 m (a frame's worth, as Player.tsx does) from `a`; returns where it ends up. */
 const walk = (a: { x: number; z: number }, b: { x: number; z: number }, rects: Rect[]) => {
   let p = a;
@@ -105,6 +105,17 @@ describe('collide', () => {
   it('spawns the player somewhere free on every floor', () => {
     expect(collide(SPAWN.x, SPAWN.z, officeColliders())).toEqual({ x: SPAWN.x, z: SPAWN.z });
     expect(collide(SPAWN.x, SPAWN.z, lobbyColliders())).toEqual({ x: SPAWN.x, z: SPAWN.z });
+    expect(collide(LOBBY_SPAWN.x, LOBBY_SPAWN.z, lobbyColliders())).toEqual({ x: LOBBY_SPAWN.x, z: LOBBY_SPAWN.z });
+  });
+
+  it('starts you in the lobby facing the front desk, a few steps from it', () => {
+    // a yaw of 0 looks towards -Z (north); the desk is straight ahead
+    const ahead = { x: -Math.sin(LOBBY_SPAWN.yaw), z: -Math.cos(LOBBY_SPAWN.yaw) };
+    const to = { x: RECEPTION.x - LOBBY_SPAWN.x, z: RECEPTION.z - LOBBY_SPAWN.z };
+    const d = Math.hypot(to.x, to.z);
+    expect((ahead.x * to.x + ahead.z * to.z) / d).toBeCloseTo(1);
+    expect(d).toBeGreaterThan(4);
+    expect(d).toBeLessThan(8);
   });
 
   it("keeps the elevator's shut doors shut", () => {
@@ -125,7 +136,7 @@ describe("the CEO's awards wall", () => {
     const left = EXEC_AWARDS.x - EXEC_AWARDS.w / 2;
     const right = EXEC_AWARDS.x + EXEC_AWARDS.w / 2;
     expect(right).toBeLessThan(-ELEVATOR.doorHalf - 1);
-    for (const [px, pz, s] of EXEC_PLANTS) if (pz > 0) expect(left > px + 0.6 * s || right < px - 0.6 * s, `plant at ${px}`).toBe(true);
+    for (const [px, pz, s] of [...EXEC_PLANTS, ...EXEC_TALL_PLANTS]) if (pz > 0) expect(left > px + 0.6 * s || right < px - 0.6 * s, `plant at ${px}`).toBe(true);
     expect(EXEC_AWARDS.z).toBeGreaterThan(HALF_D - 0.15); // on the wall, so it goes with it in the cutaway
     expect(EXEC_AWARDS.y + EXEC_AWARDS.h).toBeLessThan(WALL_H - 0.2);
     expect(EXEC_AWARD_SHELF.h).toBeLessThan(EXEC_AWARDS.y);
@@ -141,6 +152,102 @@ describe("the CEO's awards wall", () => {
     expect(others.filter((b) => touches(b, shelf))).toEqual([]);
     expect(walk({ x: EXEC_AWARD_SHELF.x, z: EXEC_AWARD_SHELF.z - 2 }, { x: EXEC_AWARD_SHELF.x, z: HALF_D }, rects).z).toBeCloseTo(shelf.minZ - PLAYER_RADIUS);
     expect(collide(SPAWN.x, SPAWN.z, rects)).toEqual({ x: SPAWN.x, z: SPAWN.z });
+  });
+});
+
+describe("the CEO's office", () => {
+  const { x: tx, z: tz, w: tw, d: td } = EXEC_MEETING;
+  const spine = tw / 2 - td / 2;
+  /** The nearest point of the meeting table's racetrack spine to anything at x: the top is everything within td / 2 of it. */
+  const nearest = (x: number) => ({ x: Math.max(tx - spine, Math.min(tx + spine, x)), z: tz });
+  const fromTop = (x: number, z: number) => {
+    const n = nearest(x);
+    return Math.hypot(x - n.x, z - n.z) - td / 2;
+  };
+  /** A chair's footprint's outline, turned with it, a point every 2 cm. */
+  const outline = ([cx, cz, yaw]: [number, number, number]) => {
+    const { w, d } = MEETING_CHAIR;
+    const pts: { x: number; z: number }[] = [];
+    for (let i = 0; i <= 25; i++) {
+      const t = i / 25;
+      for (const [u, v] of [
+        [-w / 2 + w * t, -d / 2],
+        [-w / 2 + w * t, d / 2],
+        [-w / 2, -d / 2 + d * t],
+        [w / 2, -d / 2 + d * t],
+      ])
+        pts.push({ x: cx + u * Math.cos(yaw) + v * Math.sin(yaw), z: cz - u * Math.sin(yaw) + v * Math.cos(yaw) });
+    }
+    return pts;
+  };
+
+  it("tucks the meeting table's chairs in round it, never through its top, each facing the table", () => {
+    const chairs = meetingChairs();
+    expect(chairs).toHaveLength(8);
+    for (const c of chairs) {
+      const at = `chair at ${c[0].toFixed(2)}, ${c[1].toFixed(2)}`;
+      for (const p of outline(c)) expect(fromTop(p.x, p.z), at).toBeGreaterThan(0.1);
+      expect(fromTop(c[0], c[1]), at).toBeLessThan(0.5);
+      // it faces (a yaw: 0 faces -z) the nearest point of the table
+      const n = nearest(c[0]);
+      const len = Math.hypot(n.x - c[0], n.z - c[1]);
+      expect((-Math.sin(c[2]) * (n.x - c[0]) - Math.cos(c[2]) * (n.z - c[1])) / len, at).toBeGreaterThan(0.99);
+    }
+    for (let i = 0; i < chairs.length; i++) for (let j = i + 1; j < chairs.length; j++) expect(Math.hypot(chairs[i][0] - chairs[j][0], chairs[i][1] - chairs[j][1])).toBeGreaterThan(MEETING_CHAIR.w + 0.1);
+    // the table and its chairs are solid all over
+    const solid = ceoColliders();
+    for (const c of chairs) for (const p of outline(c)) expect(solid.some((b) => p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ)).toBe(true);
+  });
+
+  it('lists every seat in the room once, each on something solid', () => {
+    const ids = CEO_SEATS.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const solid = ceoColliders();
+    for (const s of CEO_SEATS) {
+      expect(solid.some((b) => s.x > b.minX && s.x < b.maxX && s.z > b.minZ && s.z < b.maxZ), s.id).toBe(true);
+      expect(s.height, s.id).toBeGreaterThan(0.3);
+      expect(s.height, s.id).toBeLessThan(0.8);
+    }
+    expect(CEO_SEATS.filter((s) => s.id.startsWith('ceo-chair-')).map((s) => [s.x, s.z, s.facing])).toEqual(meetingChairs());
+    for (const kind of ['sofa', 'armchair', 'chair', 'stool'] as const) expect(CEO_SEATS.some((s) => s.kind === kind), kind).toBe(true);
+  });
+
+  it('hangs the pictures clear of the windows, the doors, the boards, the clock and each other, under the ceiling', () => {
+    const taken: Record<Wall, [number, number][]> = { north: [], south: [], west: [], east: [] };
+    for (const side of SIDES) {
+      const o = SIDE_OPENINGS.ceo[side];
+      taken[side].push([o.door - SIDE_DOOR.half - 0.15, o.door + SIDE_DOOR.half + 0.15], ...o.windows.map((z): [number, number] => [z - WINDOW.w / 2 - 0.1, z + WINDOW.w / 2 + 0.1]));
+    }
+    const m = EXEC_MILESTONES;
+    taken.north.push([-2.2, 2.2], [m.x - m.w / 2 - 0.08, m.x + m.w / 2 + 0.08]);
+    taken.south.push([EXEC_AWARDS.x - EXEC_AWARDS.w / 2 - 0.08, EXEC_AWARDS.x + EXEC_AWARDS.w / 2 + 0.08], [-ELEVATOR.doorHalf - 0.2, ELEVATOR.doorHalf + 0.9]);
+    taken.east.push([EXEC_CLOCK.z - 0.45, EXEC_CLOCK.z + 0.45], [EXEC_BAR.z - EXEC_BAR.l / 2, EXEC_BAR.z + EXEC_BAR.l / 2]);
+    for (const p of EXEC_ART) {
+      const h = p.w / PICTURE_ASPECT;
+      const span: [number, number] = [p.at - p.w / 2 - 0.07, p.at + p.w / 2 + 0.07];
+      for (const [a, b] of taken[p.wall]) expect(span[1] <= a || span[0] >= b, `the ${p.wall} wall's picture at ${p.at}`).toBe(true);
+      taken[p.wall].push(span);
+      expect(p.y + h + 0.07).toBeLessThan(WALL_H - 0.2);
+      expect(p.y - 0.07).toBeGreaterThan(1.05);
+    }
+  });
+
+  it("lays the rugs without overlapping, the runner from the desk's rug to just short of the elevator", () => {
+    const e = 1e-6;
+    for (let i = 0; i < EXEC_RUGS.length; i++)
+      for (let j = i + 1; j < EXEC_RUGS.length; j++) {
+        const [a, b] = [EXEC_RUGS[i], EXEC_RUGS[j]];
+        expect(a.minX < b.maxX - e && a.maxX > b.minX + e && a.minZ < b.maxZ - e && a.maxZ > b.minZ + e, `rugs ${i} and ${j}`).toBe(false);
+      }
+    const [desk, runner] = EXEC_RUGS;
+    expect(runner.minZ).toBeCloseTo(desk.maxZ);
+    expect(runner.maxZ).toBeGreaterThan(SPAWN.z);
+    expect(runner.maxZ).toBeLessThan(HALF_D - 0.5);
+  });
+
+  it('spawns you free in front of the elevator, its shut doors shut', () => {
+    expect(collide(SPAWN.x, SPAWN.z, ceoColliders())).toEqual({ x: SPAWN.x, z: SPAWN.z });
+    expect(walk({ x: 0, z: SPAWN.z }, { x: 0, z: HALF_D + 2 }, ceoColliders()).z).toBeLessThan(HALF_D);
   });
 });
 
@@ -162,7 +269,7 @@ describe('walking outside', () => {
     }
   });
 
-  it.each(['office', 'lobby'] as const)('lets you walk from the %s floor straight out of each door to the railing, and back', (kind) => {
+  it.each(['office', 'lobby', 'ceo'] as const)('lets you walk from the %s floor straight out of each door to the railing, and back', (kind) => {
     const rects = all(kind);
     for (const side of SIDES) {
       const s = sideSign(side);
@@ -176,7 +283,7 @@ describe('walking outside', () => {
     }
   });
 
-  it.each(['office', 'lobby'] as const)("keeps the room's furniture out of the way of the %s doors", (kind) => {
+  it.each(['office', 'lobby', 'ceo'] as const)("keeps the room's furniture out of the way of the %s doors", (kind) => {
     const shell = shellColliders(kind);
     const outside = outsideColliders(kind);
     const same = (b: Rect, c: Rect) => b.minX === c.minX && b.maxX === c.maxX && b.minZ === c.minZ && b.maxZ === c.maxZ;

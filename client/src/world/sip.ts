@@ -1,7 +1,7 @@
 // Drinking your coffee and eating a snack from the fridge, as pure rules: what E does with something in your hands,
 // the timeline of a sip and of the big last gulp (when the coffee goes down), a snack's sips or bites (the first opens
-// it, the last finishes it and it leaves your hand), and the pose along the way. sipping.ts plays them; the player's
-// body draws them. The cues are named for their sounds (ui/sipSfx.ts plays them).
+// it, the last finishes it and it leaves your hand), a toasted marshmallow eaten off its stick, and the pose along the
+// way. sipping.ts plays them; the player's body draws them. The cues are named for their sounds (ui/sipSfx.ts plays them).
 // Adapted from cubefarm client/src/world/toys/sip.ts (MIT): the roof's sausage and the dropped mug's clunk are cut,
 // and the last gulp keeps the empty mug in your hand (it's refilled at the machine) instead of dropping it.
 
@@ -13,18 +13,21 @@ export type EAction = 'sip' | 'empty' | 'target';
 /**
  * E with a mug of coffee sips it, whatever the crosshair is on, except the coffee machine and the mug stand (where E
  * works them). With an empty mug E acts on the target as usual, or says it's empty when there is none. A snack is
- * eaten the same way; at the fridge E works the fridge whatever you hold (it shuts the door, or says your hands are full).
+ * eaten the same way, and so is a marshmallow on a stick (in one go); at the fridge E works the fridge whatever you hold
+ * (it shuts the door, or says your hands are full), and on a seat it sits you down with it.
  */
-export function eAction(held: { kind: string; sips?: number; left?: number } | null, focusKind: string | null): EAction {
-  if (held && focusKind === 'fridge') return 'target';
+export function eAction(held: { kind: string; sips?: number; left?: number; eaten?: boolean } | null, focusKind: string | null): EAction {
+  if (held && (focusKind === 'fridge' || focusKind === 'sit')) return 'target';
   if (held?.kind === 'snack') return (held.left ?? 0) > 0 ? 'sip' : focusKind ? 'target' : 'empty';
+  if (held?.kind === 'marshmallow') return !held.eaten ? 'sip' : focusKind ? 'target' : 'empty';
   if (held?.kind !== 'mug' || focusKind === 'coffee' || focusKind === 'mugs') return 'target';
   if ((held.sips ?? 0) > 0) return 'sip';
   return focusKind ? 'target' : 'empty';
 }
 
-/** The hint for E when eAction says 'sip': sip the coffee, sip or bite the snack, or sip the beer (the beer fridge's). */
+/** The hint for E when eAction says 'sip': sip the coffee, sip or bite the snack, sip the beer (the beer fridge's) or eat the marshmallow. */
 export function sipLabel(held: { kind: string; snack?: SnackId; beer?: boolean } | null): string {
+  if (held?.kind === 'marshmallow') return 'Eat the marshmallow';
   const s = held?.kind === 'snack' && held.snack ? SNACKS[held.snack] : null;
   if (s && held?.beer) return 'Sip the beer';
   if (s) return `${s.kind === 'drink' ? 'Sip' : 'Bite'} the ${s.short}`;
@@ -110,6 +113,27 @@ export const LAST_BITE: SipPlan = {
     { at: 1.4, cue: 'drop' },
   ],
 };
+
+/**
+ * A marshmallow off its stick: up to the mouth, a soft bite (a crunch when it's `charred`), a munch and an "mm" (or
+ * more munching), and the stick goes.
+ */
+export function marshmallowPlan(charred: boolean): SipPlan {
+  return {
+    dur: 1.5,
+    up: 0.3,
+    down: 0.6,
+    tilt: 0,
+    head: 0.04,
+    cues: [
+      { at: 0.28, cue: charred ? 'crunch' : 'nom' },
+      { at: 0.36, cue: 'drink' },
+      { at: 0.6, cue: 'munch' },
+      { at: 1.05, cue: charred ? 'munch' : 'mm' },
+      { at: 1.4, cue: 'drop' },
+    ],
+  };
+}
 
 // ---------- snacks ----------
 

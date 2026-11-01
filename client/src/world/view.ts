@@ -1,10 +1,11 @@
 // What this tab is looking at and doing, kept in the tab, not on the server: which floor (0 is the lobby), whether you
 // walk it (the camera behind you or in your eyes) or look down on it, what's under the crosshair, whether the mouse is
-// locked for looking round, the panel that's open over the view, what you hold, and a passing note. Adapted from
-// cubefarm client/src/store.ts (MIT): overlay, focus, locked, held and toasts.
+// locked for looking round, the panel that's open over the view, what you hold, the seat you're sitting in, and a
+// passing note. Adapted from cubefarm client/src/store.ts (MIT): overlay, focus, locked, held and toasts.
 import { create } from 'zustand';
 import type { SnackId } from './fridge';
 import type { End } from './pongPhysics';
+import type { Seat } from './seats';
 
 /** The manager's console's tabs (ui/ManagerConsole.tsx). */
 export type ConsoleTab = 'floors' | 'team' | 'issues' | 'shop' | 'settings';
@@ -37,7 +38,9 @@ const PANELS: readonly string[] = ['terminal', 'kanban', 'elevator', 'look', 'fr
 /**
  * What E does with what's under the crosshair: open a panel, or do something in the room (actions.ts hands those to
  * whoever registered for them): say hi, take a mug, work the coffee machine or the fridge, get something from a floor's
- * vending machine or beer fridge (by its spot), pick up a paddle, look through a lookout's binoculars.
+ * vending machine or beer fridge (by its spot), pick up a paddle, look through a lookout's binoculars, sit down in a
+ * seat or get up from it, take a marshmallow on a stick at the roof's fire, take a hoop's ball or a dartboard's darts (by
+ * the shop spot it's in).
  */
 export type Action =
   | Overlay
@@ -48,7 +51,12 @@ export type Action =
   | { kind: 'vending'; spot: string }
   | { kind: 'beer'; spot: string }
   | { kind: 'paddle'; end: End }
-  | { kind: 'lookout'; id: string };
+  | { kind: 'lookout'; id: string }
+  | { kind: 'sit'; seat: Seat }
+  | { kind: 'stand' }
+  | { kind: 'marshmallow' }
+  | { kind: 'hoop'; spot: string }
+  | { kind: 'darts'; spot: string };
 
 export const isPanel = (a: Action): a is Overlay => PANELS.includes(a.kind);
 
@@ -61,9 +69,16 @@ export interface Focus {
 
 /**
  * What's in your hands: a mug (and the sips of coffee in it), a snack from the fridge or the vending machine, a beer
- * from the beer fridge (drawn as the fridge's brown bottle), or a ping-pong paddle.
+ * from the beer fridge (drawn as the fridge's brown bottle), a ping-pong paddle, or a marshmallow on a stick (`toast`:
+ * seconds toasted at full heat, roof/marshmallow.ts, brought up to date as it changes stage; `alight` while it's on fire;
+ * `eaten` once it's off the stick), or a game: a hoop's ball or a dartboard's darts (games/gameState.ts).
  */
-export type Held = { kind: 'mug'; id: string; sips: number } | { kind: 'snack'; id: string; snack: SnackId; left: number; beer?: boolean } | { kind: 'paddle'; end: End };
+export type Held =
+  | { kind: 'mug'; id: string; sips: number }
+  | { kind: 'snack'; id: string; snack: SnackId; left: number; beer?: boolean }
+  | { kind: 'paddle'; end: End }
+  | { kind: 'marshmallow'; id: string; toast: number; alight?: boolean; eaten?: boolean }
+  | { kind: 'game'; game: 'hoop' | 'darts'; spot: string };
 
 export type ViewMode = 'first' | 'overview';
 /** On foot (ViewMode 'first'), whether the camera looks out of your eyes (the default) or follows behind you. */
@@ -79,7 +94,7 @@ function loadPerson(): Person {
 }
 
 interface View {
-  floor: number | null; // until the manager picks one: the first floor with workers on it
+  floor: number | null; // null until the game shows one: the lobby (Game.tsx)
   mode: ViewMode;
   person: Person;
   overlay: Overlay | null;
@@ -88,6 +103,8 @@ interface View {
   hover: Focus | null;
   locked: boolean;
   held: Held | null;
+  /** The seat you're sitting in (Player.tsx sits you down and gets you up); null on your feet. */
+  seated: Seat | null;
   /** A passing note over the view ("Put a mug under the machine first"), and when it was shown (performance.now()). */
   toast: { text: string; at: number } | null;
   setFloor(floor: number): void;
@@ -99,6 +116,7 @@ interface View {
   setHover(f: Focus | null): void;
   setLocked(locked: boolean): void;
   setHeld(h: Held | null): void;
+  setSeated(s: Seat | null): void;
   showToast(text: string): void;
 }
 
@@ -111,6 +129,7 @@ export const useView = create<View>()((set, get) => ({
   hover: null,
   locked: false,
   held: null,
+  seated: null,
   toast: null,
   setFloor: (floor) => set({ floor }),
   setMode: (mode) => set({ mode }),
@@ -137,5 +156,6 @@ export const useView = create<View>()((set, get) => ({
   },
   setLocked: (locked) => set({ locked }),
   setHeld: (held) => set({ held }),
+  setSeated: (seated) => set({ seated }),
   showToast: (text) => set({ toast: { text, at: performance.now() } }),
 }));

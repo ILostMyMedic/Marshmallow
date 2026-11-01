@@ -7,13 +7,15 @@ const NOW = 1_800_000_000_000;
 describe('the debug page’s world events', () => {
   it('lists every event once, in its group', () => {
     const groups = eventGroups();
-    expect(groups.map((g) => g.title)).toEqual(['Everyday', 'Big', 'Street']);
+    expect(groups.map((g) => g.title)).toEqual(['Everyday', 'Big', 'Street', 'Night']);
     expect(groups.flatMap((g) => g.events.map((e) => e.id)).sort()).toEqual([...EVENT_IDS].sort());
     expect(groups[0].events.map((e) => e.id)).toContain('plane');
     expect(groups[1].events.map((e) => e.id)).toContain('duck');
     expect(groups[2].events.map((e) => e.id)).toEqual(['rockbus', 'icecream', 'firetruck', 'foodtruck', 'parade']);
     expect(eventHint(EVENTS.parade)).toBe('weird, draws a crowd, with a note · 95 s');
     expect(eventHint(EVENTS.plane)).toBe('everyday · 70 s');
+    expect(groups[3].events.map((e) => e.id)).toEqual(['aurora', 'fireworks']);
+    expect(eventHint(EVENTS.aurora)).toBe('fun, draws a crowd, at night · 150 s');
   });
 
   it('counts down what’s on, and says when the director picks next', () => {

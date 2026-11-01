@@ -121,6 +121,46 @@ describe('the office database', () => {
     expect(store.snapshot().desk.chats.map((c) => c.title)).toEqual(['Recipes', 'Earlier messages']);
   });
 
+  it('moves beanbags bought for a small spot to a free big one as it opens, and pays back the ones with no room', async () => {
+    store.putFloor(floor([]));
+    const home = path.join(dir, 'db');
+    office = await openOffice(home, store);
+    await office.ledger.grant(REPO, 500);
+    // what an older catalogue sold: two lots of beanbags in small spots (35 and 45 coins), the big spots taken but one
+    const db = office.db;
+    const buy = async (spot: string, item: string, price: number, detail: string, at: string) => {
+      await db.query('insert into floor_items (floor_id, spot, item, since) values ($1, $2, $3, $4)', [REPO, spot, item, at]);
+      await db.query("insert into coin_entries (floor_id, amount, reason, detail, at) values ($1, $2, 'purchase', $3, $4)", [REPO, -price, detail, at]);
+    };
+    await buy('big-1', 'vending-machine', 120, 'Vending machine', '2026-10-01T10:00:00Z');
+    await buy('floor-3', 'beanbags', 35, 'Beanbags', '2026-10-02T10:00:00Z');
+    await buy('big-3', 'sofa', 90, 'Sofa', '2026-10-03T10:00:00Z');
+    await buy('floor-1', 'beanbags', 45, 'Beanbags', '2026-10-04T10:00:00Z');
+    await office.close();
+    office = null;
+
+    events = [];
+    const again = newStore();
+    again.putFloor(floor([]));
+    office = await openOffice(home, again);
+    const plan = office.plans.of(REPO);
+    // the older lot moved into the free big spot; the newer one, with no room left, paid back what it cost
+    expect(plan.filter((i) => i.item === 'beanbags').map((i) => i.spot)).toEqual(['big-2']);
+    expect(plan.map((i) => i.spot)).not.toContain('floor-1');
+    expect(plan.map((i) => i.spot)).not.toContain('floor-3');
+    await office.awards.idle(); // a purchases award may pay too: count from the lines
+    const sum = async (where: string) => (await office!.db.query<{ n: number }>(`select coalesce(sum(amount), 0)::int as n from coin_entries where floor_id = $1 and ${where}`, [REPO])).rows[0].n;
+    expect(await sum("reason = 'refund'")).toBe(45);
+    expect(office.ledger.balance(REPO)).toEqual({ coins: await sum('true'), earned: await sum("amount > 0 and reason not in ('grant', 'refund')") });
+    expect(office.ledger.get().recent.find((e) => e.reason === 'refund')).toMatchObject({ amount: 45, detail: 'Beanbags paid back: no room for them now' });
+    expect(of('floorPlan').some((e) => e.floorId === REPO && e.items.some((i) => i.spot === 'big-2' && i.item === 'beanbags'))).toBe(true);
+    // done once: opening again changes nothing
+    await office.close();
+    office = await openOffice(home, newStore());
+    expect(await office.plans.resettle(office.ledger)).toEqual([]);
+    expect(await sum("reason = 'refund'")).toBe(45);
+  });
+
   it('gives every floor the default kit, once', async () => {
     store.putFloor(floor([]));
     office = await openOffice(null, store);

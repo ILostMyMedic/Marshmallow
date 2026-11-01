@@ -21,6 +21,7 @@ import { INK } from './Outlines';
 import { Outside } from './Outside';
 import { CoffeeTable, Couch, Plant, Rug } from './Props';
 import { Shell } from './Shell';
+import { LobbySeason } from './seasons/LobbySeason';
 import { ShippedWall } from './ShippedWall';
 import { Ball, Box, Cyl } from './Toon';
 import { todayStatus } from './tour';
@@ -239,6 +240,7 @@ export const Lobby = memo(function Lobby({ top }: { top: number }) {
       <ShopKiosk />
       <TrophyCabinet />
       <ShippedWall />
+      <LobbySeason />
       <Couch position={[LOBBY_COUCH.x, 0, LOBBY_COUCH.z]} rotationY={Math.PI / 2} color="#2a9d8f" />
       <CoffeeTable position={[LOBBY_TABLE.x, 0, LOBBY_TABLE.z]} rotationY={Math.PI / 2} />
       {LOBBY_PLANTS.map(([x, z, s]) => (

@@ -25,7 +25,9 @@ import {
   type Rect,
 } from '../layout';
 import { findPath, spot, standable, walkways, WALK_R } from '../walkways';
-import { ITEM_SIZE, PLACED_SPOTS, SPOT_AT, itemRect, itemSize, kindOf, kitTier, placedItems, placement, planRects, reservedRects, slotSpots, spotRect } from './spots';
+import { OCHE } from '../games/darts';
+import { hoopRim } from '../games/hoopPhysics';
+import { ITEM_SIZE, PLACED_SPOTS, SPOT_AT, itemRect, itemSize, kindOf, kitTier, placedItems, placement, planRects, reservedRects, slotSpots, spotRect, wallFoot, dartboardY } from './spots';
 
 const overlaps = (a: Rect, b: Rect, pad = 0) => a.minX < b.maxX + pad && a.maxX > b.minX - pad && a.minZ < b.maxZ + pad && a.maxZ > b.minZ - pad;
 const contains = (outer: Rect, inner: Rect) => inner.minX >= outer.minX - 1e-6 && inner.maxX <= outer.maxX + 1e-6 && inner.minZ >= outer.minZ - 1e-6 && inner.maxZ <= outer.maxZ + 1e-6;
@@ -174,6 +176,68 @@ describe('the shop spots', () => {
       const [a, b] = [spots.find((s) => s.id === `${id}-sip-0`)!, spots.find((s) => s.id === `${id}-sip-1`)!];
       expect(Math.cos(a.facing) * (b.x - a.x) + Math.sin(a.facing) * (b.z - a.z), id).toBeGreaterThan(0.5);
       expect(Math.cos(b.facing) * (a.x - b.x) + Math.sin(b.facing) * (a.z - b.z), id).toBeGreaterThan(0.5);
+    }
+  });
+});
+
+describe('the games’ places', () => {
+  const w = walkways('office');
+  /** Every named spot on an office floor but `id`. */
+  const others = (id: string) => [...w.spots, ...w.homes].filter((s) => s.id !== id);
+
+  it('gives every big spot a place out in the room to shoot at a hoop from, facing it, a couple of metres past the rim', () => {
+    for (const id of ofKind('big')) {
+      const s = spot(w, `${id}-shoot`)!;
+      expect(s, id).toBeDefined();
+      expect(standable(w, s.x, s.z), id).toBe(true);
+      const foot = wallFoot(id)!;
+      const rim = hoopRim(foot);
+      const dist = Math.hypot(rim.x - s.x, rim.z - s.z);
+      expect(dist, id).toBeGreaterThan(2.2);
+      expect(dist, id).toBeLessThan(4);
+      // facing the hoop
+      expect(Math.cos(s.facing) * (rim.x - s.x) + Math.sin(s.facing) * (rim.z - s.z), id).toBeGreaterThan(dist * 0.95);
+      for (const o of others(s.id)) expect(Math.hypot(o.x - s.x, o.z - s.z), `${s.id} and ${o.id}`).toBeGreaterThan(0.75);
+    }
+  });
+
+  it('gives every wall spot an oche at the proper distance from a dartboard there, facing it and clear of everyone else', () => {
+    for (const id of ofKind('wall')) {
+      const s = spot(w, `${id}-oche`)!;
+      expect(s, id).toBeDefined();
+      expect(standable(w, s.x, s.z), id).toBe(true);
+      const foot = wallFoot(id)!;
+      // straight out from the wall OCHE metres (along the wall a little for the one by the cooler)
+      const out = (s.x - foot.x) * Math.sin(foot.rotY) + (s.z - foot.z) * Math.cos(foot.rotY);
+      expect(out, id).toBeCloseTo(OCHE);
+      const along = Math.abs((s.x - foot.x) * Math.cos(foot.rotY) - (s.z - foot.z) * Math.sin(foot.rotY));
+      expect(along, id).toBeLessThan(1.1);
+      expect(Math.cos(s.facing) * (foot.x - s.x) + Math.sin(s.facing) * (foot.z - s.z), id).toBeGreaterThan(0);
+      for (const o of others(s.id)) expect(Math.hypot(o.x - s.x, o.z - s.z), `${s.id} and ${o.id}`).toBeGreaterThan(0.75);
+    }
+  });
+
+  it('hangs a dartboard with its bull at the proper height (a little higher over a plant), clear of what stands below it on its wall', () => {
+    const things = wallThings();
+    const half = ITEM_SIZE.dartboard.h / 2;
+    for (const id of ofKind('wall')) {
+      const p = placement(id, 'dartboard')!;
+      expect(p.y, id).toBe(dartboardY(id));
+      expect(p.y, id).toBeGreaterThanOrEqual(1.73);
+      expect(p.y, id).toBeLessThan(2);
+      const { wall, a, b } = onWall(spotRect(id)!)[0];
+      for (const t of things.filter((x) => x.wall === wall)) expect(b <= t.a || a >= t.b || t.top < p.y - half, `${id} and the ${t.what}`).toBe(true);
+    }
+  });
+
+  it('hangs a hoop where its rim sticks out over the big spot, under the ceiling', () => {
+    for (const id of ofKind('big')) {
+      const foot = wallFoot(id)!;
+      const rim = hoopRim(foot);
+      const r = spotRect(id)!;
+      // the rim's middle is above the spot's own floor space (the edge of the ball's way in may lean past it)
+      expect(rim.x > r.minX && rim.x < r.maxX && rim.z > r.minZ - 0.1 && rim.z < r.maxZ + 0.1, id).toBe(true);
+      expect(rim.y + 0.5).toBeLessThan(WALL_H);
     }
   });
 });

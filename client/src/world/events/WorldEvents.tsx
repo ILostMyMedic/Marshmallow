@@ -32,6 +32,8 @@ const SCENES: Record<EventId, LazyExoticComponent<ComponentType<SceneProps>>> = 
   firetruck: lazy(() => import('./scenes/FireTruck')),
   foodtruck: lazy(() => import('./scenes/FoodTruck')),
   parade: lazy(() => import('./scenes/Parade')),
+  aurora: lazy(() => import('./scenes/Aurora')),
+  fireworks: lazy(() => import('./scenes/Fireworks')),
 };
 
 /** The events outside, at street level: `elevation` is how high the floor you're on stands (the city's, City.tsx). */

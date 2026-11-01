@@ -4,7 +4,7 @@
 // inside. On the roof the fire pit crackles too, from where it is. One fixed graph, built once: bird calls, crickets and
 // cars are scheduled on a few long-lived voices, so nothing is added however long the office is left open. A timer
 // (not the frame loop) moves it with you; it's silent while quiet (a panel, the elevator ride) or with the tab hidden,
-// and cut off from the mixer once silent.
+// and cut off from the mixer once silent. The season leans on its layers (world/seasons/seasonState.ts).
 // Adapted from cubefarm client/src/ui/outsideSfx.ts (MIT): the weather's layers are cut; the fire is new.
 
 import { sampleDayTime } from '../world/dayTime';
@@ -12,6 +12,7 @@ import { doorOpen } from '../world/doors';
 import type { FloorKindOf } from '../world/floors';
 import { SIDES, type Side } from '../world/layout';
 import { FIRE } from '../world/roof/roofLayout';
+import { season } from '../world/seasons/seasonState';
 import {
   birdCall,
   BIRD_CALL_MAX,
@@ -149,7 +150,7 @@ function tick() {
   const ear = listenerAt();
   for (const side of SIDES) open[side] = doorOpen(side);
   hearing = outsideHearing(kind, ear.x, ear.z, open);
-  layers = outsideLayers(sampleDayTime(), kind);
+  layers = outsideLayers(sampleDayTime(), kind, season().sound);
   const silent = quiet || document.hidden;
   const level = silent ? 0 : hearing.level;
 

@@ -1,5 +1,6 @@
 // The character designs the lab compares. Each dresses the shared rig (rig.ts) from the same Appearance: skin, shirt and
 // outfit, build, height, the feminine or masculine shape; the head and face are the game's own (HeadParts), scaled.
+// The CEO wears a navy suit over a white shirt and a tie, whatever the look's outfit (as Figure.tsx's TorsoWear had it).
 // A design returns its proportions and its body merged into one skinned geometry (build.ts).
 import * as THREE from 'three';
 import { ACCENTS, BUILD_SHAPE, type Appearance } from '../world/appearance';
@@ -12,6 +13,9 @@ import { BI, bindPositions, standHeight, type Proportions, type V3 } from './rig
 export const PANTS = '#3d4a6b'; // the game's trousers (Character.tsx)
 const WHITE = '#f8f9fa';
 const SOLE = '#ece6da';
+const SUIT = '#2b2d42';
+const LAPEL = '#1d1f30';
+const GOLD = '#ffd166';
 
 export interface Built {
   props: Proportions;
@@ -27,11 +31,14 @@ export interface Built {
   phones: { at: V3; scale: number };
 }
 
+export type Role = 'worker' | 'ceo';
+
 export interface Design {
   id: DesignId;
   name: string;
   blurb: string;
-  build(look: Appearance): Built;
+  /** The body for a look; the CEO's in their suit (the designs the office uses dress it; the others ignore it). */
+  build(look: Appearance, role?: Role): Built;
 }
 
 export type DesignId = 'soft' | 'blocks' | 'human' | 'chibi' | 'floaty' | 'today';
@@ -53,7 +60,8 @@ function measure(look: Appearance) {
   };
 }
 
-function palette(look: Appearance) {
+function palette(look: Appearance, suit = false) {
+  if (suit) return { shirt: SUIT, skin: look.skin, collar: WHITE, main: LAPEL, trim: look.shirt, cuff: shade(SUIT, -0.1) };
   return {
     shirt: look.shirt,
     skin: look.skin,
@@ -91,8 +99,8 @@ const frontDepth = (s: TorsoShape, y: number) => -surfacePoint(s, 0, thetaAt(s, 
  * pocket and strings, a cardigan's open front and buttons, a stripe, a sweater's ribbing and diamonds, a turtleneck's
  * rolls). `k` scales the small pieces to the body.
  */
-function dressTorso(body: Body, s: TorsoShape, look: Appearance, o: { waist: number; neck: number; chest: number; k: number; weigh: Weigh; lift?: number }) {
-  const c = palette(look);
+function dressTorso(body: Body, s: TorsoShape, look: Appearance, o: { waist: number; neck: number; chest: number; k: number; weigh: Weigh; lift?: number; suit?: boolean }) {
+  const c = palette(look, o.suit);
   const { waist, neck, chest, k, weigh } = o;
   const lift = o.lift ?? 0.005;
   const tw = thetaAt(s, waist);
@@ -107,7 +115,21 @@ function dressTorso(body: Body, s: TorsoShape, look: Appearance, o: { waist: num
     weigh,
   );
   // the hem, a lip over the trousers
-  body.skinned(band(s, waist - 0.004, waist + 0.032 * k, lift * 1.2), look.outfit === 'sweater' ? c.trim : c.shirt, weigh);
+  body.skinned(band(s, waist - 0.004, waist + 0.032 * k, lift * 1.2), look.outfit === 'sweater' && !o.suit ? c.trim : c.shirt, weigh);
+  if (o.suit) {
+    // the white shirt front between the lapels, the tie and its knot, the jacket's gold button, a pocket square
+    body.skinned(panel(s, -0.24, 0.24, chest - 0.03 * k, neck, lift * 0.8, 6, 8), WHITE, weigh, true);
+    body.skinned(panel(s, -0.36, -0.2, waist + 0.1 * k, neck, lift * 1.5, 3, 10), LAPEL, weigh, true);
+    body.skinned(panel(s, 0.2, 0.36, waist + 0.1 * k, neck, lift * 1.5, 3, 10), LAPEL, weigh, true);
+    body.skinned(panel(s, -0.05, 0.05, chest - 0.11 * k, neck - 0.02 * k, lift * 1.7, 2, 8), look.shirt, weigh, true);
+    const knot = surfacePoint(s, 0, thetaAt(s, neck - 0.025 * k), new THREE.Vector3());
+    body.skinned(xf(blob(0.022 * k, 0.018 * k, 0.012 * k), { at: [knot.x, knot.y, knot.z - 0.008] }), shade(look.shirt, -0.2), weigh, true);
+    const button = surfacePoint(s, 0, thetaAt(s, waist + 0.07 * k), new THREE.Vector3());
+    body.skinned(xf(ball(0.012 * k, 8, 6), { at: [button.x, button.y, button.z - 0.006] }), GOLD, weigh, true);
+    body.skinned(panel(s, -0.62, -0.45, chest + 0.02 * k, chest + 0.06 * k, lift * 1.6, 2, 2), look.shirt, weigh, true);
+    body.skinned(collarRing(s, neck, 0.004, 0.018 * k), WHITE, weigh);
+    return;
+  }
   switch (look.outfit) {
     case 'tee':
       body.skinned(collarRing(s, neck, 0.004, 0.018 * k), c.collar, weigh);
@@ -155,9 +177,9 @@ function dressTorso(body: Body, s: TorsoShape, look: Appearance, o: { waist: num
 }
 
 /** Sleeves on two-part arms: long (to a cuff at the wrist) or short (a sleeve over the top of a bare arm). */
-function sleeves(body: Body, look: Appearance, p: Proportions, arm: { upper: () => THREE.BufferGeometry; fore: () => THREE.BufferGeometry; r1: number; r2: number; r3: number }) {
-  const c = palette(look);
-  const long = measure(look).long;
+function sleeves(body: Body, look: Appearance, p: Proportions, arm: { upper: () => THREE.BufferGeometry; fore: () => THREE.BufferGeometry; r1: number; r2: number; r3: number }, suit = false) {
+  const c = palette(look, suit);
+  const long = suit || measure(look).long;
   if (long) {
     body.pair('upperArm', arm.upper, c.shirt);
     body.pair('forearm', arm.fore, c.shirt);
@@ -206,11 +228,27 @@ function instep(z: number) {
  * toe and up round the ankle, white laces down the instep, sitting in a flat rubber sole a little wider all round.
  */
 function trainers(body: Body, ankle: number) {
-  body.pair('foot', () => loaf(SHOE_BACK, SHOE_FRONT, shoeWidth, (s) => shoeTop(s) - ankle, WELT - ankle, 0.008, { n: 2.4, m: SHOE_M, seg: 24, rings: 16 }), SHOE);
+  const [upper, laces, sole] = trainerShapes(ankle);
+  body.pair('foot', () => upper.clone(), SHOE);
+  body.pair('foot', () => laces.clone(), WHITE, false, 0.5);
+  body.pair('foot', () => sole.clone(), SOLE, false, 0.35);
+}
+
+const trainerCache = new Map<number, THREE.BufferGeometry[]>();
+
+/** The trainers' upper, laces and sole for an ankle that high: the same for everyone, so made once (each a few ms). */
+function trainerShapes(ankle: number) {
+  let shapes = trainerCache.get(ankle);
+  if (shapes) return shapes;
   const [lb, lf] = [-0.05, -0.13];
   const lz = (s: number) => lb + (lf - lb) * s;
-  body.pair('foot', () => loaf(lb, lf, curve([[0, 0.02], [1, 0.024]]), (s) => instep(lz(s)) + 0.004 - ankle, (s) => instep(lz(s)) - 0.003 - ankle, 0.004, { n: 3, m: 2.4, seg: 12, rings: 8 }), WHITE, false, 0.5);
-  body.pair('foot', () => loaf(SHOE_BACK + 0.018, SHOE_FRONT - 0.018, (s) => shoeWidth(s) + SOLE_LIP, () => 0.033 - ankle, 0.016 - ankle, 0.016, { n: 4, m: 3.5, seg: 24, rings: 18 }), SOLE, false, 0.35);
+  shapes = [
+    loaf(SHOE_BACK, SHOE_FRONT, shoeWidth, (s) => shoeTop(s) - ankle, WELT - ankle, 0.008, { n: 2.4, m: SHOE_M, seg: 24, rings: 16 }),
+    loaf(lb, lf, curve([[0, 0.02], [1, 0.024]]), (s) => instep(lz(s)) + 0.004 - ankle, (s) => instep(lz(s)) - 0.003 - ankle, 0.004, { n: 3, m: 2.4, seg: 12, rings: 8 }),
+    loaf(SHOE_BACK + 0.018, SHOE_FRONT - 0.018, (s) => shoeWidth(s) + SOLE_LIP, () => 0.033 - ankle, 0.016 - ankle, 0.016, { n: 4, m: 3.5, seg: 24, rings: 18 }),
+  ];
+  trainerCache.set(ankle, shapes);
+  return shapes;
 }
 
 /** The headphones' resting place round the neck, in chest space. */
@@ -358,7 +396,8 @@ const human: Design = {
   id: 'human',
   name: 'Stylized human',
   blurb: 'A sculpted torso (chest, waist, slim hips, shoulders that read), tapered sleeves and trousers, hands with a thumb, trainers with laces and a rubber sole: slimmer and taller.',
-  build(look) {
+  build(look, role) {
+    const suit = role === 'ceo';
     const m = measure(look);
     const c = palette(look);
     const h = m.h;
@@ -404,7 +443,7 @@ const human: Design = {
     };
     const body = new Body(props);
     const weigh = torsoWeights(props);
-    dressTorso(body, s, look, { waist: P0 + 0.05 * h, neck: P0 + 0.535 * h, chest: P0 + 0.4 * h, k: h * 0.9, weigh, lift: 0.004 });
+    dressTorso(body, s, look, { waist: P0 + 0.05 * h, neck: P0 + 0.535 * h, chest: P0 + 0.4 * h, k: h * 0.9, weigh, lift: 0.004, suit });
     // a belt under the hem
     body.skinned(band(s, P0 + 0.025 * h, P0 + 0.05 * h, 0.003), shade(PANTS, -0.12), weigh);
     body.rigid('neck', taper(0.052 * h, 0.05 * h, 0.2 * h, 12, 3).translate(0, 0.16 * h, 0), c.skin);
@@ -414,7 +453,7 @@ const human: Design = {
       r1: aR,
       r2: 0.044 * L * h,
       r3: 0.033 * L * h,
-    });
+    }, suit);
     // hands: a palm, the fingers together and slightly curled, a thumb
     const H = h * 1.15;
     body.pair('hand', () => rbox(0.03 * H, 0.075 * H, 0.07 * H, 0.012 * H, 1).translate(0, -0.042 * H, 0), c.skin);
@@ -432,7 +471,8 @@ const chibi: Design = {
   id: 'chibi',
   name: 'Chibi',
   blurb: 'A big head on a small round body, with short stubby limbs that still bend.',
-  build(look) {
+  build(look, role) {
+    const suit = role === 'ceo';
     const m = measure(look);
     const c = palette(look);
     const h = m.h;
@@ -475,8 +515,8 @@ const chibi: Design = {
     };
     const body = new Body(props);
     const weigh = torsoWeights(props);
-    dressTorso(body, s, look, { waist: P0 + 0.005 * h, neck: P0 + 0.255 * h, chest: P0 + 0.15 * h, k: h * 0.75, weigh, lift: 0.004 });
-    sleeves(body, look, props, { upper: () => taper(aR, aR, props.upperArm), fore: () => taper(aR, aR, props.forearm), r1: aR, r2: aR, r3: aR });
+    dressTorso(body, s, look, { waist: P0 + 0.005 * h, neck: P0 + 0.255 * h, chest: P0 + 0.15 * h, k: h * 0.75, weigh, lift: 0.004, suit });
+    sleeves(body, look, props, { upper: () => taper(aR, aR, props.upperArm), fore: () => taper(aR, aR, props.forearm), r1: aR, r2: aR, r3: aR }, suit);
     body.pair('hand', () => ball(0.05 * h, 12, 9).translate(0, -0.045 * h, 0), c.skin);
     body.pair('hand', () => blob(0.018 * h, 0.024 * h, 0.018 * h).translate(-0.01 * h, -0.03 * h, -0.042 * h), c.skin);
     body.pair('thigh', () => taper(lR, lR, props.thigh), PANTS);

@@ -18,6 +18,7 @@ import {
   admit,
   choose,
   enqueue,
+  ErrandEnds,
   errandNamed,
   errands,
   headingFor,
@@ -44,6 +45,7 @@ import {
   type Queued,
 } from './errands';
 import './fridgeErrand';
+import './gameErrands';
 import './vendingErrand';
 import { SEATS } from './layout';
 import type { Pt } from './nav';
@@ -125,6 +127,8 @@ export function ErrandDirector({
 }) {
   const w = walkways(floor);
   const people = useMemo(() => new Map<string, Person>(), []);
+  // every errand that got going gets its `end` once, however it stops (errands.ts ErrandEnds)
+  const ends = useMemo(() => new ErrandEnds(), []);
   const latest = useRef(workers);
   latest.current = workers;
   const gone = useRef(onGone);
@@ -135,6 +139,7 @@ export function ErrandDirector({
   const report = (p: Person) => setErrand(p.id, p.errand && p.dest ? { name: p.errand.name, phase: p.phase, spot: p.dest.id } : null);
 
   const walk = (p: Person, phase: Phase, errand: Errand, dest: Spot, path: Pt[]) => {
+    ends.begin(p.id, errand);
     Object.assign(p, { phase, phaseAt: run.clock, errand, dest, path, wp: 0, hurry: false, waited: 0, ghost: 0, hold: 0 });
     report(p);
   };
@@ -152,7 +157,13 @@ export function ErrandDirector({
 
   /** Let go: up to the spot behind their chair to pick up a box (then out: see 'there'). */
   const depart = (p: Person) => {
+    // whatever they were doing is dropped: a coffee break's actor or a chat would otherwise carry on instead of the walk out
     endScript(p);
+    p.actor?.abort();
+    p.actor?.end(false);
+    p.actor = null;
+    p.walking = null;
+    leaveChat(p);
     p.queue = [];
     walk(p, 'leaving', LEAVE, p.home, [{ x: p.home.x, z: p.home.z }]);
   };
@@ -221,6 +232,7 @@ export function ErrandDirector({
       endScript(p);
       p.actor?.abort();
       p.actor?.end(false);
+      ends.end(id, 'cut');
       seatBody(id);
       setErrand(id, null);
       say(id, null);
@@ -239,9 +251,10 @@ export function ErrandDirector({
         setErrand(id, null);
         say(id, null);
       }
+      ends.endAll();
       people.clear();
     },
-    [people],
+    [people, ends],
   );
 
   useEffect(
@@ -306,7 +319,7 @@ export function ErrandDirector({
         p.actor?.end(false);
         p.actor = null;
         p.walking = null;
-        p.errand?.end?.(p.id, 'cut');
+        ends.end(p.id, 'cut');
         endScript(p);
         sitDown(p);
       }),
@@ -332,13 +345,20 @@ export function ErrandDirector({
       dest = s && !taken.has(s.id) && standable(w, s.x, s.z) ? s : null;
     } else {
       const ids = spotChoices(e.where?.(p.id) ?? e.spot, w.spots.map((s) => s.id), taken);
-      dest = pickSpot(ids.map((id) => spotById(w, id)!), origin, Math.random());
+      dest = pickSpot(ids.map((id) => spotById(w, id)!), origin, Math.random(), e.near);
     }
     const path = dest && findPath(w, origin, dest);
-    if (!dest || !path) return false;
+    // what it took for them (its place, its claim) is let go if they can't go after all
+    if (!dest || !path) {
+      if (dest && e.place) e.end?.(p.id, 'cut');
+      return false;
+    }
     if (e.claim && !e.claim(p.id)) return null;
     const script = e.script && ctx ? e.script(ctx.a, floor) : null;
-    if (e.script && !script) return false;
+    if (e.script && !script) {
+      e.end?.(p.id, 'cut');
+      return false;
+    }
     // turned round from a coffee break or a game: leave it behind
     if (p.actor) {
       p.actor.abort();
@@ -371,7 +391,7 @@ export function ErrandDirector({
   };
 
   const goHome = (p: Person, hurry: boolean, at: Pt, how: 'done' | 'cut' = 'cut') => {
-    p.errand?.end?.(p.id, how);
+    ends.end(p.id, how);
     endScript(p);
     leaveChat(p);
     p.hurry = hurry;
@@ -521,7 +541,7 @@ export function ErrandDirector({
     const ask = long > GIVE_UP.acting ? 'done' : actor.step(run.clock, p.arrived);
     if (ask === 'done') {
       if (long > GIVE_UP.acting) actor.abort();
-      goHome(p, false, st);
+      goHome(p, false, st, long > GIVE_UP.acting ? 'cut' : 'done');
       return;
     }
     if ('walk' in ask && ask.walk !== p.walking) {
@@ -663,6 +683,7 @@ export function ErrandDirector({
         case 'exiting': {
           if (long > GIVE_UP.returning || follow(p, st.x, st.z, WALK_SPEED, false, dt)) {
             p.gone = true;
+            ends.end(p.id, 'done');
             setErrand(p.id, null);
             gone.current?.(p.id);
           }
@@ -697,7 +718,7 @@ export function ErrandDirector({
         // a coffee carried home goes on the desk first
         if ((!idle && (p.phase !== 'returning' || p.actor)) || !st) continue;
         const e = wanted(errands(), a, state).find((x) => x.work);
-        if (e && start(p, e, st, { a, state }) && idle) was?.end?.(p.id, 'cut');
+        if (e) start(p, e, st, { a, state }); // the errand they were on is ended as they turn round (walk)
         continue;
       }
       if (!isSeated(p.id)) continue; // walked by the gong run or the stand-up, or not back in their chair yet

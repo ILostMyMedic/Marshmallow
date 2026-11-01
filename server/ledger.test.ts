@@ -272,7 +272,7 @@ describe('the shop', () => {
     await open();
     await office!.ledger.grant(REPO, 100);
     const before = office!.plans.of(REPO);
-    await expect(office!.shop.buy(REPO, 'vending-machine')).rejects.toMatchObject({ status: 409, message: 'A vending machine costs 120 coins; this floor has 100' });
+    await expect(office!.shop.buy(REPO, 'vending-machine')).rejects.toMatchObject({ status: 409, message: 'Vending machine: 120 coins, and this floor has 100' });
     await expect(office!.shop.buy(REPO, 'plant', 'wall-1')).rejects.toMatchObject({ status: 409 });
     await expect(office!.shop.buy(REPO, 'nope')).rejects.toMatchObject({ status: 409 });
     vi.spyOn(office!.plans, 'put').mockRejectedValueOnce(new Error('disk full'));
@@ -289,7 +289,7 @@ describe('the shop', () => {
     await office!.ledger.grant(REPO, 130);
     const [a, b] = await Promise.allSettled([office!.shop.buy(REPO, 'vending-machine'), office!.shop.buy(REPO, 'vending-machine')]);
     expect(a.status).toBe('fulfilled');
-    expect(b).toMatchObject({ status: 'rejected', reason: { status: 409, message: 'A vending machine costs 150 coins; this floor has 10' } });
+    expect(b).toMatchObject({ status: 'rejected', reason: { status: 409, message: 'Vending machine: 150 coins, and this floor has 10' } });
     expect((await purse()).coins).toBe(10);
     expect(office!.plans.of(REPO).filter((i) => i.item === 'vending-machine')).toHaveLength(1);
   });

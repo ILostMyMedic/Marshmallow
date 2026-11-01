@@ -1,8 +1,12 @@
 // The world events outside, chosen by the office for every tab at once, so two tabs see the same blimp at the same
 // moment: the director (shared/worldEvents.ts) ticked on the server's clock at the pace a tab used to keep, with its
 // schedule and a log of what ran in the office database, so neither a reload nor a restart starts it over. What's on
-// goes in the snapshot, and every change to the tabs; each tab draws an event from its start time and seed.
-import { clashes, EVENTS, newDirector, parseEventId, roll, scheduleFirst, startRunning, stepDirector, stopRunning, type Director, type EventId, type EventSide, type WorldRun, type WorldView } from '../../shared/worldEvents.ts';
+// goes in the snapshot, and every change to the tabs; each tab draws an event from its start time and seed. The
+// office's date goes with it, so every tab shows the same season (shared/seasons.ts), and the director picks the
+// night-only events (the northern lights, New Year's fireworks) only while it's night on the office clock.
+import { nightFor } from '../../shared/dayClock.ts';
+import { officeDay, parseSeasonSetting, seasonFor } from '../../shared/seasons.ts';
+import { clashes, EVENTS, newDirector, parseEventId, roll, scheduleFirst, startRunning, stepDirector, stopRunning, type Director, type EventId, type EventSide, type Sky, type WorldRun, type WorldView } from '../../shared/worldEvents.ts';
 import type { Store } from '../store.ts';
 import type { Db } from './db.ts';
 
@@ -14,6 +18,8 @@ const MISSED_S = 60;
 /** How long the log keeps what ran. */
 const LOG_DAYS = 30;
 const LOG_RECENT = 20;
+/** A night-only event starts only with at least this much of the night left (seconds). */
+const NIGHT_LEFT_S = 90;
 
 interface EventRow {
   id: number;
@@ -47,6 +53,7 @@ export class World {
   private timer: NodeJS.Timeout | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private failing = false;
+  private today: string;
 
   constructor(
     private readonly db: Db,
@@ -54,10 +61,18 @@ export class World {
     private readonly now: () => number = Date.now,
   ) {
     this.d = newDirector(0, clock(now())); // load() puts the saved one in its place
+    this.today = officeDay(now());
   }
 
   get(): WorldView {
-    return { running: this.runs, nextAt: Math.round(this.d.nextAt * 1000) };
+    return { running: this.runs, nextAt: Math.round(this.d.nextAt * 1000), today: this.today };
+  }
+
+  /** What may happen at `now`: whether it's night on the office clock, and the season the office shows. */
+  sky(now = this.now()): Sky {
+    const settings = this.store.getSettings();
+    const look = seasonFor(parseSeasonSetting(settings.season), officeDay(now));
+    return { night: nightFor(now, settings.dayMode, NIGHT_LEFT_S), season: look.season, holiday: look.holiday };
   }
 
   /** The saved schedule and what's still running (a new schedule the first time); the log loses what's a month old. */
@@ -112,11 +127,15 @@ export class World {
       const before = { nextAt: this.d.nextAt, state: this.d.state };
       const over = this.runs.filter((r) => r.startedAt + r.seconds * 1000 <= now);
       if (over.length) this.runs = this.runs.filter((r) => !over.includes(r));
-      const id = stepDirector(this.d, Math.max(0, clock(now) - this.d.clock));
+      const id = stepDirector(this.d, Math.max(0, clock(now) - this.d.clock), this.sky(now));
       if (id) await this.begin(id, either(roll(this.d)), seedOf(roll(this.d)), false, now);
       const moved = this.d.nextAt !== before.nextAt || this.d.state !== before.state;
       if (moved) await this.saveSchedule();
-      if (over.length || moved) this.publish();
+      // past midnight: a new day, maybe a new season
+      const day = officeDay(now);
+      const dawned = day !== this.today;
+      this.today = day;
+      if (over.length || moved || dawned) this.publish();
     });
   }
 

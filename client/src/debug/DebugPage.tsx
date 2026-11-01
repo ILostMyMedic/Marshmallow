@@ -3,9 +3,11 @@
 // also hire and let go of pretend workers, give a floor coins, and fake Claude's usage warning or limit
 // (server/demoRoutes.ts).
 import { Fragment, useEffect, useState } from 'react';
-import { DAY_MODES, isBusy, type DayMode, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
+import { BODY_STYLES, DAY_MODES, isBusy, type BodyStyle, type DayMode, type Floor, type GhRepoSummary, type PullInfo } from '../../../shared/types';
+import { STYLE_NAMES } from '../world/bodyStyle';
 import { BOX_SIZE_INFO, BOX_SIZES } from '../../../shared/cloud';
 import { CLAUDE_MODELS } from '../../../shared/models';
+import { officeDay, SEASON_SETTING_NAMES, SEASON_SETTINGS, seasonFor, parseSeasonSetting, type SeasonSetting } from '../../../shared/seasons';
 import { EVENTS, type EventId, type EventSide } from '../../../shared/worldEvents';
 import { command, floorPath, query } from '../api';
 import { qaKey, useStore } from '../store';
@@ -55,6 +57,9 @@ export function DebugPage() {
           <input type="checkbox" checked={settings.autoscale} onChange={(e) => run('PATCH', '/api/settings', { autoscale: e.target.checked })} /> autoscale
         </label>
         <OfficeClockPicker run={run} />
+        <SeasonPicker run={run} />
+        <BodyStylePicker run={run} />
+        <InkToggle run={run} />
         <ModelField label="default model" value={settings.defaultModel} placeholder="claude-opus-5-5" onCommit={(v) => v && run('PATCH', '/api/settings', { defaultModel: v })} />
         <ConnectRepo run={run} />
         {demo && (
@@ -106,6 +111,52 @@ function OfficeClockPicker({ run }: { run: Run }) {
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+/** The season outside, an office setting: by the office's date, or any season shown now, in every tab (shared/seasons.ts). */
+function SeasonPicker({ run }: { run: Run }) {
+  const setting = useStore((s) => s.settings.season);
+  const today = useStore((s) => s.world.today);
+  const look = seasonFor(parseSeasonSetting(setting), today || officeDay(Date.now()));
+  return (
+    <label className="connect" title={`The season outside: snow, blossom, leaves, pumpkins, the Christmas tree, New Year's fireworks. The office's date is ${today || 'not known yet'}; showing ${look.label}. The game's ?season= shows another in one tab.`}>
+      season
+      <select value={setting} onChange={(e) => run('PATCH', '/api/settings', { season: e.target.value as SeasonSetting })}>
+        {SEASON_SETTINGS.map((m) => (
+          <option key={m} value={m}>
+            {SEASON_SETTING_NAMES[m]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** How everyone in the office is drawn, an office setting: the character lab's chibi or stylized human, in every tab. */
+function BodyStylePicker({ run }: { run: Run }) {
+  const style = useStore((s) => s.settings.bodyStyle);
+  return (
+    <label className="connect" title="How everyone in the office is drawn, you included: the same in every tab.">
+      body style
+      <select value={style} onChange={(e) => run('PATCH', '/api/settings', { bodyStyle: e.target.value as BodyStyle })}>
+        {BODY_STYLES.map((s) => (
+          <option key={s} value={s}>
+            {STYLE_NAMES[s]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** The office's ink outlines, an office setting: off draws none at all (fewer draw calls), in every tab. */
+function InkToggle({ run }: { run: Run }) {
+  const on = useStore((s) => s.settings.inkOutlines);
+  return (
+    <label className="connect" title="Ink outlines round the furniture and the people. Off draws none at all, for fewer draw calls. The same in every tab.">
+      <input type="checkbox" checked={on} onChange={(e) => run('PATCH', '/api/settings', { inkOutlines: e.target.checked })} /> ink outlines
     </label>
   );
 }

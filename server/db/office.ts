@@ -50,6 +50,8 @@ export async function openOffice(dir: string | null, store: Store): Promise<Offi
   const shop = new Shop(db, store, ledger, plans);
   const awards = new Awards(db, store, ledger, plans, desk, records);
   await Promise.all([records.load(), player.load(), plans.load(), world.load(), previewSettings.load(), desk.load(), ledger.load()]);
+  // what the catalogue now sells for another kind of spot goes where it fits, or is paid back
+  await ledger.serial(() => plans.resettle(ledger));
   await desk.importPhone(store.snapshot().messages);
   store.attachDb(() => ({ records: records.get(), look: player.get(), floorPlans: plans.get(), coins: ledger.get(), awards: awards.get(), world: world.get(), desk: desk.get() }));
   const look = () => void awards.poke().catch(warn('look at the awards'));

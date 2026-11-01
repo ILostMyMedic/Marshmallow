@@ -164,7 +164,7 @@ export function ago(at: number, now: number): string {
   return d === 1 ? 'yesterday' : `${d} days ago`;
 }
 
-const REASON_ICONS: Record<CoinReason, string> = { merge: '🔀', 'clean-qa': '✅', fixed: '🔧', award: '🏆', purchase: '🛍️', grant: '🎁' };
+const REASON_ICONS: Record<CoinReason, string> = { merge: '🔀', 'clean-qa': '✅', fixed: '🔧', award: '🏆', purchase: '🛍️', grant: '🎁', refund: '↩️' };
 
 export interface LedgerLine {
   id: number;

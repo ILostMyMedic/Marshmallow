@@ -18,7 +18,7 @@ import {
   paddleSwing,
   paddleTaken,
   playerEnd,
-  pongCamera,
+  pongShake,
   pongChanged,
   pongClick,
   pongMatch,
@@ -343,29 +343,14 @@ describe("the player's paddle", () => {
 });
 
 describe("the player's view", () => {
-  it('sits behind their end, a little high, looking down the table', () => {
-    joinPong('west');
-    const v = pongCamera('west', 0);
-    expect(v.x).toBeLessThan(TABLE.x - TABLE.len / 2);
-    expect(v.z).toBeCloseTo(TABLE.z);
-    expect(v.y).toBeGreaterThan(TABLE.top + 0.5);
-    expect(v.yaw).toBeCloseTo(-Math.PI / 2); // facing +x
-    expect(v.pitch).toBeLessThan(0);
-    expect(pongCamera('east', 0).yaw).toBeCloseTo(Math.PI / 2);
-    expect(Math.hypot(v.shake.x, v.shake.y, v.shake.z)).toBe(0);
-  });
-
-  it('follows the paddle a little sideways, and shakes for a moment after a smash', () => {
-    joinPong('east');
-    pongMouse(200, 0);
-    const v = pongCamera('east', 0);
-    expect(Math.abs(v.z - TABLE.z)).toBeGreaterThan(0.05);
-    expect(Math.abs(v.z - TABLE.z)).toBeLessThan(paddle.lat);
+  it('stays still until a smash, then shakes for a moment (the view itself: pongCam.test.ts)', () => {
+    const still = pongShake(0);
+    expect(Math.hypot(still.x, still.y, still.z)).toBe(0);
     shakeView(1);
     const now = performance.now();
-    const s = pongCamera('east', now + 50).shake;
+    const s = pongShake(now + 50);
     expect(Math.hypot(s.x, s.y, s.z)).toBeGreaterThan(0);
-    const after = pongCamera('east', now + 400).shake;
+    const after = pongShake(now + 400);
     expect(Math.hypot(after.x, after.y, after.z)).toBe(0);
   });
 });

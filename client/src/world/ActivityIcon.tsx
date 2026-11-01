@@ -5,7 +5,9 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ACTIVITY_ICONS } from '../../../shared/activity';
 import { isBusy, type Activity, type Worker } from '../../../shared/types';
+import { useStore } from '../store';
 import { signHeight, SIGN_SIZE } from './activitySign';
+import { HEAD_LIFT, parseBodyStyle } from './bodyStyle';
 import { roundRect, SANS } from './draw';
 import { INK } from './Outlines';
 import { bodyState, saying } from './people';
@@ -114,7 +116,7 @@ export const ActivityIcon = memo(function ActivityIcon({ worker }: { worker: Wor
     if (!grp.visible) return;
     // over their head, seated or up and about (in the desk's frame), and above a speech bubble
     const body = bodyState(worker.id);
-    const target = signHeight(body?.sit ?? 1, !!saying(worker.id));
+    const target = signHeight(body?.sit ?? 1, !!saying(worker.id), HEAD_LIFT[parseBodyStyle(useStore.getState().settings.bodyStyle)]);
     st.y = st.y === 0 ? target : st.y + (target - st.y) * Math.min(1, dt * 10);
     if (body && grp.parent) grp.parent.worldToLocal(st.at.set(body.x, 0, body.z));
     else st.at.set(0, 0, SEATED_AT.z);

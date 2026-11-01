@@ -17,7 +17,7 @@ const COLOURS = ['#e63946', '#3a86ff', '#ffb703', '#2a9d8f'];
 // Chair-space (origin on the deck under the sitter's hips, facing −z): the canvas hangs from the front bar down to the
 // low point of the seat and up to the top bar, tipped back RECLINE from upright.
 /** How far back a deck chair (and whoever sits in it) leans, radians. */
-export const RECLINE = 0.45;
+export const RECLINE = DECK_CHAIRS.recline;
 const SEAT_LOW: V3 = [0, 0.22, 0.12];
 const FRONT_BAR: V3 = [0, 0.45, -0.42];
 const TOP_BAR: V3 = [0, SEAT_LOW[1] + 0.86 * Math.cos(RECLINE + 0.05), SEAT_LOW[2] + 0.86 * Math.sin(RECLINE + 0.05)];

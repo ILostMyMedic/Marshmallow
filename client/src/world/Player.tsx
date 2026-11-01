@@ -3,10 +3,14 @@
 // switches between the camera following behind you (you turn to face the way you walk) and looking out of your eyes,
 // and Tab flies up to the overview and back. Walls, furniture and shut doors stop you (layout.ts collide, doors.ts, the
 // elevator's doors: elevatorRide.ts); a ride in the elevator leaves you in its cabin on the new floor. With a ping-pong
-// paddle in hand the mouse moves the paddle, a click serves, and the camera stands behind your end of the table; at a
-// lookout on the roof you look through its binoculars until E, G or Esc. While the overview has the camera, the keys
-// pan it instead. Your body is Me.tsx's, drawn where this leaves you (playerAt); your steps sound by what's underfoot
-// (ui/footsteps.ts).
+// paddle in hand the mouse moves the paddle, a click serves, and the camera flies up behind your end of the table and
+// over your shoulder (pongCam.ts), and back to your view when you put the paddle down. With a hoop's ball or a dart in
+// hand, holding the mouse down winds up a throw and letting go throws it (games/gameState.ts). At a lookout on the roof
+// you look through its binoculars until E, G or Esc. E on a seat (SeatTargets.tsx) sits you down
+// in it: the camera lowers to your eyes sitting there, you look round but stay put, and E (with nothing else to aim
+// at) or a step gets you up beside it (seats.ts standSpot), as does Tab, a ride or the seat going. While the overview
+// has the camera, the keys pan it instead. Your body is Me.tsx's, drawn where this leaves you (playerAt); your steps
+// sound by what's underfoot (ui/footsteps.ts).
 // Adapted from cubefarm client/src/world/Player.tsx (MIT): walking, looking, using and holding things, sips and the
 // paddle; toys, the gamepad, perches, photo mode, saved spots and key bindings are cut.
 import { useEffect, useMemo, useRef } from 'react';
@@ -14,23 +18,30 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { surfaceAt } from '../ui/footstepRules';
 import { footstepsFollow } from '../ui/footsteps';
-import { act, heldTakesE } from './actions';
+import { act, heldTakesE, onAction } from './actions';
 import { shutDoorways } from './doors';
 import { elevatorShut, takeArrival } from './elevatorRide';
+import { cancelCharge, releaseCharge, startCharge } from './games/gameState';
 import { interactables } from './interact';
 import { angleDelta } from './body';
+import { BEHIND_HEAD, EYE_HEIGHTS, parseBodyStyle, SEATED_EYES } from './bodyStyle';
 import { kindOf } from './floors';
-import { collide, EYE_HEIGHT, SPAWN, WALL_H, type Rect } from './layout';
+import { collide, LOBBY_SPAWN, SPAWN, WALL_H, type Rect } from './layout';
 import { createLookFilter, filterLookDelta, LOOK_RADIANS_PER_PX, resetLookFilter, useLookPrefs } from './look';
 import { watchLookLock } from './lookLock';
 import { lookingThrough, stepBack } from './lookout';
 import { useMe } from './myLook';
-import { clear } from './nav';
-import { fromOwn, type End } from './pongPhysics';
-import { paddle, pongCamera, pongClick, pongMouse, tickPaddle } from './pongState';
+import { blendCam, facingAt, newCamPose, newPongCam, PONG_CAM, stanceAt, stepPongCam, type CamPose } from './pongCam';
+import type { End } from './pongPhysics';
+import { paddle, pongClick, pongMouse, pongShake, tickPaddle } from './pongState';
 import { arriveOnFloor, exitView, FIRST_FOV, lookAllowed, playerAt, rigInput, rigOwnsCamera, setHomeLook, setHomeView, stepRig, tapView } from './rig';
+import { seatedEye, standSpot, type Seat } from './seats';
 import { sipPose, tickSip } from './sipping';
-import { useView, type Focus } from './view';
+import { useView, type Focus, type Person } from './view';
+import { useStore } from '../store';
+
+/** The office's body style: where your eyes are depends on it (bodyStyle.ts). */
+const styleNow = () => parseBodyStyle(useStore.getState().settings.bodyStyle);
 
 let canvasEl: HTMLCanvasElement | null = null;
 
@@ -78,10 +89,21 @@ function putDown() {
   if (held.kind === 'mug') showToast('☕ You leave the mug on the side');
 }
 
+/** Player.tsx's own getting up, beside the seat; set while it's mounted. */
+let leaveSeat: (() => void) | null = null;
+
+/** Up out of your seat, if you're in one: beside it. */
+export function standUp() {
+  if (!useView.getState().seated) return;
+  if (leaveSeat) leaveSeat();
+  else useView.getState().setSeated(null);
+}
+
 /** Tab (or the overview's "Walk the floor" button): down onto the floor and grab the mouse, or back up to the overview. */
 export function toggleWalk() {
   const view = useView.getState();
   if (playingAt()) view.setHeld(null); // up from the table first
+  standUp(); // and out of your seat
   tapView();
   if (useView.getState().mode === 'first' && !lookFirstTime() && useLookPrefs.getState().grabOnClose) requestLook();
 }
@@ -107,37 +129,67 @@ const playingAt = (): End | null => {
   return h?.kind === 'paddle' ? h.end : null;
 };
 
+/** What E does sitting down, with nothing else in your sights. */
+const STAND_UP: Focus = { id: 'stand', label: 'Stand up', action: { kind: 'stand' } };
+
 const isTyping = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement | null;
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 };
-
-/** Where you stand at your end of the table: behind your paddle, a little to its left, so it's in your right hand. */
-const BAT_STANCE = { back: 0.42, left: 0.3 };
 
 /**
  * Following behind you: the camera this far (m) back from your head, which it looks past, and the pitch it may tilt
  * through (it rises to look down on you); you turn to face the way you walk this fast (rad/s).
  */
 const BEHIND = { dist: 3.2, head: 1.55, minPitch: -1.0, maxPitch: 0.5, turn: 11 };
+/** Sitting, in first person: how far you can turn your head from the way the seat faces (radians). */
+const SEATED_TURN = 1.9;
+
+/** Sitting in third person, the camera's tries round you (turns from the way you face): in front a little to each side, then behind, then beside. */
+const SEATED_VIEWS = [Math.PI - 0.55, Math.PI + 0.55, 0.55, -0.55, Math.PI / 2, -Math.PI / 2];
+
+/**
+ * Where you look sitting down in `s`: in first person the way it faces (a deck chair's a little up); in third the
+ * camera comes round to look down at you from in front, a little to one side, or wherever round you the walls (`walls`)
+ * leave it the most room (a seat at a counter, say).
+ */
+function seatedLook(s: Seat, person: Person, walls: Rect[]) {
+  if (person !== 'third') return { yaw: s.facing, pitch: s.kind === 'deckchair' ? 0.05 : -0.12 };
+  const pitch = -0.3;
+  let best = { yaw: s.facing + SEATED_VIEWS[0], room: -1 };
+  for (const turn of SEATED_VIEWS) {
+    const room = behind(s.x, s.z, s.facing + turn, pitch, walls, Infinity, BEHIND.dist, scratch, s.height + SEATED_EYES[styleNow()]);
+    if (room > best.room + 0.05) best = { yaw: s.facing + turn, room };
+    if (room >= BEHIND.dist) break;
+  }
+  return { yaw: best.yaw, pitch };
+}
+const scratch = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };
+
+/** Where the camera is now, as a pose (Player sets its rotation as 'YXZ': y is the yaw, x the pitch). */
+const cameraPose = (c: THREE.Camera, out: CamPose): CamPose => Object.assign(out, { x: c.position.x, y: c.position.y, z: c.position.z, yaw: c.rotation.y, pitch: c.rotation.x });
+
+/** Whether (x, z) is within `r` of a wall: out on a balcony (or a bench there) the camera may hang out over it. */
+const nearWall = (walls: Rect[], x: number, z: number, r: number) => walls.some((b) => x > b.minX - r && x < b.maxX + r && z > b.minZ - r && z < b.maxZ + r);
 
 /**
  * Where the camera sits behind someone at (x, z) looking yaw/pitch, pulled in when a wall (`walls`) is in the way and
- * kept under the ceiling. Writes into `out`; returns how far back it ended up.
+ * kept under the ceiling; it looks past their head, `head` up (lower when they sit). Writes into `out`; returns how far
+ * back it ended up.
  */
-function behind(x: number, z: number, yaw: number, pitch: number, walls: Rect[], ceiling: number, dist: number, out: { x: number; y: number; z: number; yaw: number; pitch: number }) {
+function behind(x: number, z: number, yaw: number, pitch: number, walls: Rect[], ceiling: number, dist: number, out: { x: number; y: number; z: number; yaw: number; pitch: number }, head = BEHIND.head) {
   const p = Math.max(BEHIND.minPitch, Math.min(BEHIND.maxPitch, pitch));
   const cp = Math.cos(p);
   const bx = Math.sin(yaw) * cp;
   const bz = Math.cos(yaw) * cp;
   let d = dist;
   for (let t = 0.3; t <= dist; t += 0.1) {
-    if (clear(walls, x + bx * t, z + bz * t, 0.2)) continue;
+    if (!nearWall(walls, x + bx * t, z + bz * t, 0.2)) continue;
     d = Math.max(0.3, t - 0.15);
     break;
   }
   out.x = x + bx * d;
-  out.y = Math.max(0.4, Math.min(ceiling, BEHIND.head - Math.sin(p) * d));
+  out.y = Math.max(0.4, Math.min(ceiling, head - Math.sin(p) * d));
   out.z = z + bz * d;
   out.yaw = yaw;
   out.pitch = p;
@@ -153,8 +205,11 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
   const center = useMemo(() => new THREE.Vector2(0, 0), []);
   const frame = useRef(0);
   const lookFilter = useMemo(createLookFilter, []);
-  /** Where you stood before picking up a paddle, to step back to when you put it down. */
-  const beforePong = useRef<{ x: number; z: number } | null>(null);
+  /** Where you stood, looked and faced before picking up a paddle, to step back to when you put it down. */
+  const beforePong = useRef<{ x: number; z: number; yaw: number; pitch: number; facing: number } | null>(null);
+  /** The camera at the table (pongCam.ts), eased after the paddle; and its flight in from your view or back out to it. */
+  const tableCam = useMemo(() => ({ cam: newPongCam(), pose: newCamPose(), shown: newCamPose(), here: newCamPose() }), []);
+  const flight = useRef<{ from: CamPose; t: number; out: boolean } | null>(null);
   /** You were looking through a lookout's binoculars last frame (the lens zoomed). */
   const atLookout = useRef(false);
   /** Where you stand (the camera is in your eyes, or behind you), which way you face, and how far back the camera is. */
@@ -162,10 +217,51 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
   const facing = useRef<number>(SPAWN.yaw);
   const back = useRef(BEHIND.dist);
   const cam = useMemo(() => ({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }), []);
+  /** The seat you're sitting in (view.ts seated, as this last saw it). */
+  const sitting = useRef<Seat | null>(null);
   // no ceiling over the roof terrace
   const ceiling = kindOf(floor) === 'roof' ? Infinity : WALL_H - 0.25;
-  const latest = useRef({ walls, ceiling });
-  latest.current = { walls, ceiling };
+  const latest = useRef({ walls, ceiling, colliders });
+  latest.current = { walls, ceiling, colliders };
+  // Sitting down and getting up (only refs: made once). Down: into the seat, facing its way; up: beside it, still
+  // looking where you were in first person, facing out from it in third.
+  const seat = useMemo(
+    () => ({
+      sit(s: Seat) {
+        if (playingAt() || lookingThrough()) return;
+        sitting.current = s;
+        useView.getState().setSeated(s);
+        pos.current = { x: s.x, z: s.z };
+        facing.current = s.facing;
+        look.current = seatedLook(s, useView.getState().person, latest.current.walls);
+        keys.current.clear(); // a key still down from walking up doesn't get you straight back up
+      },
+      leave() {
+        const s = sitting.current ?? useView.getState().seated;
+        sitting.current = null;
+        if (useView.getState().seated) useView.getState().setSeated(null);
+        if (!s) return;
+        const p = standSpot(s, latest.current.colliders);
+        pos.current = { x: p.x, z: p.z };
+        facing.current = s.facing;
+        playerAt.x = p.x;
+        playerAt.z = p.z;
+        playerAt.yaw = s.facing;
+        if (useView.getState().person === 'third') look.current = { yaw: s.facing, pitch: -0.05 };
+      },
+    }),
+    [],
+  );
+  useEffect(() => {
+    leaveSeat = seat.leave;
+    const offSit = onAction('sit', (a) => seat.sit(a.seat));
+    const offStand = onAction('stand', seat.leave);
+    return () => {
+      offSit();
+      offStand();
+      if (leaveSeat === seat.leave) leaveSeat = null;
+    };
+  }, [seat]);
   useEffect(() => setHomeLook(() => look.current), []);
   // The flight down from the overview lands where the camera will be: behind you, or in your eyes.
   useEffect(
@@ -173,7 +269,7 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       setHomeView((x, z, yaw, pitch, out) => {
         if (useView.getState().person === 'first') {
           out.x = x;
-          out.y = EYE_HEIGHT;
+          out.y = EYE_HEIGHTS[styleNow()];
           out.z = z;
           out.yaw = yaw;
           out.pitch = pitch;
@@ -182,27 +278,36 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
     [],
   );
 
-  // For checks in a browser (Playwright): where you stand, and putting you somewhere facing a way (degrees).
+  // For checks in a browser (Playwright): where you stand (the seat you're in, what E would do, what you hold), putting
+  // you somewhere facing a way (degrees; out of any seat), and turning your head where you are.
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__mmPlayer = {
       get at() {
         const v = useView.getState();
-        return { x: pos.current.x, z: pos.current.z, yaw: look.current.yaw, floor, person: v.person, mode: v.mode, overlay: v.overlay?.kind ?? null };
+        return { x: pos.current.x, z: pos.current.z, yaw: look.current.yaw, floor, person: v.person, mode: v.mode, overlay: v.overlay?.kind ?? null, seated: v.seated?.id ?? null, focus: v.focus?.label ?? null, held: v.held };
       },
       place(x: number, z: number, yawDeg = 0, pitchDeg = -3) {
+        sitting.current = null;
+        useView.getState().setSeated(null);
         pos.current = { x, z };
         look.current = { yaw: (yawDeg * Math.PI) / 180, pitch: (pitchDeg * Math.PI) / 180 };
         facing.current = look.current.yaw;
       },
+      look(yawDeg: number, pitchDeg = -3) {
+        look.current = { yaw: (yawDeg * Math.PI) / 180, pitch: (pitchDeg * Math.PI) / 180 };
+      },
     };
   }, [camera, floor]);
 
-  // A new floor: in the elevator's cabin after a ride, else in front of the elevator. A paddle stays with its table;
-  // a mug or a snack comes with you.
+  // A new floor: in the elevator's cabin after a ride, else in front of the elevator (in the lobby, facing the front
+  // desk). A paddle stays with its table; a mug or a snack comes with you; your seat stays behind.
   useEffect(() => {
     if (playingAt()) useView.getState().setHeld(null);
+    sitting.current = null;
+    if (useView.getState().seated) useView.getState().setSeated(null);
     beforePong.current = null;
-    const at = takeArrival() ?? SPAWN;
+    flight.current = null;
+    const at = takeArrival() ?? (kindOf(floor) === 'lobby' ? LOBBY_SPAWN : SPAWN);
     pos.current = { x: at.x, z: at.z };
     facing.current = at.yaw;
     look.current = { yaw: at.yaw, pitch: -0.05 };
@@ -211,14 +316,18 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
 
   useEffect(() => {
     canvasEl = gl.domElement;
-    // Left button only. If the mouse is captured, act on the crosshair's target (like E) or serve at the table;
-    // otherwise this press just captures the mouse, so the click that locks never also acts.
+    // Left button only. If the mouse is captured, act on the crosshair's target (like E), serve at the table, or wind
+    // up a throw with a hoop's ball or a dart in hand (let go to throw); otherwise this press just captures the mouse,
+    // so the click that locks never also acts.
     const onMouseDown = (e: MouseEvent) => {
       if (e.button !== 0 || !lookAllowed()) return;
       if (document.pointerLockElement !== gl.domElement) return requestLook();
       if (useView.getState().overlay) return;
       if (playingAt()) pongClick();
-      else interact(false);
+      else if (!startCharge()) interact(false);
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 0) releaseCharge();
     };
     const onQuietMouse = (e: MouseEvent) => {
       if (performance.now() >= quietUntil) return;
@@ -232,6 +341,7 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       // Esc at the table: you've stepped away, so the paddle goes back on its hook; at a lookout, you step back from it
       if (!locked && playingAt()) useView.getState().setHeld(null);
       if (!locked && lookingThrough()) stepBack();
+      if (!locked) cancelCharge(); // a throw wound up when the mouse was let go of isn't thrown
     };
     const onMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement || !document.hasFocus()) return;
@@ -244,6 +354,9 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       const third = !zoom && useView.getState().person === 'third';
       look.current.yaw -= d[0] * k;
       look.current.pitch = Math.max(third ? BEHIND.minPitch : -1.35, Math.min(third ? BEHIND.maxPitch : 1.35, look.current.pitch - d[1] * k * (invertY ? -1 : 1)));
+      // sitting, your head turns only so far from the way the seat faces
+      const sat = sitting.current;
+      if (sat && !third) look.current.yaw = sat.facing + Math.max(-SEATED_TURN, Math.min(SEATED_TURN, angleDelta(sat.facing, look.current.yaw)));
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping(e) || e.defaultPrevented) return; // handled already: the Esc that closed a panel (Panel.tsx)
@@ -255,7 +368,10 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       if (lookingThrough() && (e.code === 'KeyE' || e.code === 'KeyG')) return stepBack();
       if (e.code === 'KeyE' && view.mode === 'first' && !playingAt()) interact();
       if (e.code === 'KeyG' && view.mode === 'first') putDown();
-      if (e.code === 'KeyV' && view.mode === 'first' && !playingAt() && !lookingThrough()) view.setPerson(view.person === 'first' ? 'third' : 'first');
+      if (e.code === 'KeyV' && view.mode === 'first' && !playingAt() && !lookingThrough()) {
+        view.setPerson(view.person === 'first' ? 'third' : 'first');
+        if (view.seated) look.current = seatedLook(view.seated, useView.getState().person, latest.current.walls);
+      }
       if (e.code === 'KeyC' && view.mode === 'first') {
         if (document.pointerLockElement) document.exitPointerLock();
         view.openOverlay({ kind: 'look' });
@@ -269,6 +385,7 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
     // Alt+Tab would otherwise leave you walking
     const onBlur = () => keys.current.clear();
     gl.domElement.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
     for (const type of QUIET_EVENTS) window.addEventListener(type, onQuietMouse, true);
     document.addEventListener('pointerlockchange', onLockChange);
     document.addEventListener('mousemove', onMove);
@@ -279,6 +396,7 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
     return () => {
       stopLookLock();
       gl.domElement.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
       for (const type of QUIET_EVENTS) window.removeEventListener(type, onQuietMouse, true);
       document.removeEventListener('pointerlockchange', onLockChange);
       document.removeEventListener('mousemove', onMove);
@@ -298,9 +416,21 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
     const running = held(k, MOVE.run);
     const speed = running ? 6.5 : 3.6;
     tickSip();
+    // got up some other way (the seat went), or picked up a paddle or the binoculars from it: beside it
+    if (sitting.current && (view.seated !== sitting.current || playingAt() || lookingThrough())) seat.leave();
 
     // the overview has the camera (rig.ts): you stay where you were standing, and the keys pan it
     if (rigOwnsCamera()) {
+      // up from the table to the overview (Tab): back where you stood before the game, without a flight of your own
+      if (beforePong.current && !playingAt()) {
+        const b = beforePong.current;
+        pos.current = { x: b.x, z: b.z };
+        look.current = { yaw: b.yaw, pitch: b.pitch };
+        facing.current = b.facing;
+        Object.assign(playerAt, { x: b.x, z: b.z, yaw: b.facing });
+        beforePong.current = null;
+      }
+      flight.current = null;
       rigInput.right = strafe;
       rigInput.forward = fwd;
       rigInput.fast = running;
@@ -333,34 +463,52 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
     }
 
-    // at the ping-pong table: the camera stands behind your end, and you stand at it with the paddle in hand
+    // at the ping-pong table: the camera raised behind your end and over your shoulder (pongCam.ts), flying there from
+    // your view as you pick the paddle up, and you at the end with the paddle in hand, off to the side of the ball's way
     const end = playingAt();
     if (end) {
       tickPaddle(dt);
-      beforePong.current ??= { ...pos.current };
-      const v = pongCamera(end);
-      camera.position.set(v.x + v.shake.x, v.y + v.shake.y, v.z + v.shake.z);
+      if (!beforePong.current) {
+        beforePong.current = { x: pos.current.x, z: pos.current.z, yaw: look.current.yaw, pitch: look.current.pitch, facing: facing.current };
+        tableCam.cam.started = false;
+        flight.current = { from: cameraPose(camera, newCamPose()), t: 0, out: false };
+      }
+      let v = stepPongCam(tableCam.cam, end, paddle.back, paddle.lat, dt, tableCam.pose);
+      const f = flight.current;
+      if (f && !f.out) {
+        f.t += dt;
+        v = blendCam(f.from, v, f.t / PONG_CAM.blend, tableCam.shown);
+        if (f.t >= PONG_CAM.blend) flight.current = null;
+      }
+      const shake = pongShake();
+      camera.position.set(v.x + shake.x, v.y + shake.y, v.z + shake.z);
       camera.rotation.set(v.pitch, v.yaw, 0, 'YXZ');
-      const at = fromOwn(end, Math.max(paddle.back, 0) + BAT_STANCE.back, paddle.lat - BAT_STANCE.left);
+      const at = stanceAt(end, paddle.back, paddle.lat);
       playerAt.x = at.x;
       playerAt.z = at.z;
-      playerAt.yaw = v.yaw;
-      look.current = { yaw: v.yaw, pitch: -0.05 }; // put the paddle down and you still face the table
+      playerAt.yaw = facingAt(end);
       if (view.focus) view.setFocus(null);
       return;
     }
     if (beforePong.current) {
-      // back from the table: where you stood when you picked the paddle up, looking at the table still
-      pos.current = beforePong.current;
-      facing.current = look.current.yaw;
+      // back from the table: where you stood when you picked the paddle up, looking where you looked, the camera flying
+      // back to your view from where it was
+      const b = beforePong.current;
+      pos.current = { x: b.x, z: b.z };
+      look.current = { yaw: b.yaw, pitch: b.pitch };
+      facing.current = b.facing;
       beforePong.current = null;
+      flight.current = { from: cameraPose(camera, newCamPose()), t: 0, out: true };
     }
 
     const { yaw, pitch } = look.current;
     const third = view.person === 'third';
+    // a step gets you up out of your seat (and walking, from beside it)
+    if (sitting.current && (fwd || strafe)) seat.leave();
+    const sat = sitting.current;
     const me = pos.current;
     let moving = false;
-    if (fwd || strafe) {
+    if ((fwd || strafe) && !sat) {
       const len = Math.hypot(fwd, strafe);
       const sin = Math.sin(yaw);
       const cos = Math.cos(yaw);
@@ -381,17 +529,32 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
     // a step each half bob, whichever way the camera looks at you
     bob.current += moving ? dt * speed * 2.2 : 0;
     footstepsFollow(bob.current, moving, moving && running, surfaceAt(kindOf(floor), me.x, me.z));
+    if (sat) facing.current = sat.facing; // sitting, you face the way the seat does, whichever way you look
     if (third) {
-      // the camera behind you: in at once when a wall comes between, back out gently
-      const want = behind(me.x, me.z, yaw, pitch, walls, ceiling, BEHIND.dist, cam);
+      // the camera behind you: in at once when a wall comes between, back out gently (past your head, lower sitting)
+      const style = styleNow();
+      const head = sat ? sat.height + SEATED_EYES[style] : BEHIND_HEAD[style];
+      const want = behind(me.x, me.z, yaw, pitch, walls, ceiling, BEHIND.dist, cam, head);
       back.current = want < back.current ? want : back.current + (want - back.current) * (1 - Math.exp(-dt * 4));
-      behind(me.x, me.z, yaw, pitch, walls, ceiling, back.current, cam);
+      behind(me.x, me.z, yaw, pitch, walls, ceiling, back.current, cam, head);
       camera.position.set(cam.x, cam.y, cam.z);
       camera.rotation.set(cam.pitch, cam.yaw, 0, 'YXZ');
     } else {
-      camera.position.set(me.x, EYE_HEIGHT + (moving ? Math.sin(bob.current) * 0.035 : 0), me.z);
+      if (sat) {
+        const eye = seatedEye(sat, SEATED_EYES[styleNow()]);
+        camera.position.set(eye.x, eye.y, eye.z);
+      } else camera.position.set(me.x, EYE_HEIGHTS[styleNow()] + (moving ? Math.sin(bob.current) * 0.035 : 0), me.z);
       // a sip tips your head back a little (the last gulp more)
       camera.rotation.set(pitch + sipPose.head, yaw, 0, 'YXZ');
+    }
+    // just put the paddle down: the camera flies back from the table to where it now belongs
+    const out = flight.current;
+    if (out?.out) {
+      out.t += dt;
+      const v = blendCam(out.from, cameraPose(camera, tableCam.here), out.t / PONG_CAM.blend, tableCam.shown);
+      camera.position.set(v.x, v.y, v.z);
+      camera.rotation.set(v.pitch, v.yaw, 0, 'YXZ');
+      if (out.t >= PONG_CAM.blend) flight.current = null;
     }
     playerAt.x = me.x;
     playerAt.z = me.z;
@@ -418,7 +581,8 @@ export function Player({ colliders, walls, floor }: { colliders: Rect[]; walls: 
       if (h.distance - reach <= info.range) found = info.pick?.(h.point, o) ?? { id: info.id, label: info.label, action: info.action };
       break;
     }
-    view.setFocus(found);
+    // sitting, with nothing else to aim at, E gets you up
+    view.setFocus(found ?? (sat ? STAND_UP : null));
   });
 
   return null;

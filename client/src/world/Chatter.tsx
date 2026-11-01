@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import type { Moment } from '../../../shared/types';
 import { useStore } from '../store';
 import type { BodyState } from './body';
+import { headY as headOf, parseBodyStyle } from './bodyStyle';
 import { onAction } from './actions';
 import { CI_SLOW, currentWork, DEMO_CI_SLOW, greeting, lastFile, logNews, momentNews, slowChecks, storeNews, type Said } from './chatterEvents';
 import { chatterLine, type ChatterEvent, type ChatTopic } from './chatterLines';
@@ -91,7 +92,7 @@ const ear = new THREE.Vector3();
 // ---------- who and where ----------
 
 /** Their mouth, more or less: lower while seated. */
-const headY = (b: BodyState) => 1.25 * b.sit + 1.6 * (1 - b.sit);
+const headY = (b: BodyState) => headOf(parseBodyStyle(useStore.getState().settings.bodyStyle), b.sit);
 
 const distanceTo = (b: BodyState) => Math.hypot(ear.x - b.x, ear.y - headY(b), ear.z - b.z);
 

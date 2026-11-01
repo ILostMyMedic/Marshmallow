@@ -8,6 +8,7 @@ import { hashId, seededAppearance, TALL_HAIR } from '../world/appearance';
 import { ACCENT_COLORS, BUILDS, FACIAL_HAIR, GLASSES, HAIR_COLORS, HAIR_STYLES, HEADWEAR, OUTFITS, SHIRT_COLORS, SKIN_TONES } from '../world/looks';
 import { useMe } from '../world/myLook';
 import { MeFigure } from '../world/Me';
+import { useBodyStyle } from '../world/RigBody';
 import { useView } from '../world/view';
 import { Panel } from './Panel';
 
@@ -53,6 +54,9 @@ function Swatches({ label, colours, value, onPick }: { label: string; colours: r
   );
 }
 
+/** Where the preview's camera stands and looks, for each body style: the human stands near two metres, the chibi under one and a half. */
+const FRAMING = { human: { y: 1.2, z: 4.3, at: 1.0 }, chibi: { y: 0.9, z: 3.4, at: 0.72 } } as const;
+
 /** Radians the preview turns per pixel dragged, and where it starts: three-quarters on (π faces the camera). */
 const SPIN_PER_PX = 0.012;
 const SPIN_START = Math.PI - 0.5;
@@ -60,6 +64,7 @@ const SPIN_START = Math.PI - 0.5;
 /** You, standing still until you drag across the preview to turn yourself round. */
 function Preview({ look }: { look: Appearance }) {
   const spin = useRef(SPIN_START);
+  const frame = FRAMING[useBodyStyle()];
   const drag = useRef<number | null>(null); // the pointer's last x while dragging
   return (
     <div
@@ -76,7 +81,7 @@ function Preview({ look }: { look: Appearance }) {
       onPointerUp={() => (drag.current = null)}
       onPointerCancel={() => (drag.current = null)}
     >
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 1.15, 3.7], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, 0.95, 0)}>
+      <Canvas key={frame.z} dpr={[1, 2]} camera={{ position: [0, frame.y, frame.z], fov: 30 }} onCreated={({ camera }) => camera.lookAt(0, frame.at, 0)}>
         <hemisphereLight args={['#ffffff', '#c9b8a0', 1.6]} />
         <directionalLight position={[2, 4, 3]} intensity={1.6} />
         <MeFigure look={look} preview spin={spin} />

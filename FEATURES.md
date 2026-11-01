@@ -129,7 +129,8 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [ ] **Mission control screens** in the lobby · M → `MissionControl.tsx`
 - [x] **City outside the windows**: skyscrapers downtown, billboards on the rooftops, a red suspension bridge in the distance · M → `outside/`, `cityLayout.ts`
 - [x] **Roof terrace** on the top floor: lookouts over the city, billboards, a fireplace, deck chairs, a garden · L → `roof/`
-- [ ] **Weather**: rain, snow, or your real weather · M → `weather/`
+- [x] **Seasons** from the office's date: snow in December and January, the northern lights on winter nights (a world event), a Christmas tree and lights, Halloween pumpkins, autumn leaves, spring blossom, a summer pool, New Year fireworks; an office setting picks one to see it now · L (new; the falling snow adapted from cubefarm's precipitation)
+- [ ] **Weather**: rain, or your real weather · M → `weather/`
 - [x] **World events**: planes, blimps and the odd surprise in the sky, and workers going to the windows to watch · M → `events/`
 - [x] **Street events**: surprises down on the street round the office, starting with a rock bus with a band playing on its roof; best seen from the lobby's windows, looking down from the floors and from the roof · M (new: not in cubefarm)
 - [x] **World events on the debug page**: trigger any of them now, see what's on and end it, bring the next pick forward, and the log of what ran · S (new)
@@ -152,7 +153,9 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [ ] **Pizza Friday** · S
 - [x] **CEO walks the floors** · S
 - [ ] **Welcome tour** for new hires · S
-- [ ] **Hoops, toss and catch** with toys (needs physics toys) · M → `toyErrands.ts`
+- [x] **A basketball hoop** for a floor's big spot: shoot with the mouse, a scoreboard, streaks; workers shoot hoops · M (from cubefarm's `Hoop.tsx`, its own small ball simulation instead of physics toys)
+- [x] **Darts**: a dartboard for a wall spot, scored like a real board; workers throw a turn · S (new)
+- [ ] **Toss and catch** with toys (needs physics toys) · M → `toyErrands.ts`
 - [x] **Ping-pong** between workers · L → `toys/pong*`
 - [x] **Roof breaks**: idle workers go up to the roof terrace · S
 - [ ] **Office dog**: naps, fetches, rides the elevator · L → `toys/dog*`
@@ -168,7 +171,8 @@ Flip `[ ]` to `[x]` (or back) and tell me when you're done: the checked set beco
 - [ ] **Follow cam** on a worker · S
 - [ ] **Throw balls** (Rapier physics) · M → `toys/balls.tsx`
 - [x] **Coffee mug and fridge snacks** for the player · M
-- [ ] **Sitting down** on benches, sofas, armchairs and deckchairs, and toasting marshmallows at the roof's fire · M (new)
+- [x] **Sitting down** on benches, sofas, armchairs and deckchairs, and toasting marshmallows at the roof's fire · M (new)
+- [x] **Body styles**: the office's people in one of two styles from the character lab, chibi or stylized human, picked in the setup and changeable in the settings · L (new)
 - [x] **Ping-pong against a worker** · L
 - [ ] **Jukebox** with synthesized songs · L → `client/src/ui/music.ts`, `jukeboxSongs.ts`
 - [ ] **Foam blasters** · M

@@ -22,8 +22,11 @@ export const ROOF_HUT = { minX: -4.6, maxX: 2.2, maxZ: HALF_D + ELEVATOR.depth +
 
 /** The lounge's wooden decking on the east half, under the string lights. */
 export const DECKING: Rect = { minX: 2, maxX: HALF_W - 0.3, minZ: -6.2, maxZ: 8.6 };
-/** Deck chairs in a row on the decking, facing north over the garden to the city: x of each, z of their middles. */
-export const DECK_CHAIRS = { xs: [4.4, 6.9, 9.4, 11.9], z: -2.4, w: 0.72, l: 1.3 };
+/**
+ * Deck chairs in a row on the decking, facing north over the garden to the city: x of each, z of their middles; a
+ * sitter's hips are `hip` up, and they lean back `recline` (radians) with the canvas.
+ */
+export const DECK_CHAIRS = { xs: [4.4, 6.9, 9.4, 11.9], z: -2.4, w: 0.72, l: 1.3, hip: 0.34, recline: 0.45 };
 /** Little round tables between the chairs. */
 export const SIDE_TABLES = [5.65, 10.65].map((x) => ({ x, z: DECK_CHAIRS.z - 0.1, r: 0.3 }));
 /** The string lights' poles round the decking; the lights zigzag between the north and south rows. */
@@ -64,6 +67,8 @@ const BENCH_OUT: readonly Pt[] = [
 ];
 /** Where someone sitting by the fire stands up to, in front of their seat (the Character's standAt, in its seat's frame). */
 export const FIRE_STAND = { x: 0, z: -0.62 };
+/** The crate on the fire's open (east) side, with a bag of marshmallows and a can of sticks on it: its middle, size and top. */
+export const MARSHMALLOW_CRATE = { x: FIRE.x + 1.6, z: FIRE.z, w: 0.5, d: 0.42, h: 0.42 };
 
 /** The way a body heading faces, as a unit step (heading 0 faces -z). */
 export const facing = (heading: number): Pt => ({ x: -Math.sin(heading), z: -Math.cos(heading) });
@@ -196,6 +201,7 @@ export function roofColliders(doorway = false): Rect[] {
     rect(PICNIC.x, PICNIC.z, PICNIC.w, PICNIC.d),
     rect(FIRE.x, FIRE.z, FIRE.r * 2, FIRE.r * 2),
     ...FIRE_BENCHES.map((b) => b.rect),
+    rect(MARSHMALLOW_CRATE.x, MARSHMALLOW_CRATE.z, MARSHMALLOW_CRATE.w, MARSHMALLOW_CRATE.d),
     ...LOOKOUTS.map((l) => rect(l.x, l.z, LOOKOUT.base, LOOKOUT.base)),
   ];
 }

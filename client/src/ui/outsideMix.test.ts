@@ -202,6 +202,19 @@ describe('outsideLayers', () => {
     expect(dusk.birds).toBeLessThan(outsideLayers(0.6).birds);
   });
 
+  it('leans on the season: wind and a muffled city in the snow, no crickets in winter, the birds back in spring', () => {
+    const winter = { wind: 1.3, birds: 0.35, crickets: 0, city: 0.75 };
+    const snowy = outsideLayers(0.5, 'office', winter);
+    expect(snowy.wind).toBeGreaterThan(outsideLayers(0.5).wind);
+    expect(snowy.birds).toBeLessThan(outsideLayers(0.5).birds * 0.5);
+    expect(snowy.city).toBeLessThan(outsideLayers(0.5).city);
+    expect(snowy.carsPerMin).toBeLessThan(outsideLayers(0.5).carsPerMin);
+    expect(outsideLayers(0.95, 'office', winter).crickets).toBe(0);
+    // never louder crickets than ever, and the birds still capped
+    expect(outsideLayers(0.95, 'office', { wind: 1, birds: 1, crickets: 3, city: 1 }).crickets).toBe(1);
+    expect(outsideLayers(0.5, 'office', { wind: 1, birds: 1.25, crickets: 1, city: 1 }).birds).toBeLessThanOrEqual(1);
+  });
+
   it('crossfades without jumps through the day', () => {
     let prev = outsideLayers(0);
     for (let i = 1; i <= 1000; i++) {

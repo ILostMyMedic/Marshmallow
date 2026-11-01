@@ -137,8 +137,11 @@ function bubbleTexture(text: string): BubbleTex {
   return b;
 }
 
-/** `y` is head height while standing (the bubble sits just above the name tag, seated or not). */
-export function SpeechBubble({ id, y }: { id: string; y: number }) {
+/**
+ * `y` is head height while standing (the bubble sits just above the name tag, seated or not); `top` how high its top may
+ * grow (BUBBLE_TOP, moved with the body style's heads).
+ */
+export function SpeechBubble({ id, y, top = BUBBLE_TOP }: { id: string; y: number; top?: number }) {
   const camera = useThree((s) => s.camera);
   const g = useRef<THREE.Group>(null);
   const plane = useRef<THREE.Mesh>(null);
@@ -163,7 +166,7 @@ export function SpeechBubble({ id, y }: { id: string; y: number }) {
     const left = s.until !== undefined ? s.until - now : Infinity;
     const pop = ms < 90 ? 0.3 + (ms / 90) * 0.9 : ms < 170 ? 1.2 - ((ms - 90) / 80) * 0.2 : left < 150 ? Math.max(0.01, left / 150) : 1;
     grp.getWorldPosition(at);
-    const grow = Math.min(Math.max(1, (BUBBLE_TOP - at.y) / RISE), Math.max(1, at.distanceTo(camera.position) / GROW_FROM));
+    const grow = Math.min(Math.max(1, (top - at.y) / RISE), Math.max(1, at.distanceTo(camera.position) / GROW_FROM));
     grp.scale.setScalar(pop * grow);
   });
   return (

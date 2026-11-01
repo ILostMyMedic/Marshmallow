@@ -1,7 +1,8 @@
 // World events' sounds (world/events/), all synthesized: an airliner's distant rumble, a helicopter's chop, a flock's
 // wings and chirps, a balloon's burner, an airship's engines, a UFO's hum, beam and zip, a rubber duck's squeak, a
 // rainbow's chime and whale song; and down on the street a rock band's riff and drums, a marching band, an ice cream
-// truck's jingle, a fire engine's siren and horn, a truck's diesel and a griddle's sizzle. Everything goes through one
+// truck's jingle, a fire engine's siren and horn, a truck's diesel and a griddle's sizzle; fireworks' whistles and booms
+// (New Year's, seasons/Fireworks.tsx). Everything goes through one
 // small bus into the master gain, muffled through the glass indoors and full on a balcony or the roof, panned towards
 // where it happens and quieter with distance. Silent while quiet (a panel, the elevator ride) or hidden.
 // Adapted from cubefarm client/src/ui/eventSfx.ts (MIT): the kaiju's, the fireworks' and the hurricane's sounds are cut
@@ -38,15 +39,20 @@ const live = new Set<Loop>();
 
 // ---------- the floor, quiet, where you hear from ----------
 
-/** Events are on (WorldEvents.tsx while any runs): follow the listener. */
+let users = 0;
+
+/** Events are on (WorldEvents.tsx while any runs, New Year's fireworks while they go up): follow the listener. */
 export function eventSoundsOn(floorKind: FloorKindOf) {
+  users++;
   kind = floorKind;
   if (!timer) timer = setInterval(tick, TICK_MS);
   tick();
 }
 
-/** No events any more: everything fades and the bus lets go of the mixer. */
+/** No events any more (each eventSoundsOn's own off): everything fades and the bus lets go of the mixer. */
 export function eventSoundsOff() {
+  users = Math.max(0, users - 1);
+  if (users > 0) return;
   if (timer) clearInterval(timer);
   timer = null;
   for (const l of [...live]) l.stop(0.3);
@@ -553,10 +559,10 @@ export function loop(k: LoopKind): Loop {
 
 // ---------- one-shots ----------
 
-export type OneShot = 'zip' | 'beam' | 'squeak' | 'chime' | 'whale' | 'chirps' | 'burner' | 'horn' | 'bell' | 'crash';
+export type OneShot = 'zip' | 'beam' | 'squeak' | 'chime' | 'whale' | 'chirps' | 'burner' | 'horn' | 'bell' | 'crash' | 'whistle' | 'boom';
 
 /** Each one-shot at full level, before the bus. */
-const SHOT_GAIN: Record<OneShot, number> = { zip: 0.08, beam: 0.07, squeak: 0.1, chime: 0.07, whale: 0.12, chirps: 0.05, burner: 0.15, horn: 0.11, bell: 0.08, crash: 0.08 };
+const SHOT_GAIN: Record<OneShot, number> = { zip: 0.08, beam: 0.07, squeak: 0.1, chime: 0.07, whale: 0.12, chirps: 0.05, burner: 0.15, horn: 0.11, bell: 0.08, crash: 0.08, whistle: 0.025, boom: 0.3 };
 
 /** A one-off sound `delay` seconds from now, at `gain` (0-1 of its full level, distance included) from `pan`. */
 export function play(k: OneShot, { gain = 1, pan = 0, delay = 0, pitch = 1 }: { gain?: number; pan?: number; delay?: number; pitch?: number } = {}) {
@@ -662,6 +668,16 @@ export function play(k: OneShot, { gain = 1, pan = 0, delay = 0, pitch = 1 }: { 
       case 'crash':
         // a cymbal crash
         env(noise(t0, 1.9).connect(filter('highpass', 5200, 3800, t0, 1.8, 0.7)), t0, 0.003, 0.05, 1.7);
+        break;
+      case 'whistle':
+        // a rocket going up: an airy rising hiss, not a tone
+        env(noise(t0, 1.3).connect(filter('bandpass', 900, 3200, t0, 1.2, 6)), t0, 0.15, 0.8, 0.3);
+        break;
+      case 'boom':
+        // the burst: a thump and its rumble, then a crackle of sparks
+        env(noise(t0, 1.6).connect(filter('lowpass', 260, 70, t0, 1.4, 0.7)), t0, 0.004, 0.06, 1.4);
+        env(osc('sine', 90, 38, t0, 0.6), t0, 0.004, 0.04, 0.5, 0.7);
+        env(noise(t0 + 0.35, 1.2).connect(filter('highpass', 3500, 5000, t0 + 0.35, 1.1, 0.7)), t0 + 0.35, 0.05, 0.4, 0.7, 0.18);
         break;
     }
   } catch {

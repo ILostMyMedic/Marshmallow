@@ -1,7 +1,7 @@
 // Adapted from cubefarm client/src/world/toys/sip.test.ts and fridge.test.ts (MIT): without the sausage and the clunk.
 import { describe, expect, it } from 'vitest';
 import { SNACKS, SNACK_IDS } from './fridge';
-import { GULP, SIP, SNACK_PLANS, cuesDue, eAction, lift, planFor, pose, sipLabel, snackFor } from './sip';
+import { GULP, SIP, SNACK_PLANS, cuesDue, eAction, lift, marshmallowPlan, planFor, pose, sipLabel, snackFor } from './sip';
 
 const mug = (sips: number) => ({ kind: 'mug', id: 'mug-1', sips });
 
@@ -44,6 +44,38 @@ describe('what E does', () => {
     expect(sipLabel({ kind: 'snack', snack: 'coldbrew' })).toBe('Sip the cold brew');
     expect(sipLabel({ kind: 'snack', snack: 'pizza' })).toBe('Bite the cold pizza');
     expect(sipLabel({ kind: 'snack', snack: 'coldbrew', beer: true })).toBe('Sip the beer');
+    expect(sipLabel({ kind: 'marshmallow' })).toBe('Eat the marshmallow');
+  });
+
+  it('eats a marshmallow off its stick wherever you look, until it is gone', () => {
+    const mallow = { kind: 'marshmallow', id: 'm', toast: 6 };
+    expect(eAction(mallow, null)).toBe('sip');
+    expect(eAction(mallow, 'stand')).toBe('sip');
+    expect(eAction(mallow, 'marshmallow')).toBe('sip');
+    expect(eAction({ ...mallow, eaten: true }, null)).toBe('empty');
+    expect(eAction({ ...mallow, eaten: true }, 'stand')).toBe('target');
+  });
+
+  it('sits you down on a seat whatever you hold, and sips sitting there', () => {
+    for (const held of [mug(3), { kind: 'snack', snack: 'pizza', left: 2 }, { kind: 'marshmallow', toast: 0 }, null]) expect(eAction(held, 'sit')).toBe('target');
+    expect(eAction(mug(3), 'stand')).toBe('sip');
+    expect(eAction(mug(0), 'stand')).toBe('target');
+  });
+});
+
+describe('eating a marshmallow', () => {
+  it('bites, munches and lets the stick go once it is back down, in order', () => {
+    for (const charred of [false, true]) {
+      const p = marshmallowPlan(charred);
+      const at = p.cues.map((c) => c.at);
+      expect(at).toEqual([...at].sort((a, b) => a - b));
+      expect(p.cues[0].cue).toBe(charred ? 'crunch' : 'nom');
+      expect(p.cues.find((c) => c.cue === 'drink')!.at).toBeLessThan(p.down);
+      expect(p.cues.at(-1)!.cue).toBe('drop');
+      expect(p.cues.at(-1)!.at).toBeGreaterThan(p.down);
+      expect(p.cues.at(-1)!.at).toBeLessThan(p.dur);
+      expect(p.tilt).toBe(0); // it comes up level
+    }
   });
 });
 

@@ -7,6 +7,7 @@ import {
   QUEUE_SECONDS,
   admit,
   enqueue,
+  ErrandEnds,
   errandNamed,
   errands,
   headingFor,
@@ -21,6 +22,7 @@ import {
   restlessSeconds,
   spotChoices,
   wanted,
+  type Errand,
   type ErrandState,
   type Queued,
 } from './errands';
@@ -176,6 +178,80 @@ describe('where to', () => {
     expect(nextWaypoint(path, 1, { x: 0.95, z: 0.1 })).toBe(2);
     expect(nextWaypoint(path, 2, { x: 1, z: 3 })).toBe(2);
     expect(nextWaypoint(path, 0, { x: -2, z: 0 })).toBe(0);
+  });
+});
+
+/** An errand that keeps its own list of who's on it through `claim` and `end`, as the beer fridge's first did. */
+function tracked(name: string) {
+  const on = new Set<string>();
+  const ended: string[] = [];
+  const errand: Errand = {
+    name,
+    when: () => true,
+    spot: [],
+    steps: [],
+    claim: (id) => {
+      on.add(id);
+      return true;
+    },
+    end: (id, how) => {
+      on.delete(id);
+      ended.push(`${id}:${how}`);
+    },
+  };
+  return { errand, on, ended };
+}
+
+describe('ending errands', () => {
+  it('ends an errand once, however many times it is ended', () => {
+    const beer = tracked('beer');
+    const ends = new ErrandEnds();
+    beer.errand.claim!('kai');
+    ends.begin('kai', beer.errand);
+    expect(ends.owes('kai')).toBe(beer.errand);
+    ends.end('kai', 'done');
+    ends.end('kai', 'cut'); // the gong run takes them on the way back: nothing left to end
+    expect(beer.ended).toEqual(['kai:done']);
+    expect(ends.owes('kai')).toBeNull();
+  });
+
+  it('cuts short what they were on when they set off on something else, but not more of the same', () => {
+    const beer = tracked('beer');
+    const board = tracked('board');
+    const ends = new ErrandEnds();
+    beer.errand.claim!('kai');
+    ends.begin('kai', beer.errand);
+    ends.begin('kai', beer.errand); // out of the elevator and on their way: the same errand
+    expect(beer.ended).toEqual([]);
+    ends.begin('kai', board.errand); // work came in on the way to the fridge
+    expect(beer.ended).toEqual(['kai:cut']);
+    expect(beer.on.size).toBe(0);
+    expect(ends.owes('kai')).toBe(board.errand);
+  });
+
+  it('lets nobody stay claimed once the floor is left mid-errand (the stale beer drinker)', () => {
+    const beer = tracked('beer');
+    const coffee = tracked('coffee');
+    const ends = new ErrandEnds();
+    for (const id of ['kai', 'mo']) {
+      beer.errand.claim!(id);
+      ends.begin(id, beer.errand);
+    }
+    ends.endAll(); // the floor left with both at the fridge
+    expect(beer.on.size).toBe(0);
+    expect(beer.ended.sort()).toEqual(['kai:cut', 'mo:cut']);
+    // back on the floor a fresh director starts them on coffee: nobody is still counted at the fridge
+    const next = new ErrandEnds();
+    next.begin('kai', coffee.errand);
+    expect(beer.on.size).toBe(0);
+    expect(beer.ended).toHaveLength(2);
+  });
+
+  it('ends nothing for someone who was never sent', () => {
+    const ends = new ErrandEnds();
+    expect(() => ends.end('nobody', 'cut')).not.toThrow();
+    ends.endAll();
+    expect(ends.owes('nobody')).toBeNull();
   });
 });
 

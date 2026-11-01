@@ -1,13 +1,13 @@
 // Adapted from cubefarm client/src/world/events/director.test.ts (MIT).
 import { describe, expect, it } from 'vitest';
-import { clashes, EVENT_IDS, EVENTS, FIRST, GAP, newDirector, parseEventId, parseEventParam, pickEvent, RETRY_SECONDS, roll, seeded, startRunning, stepDirector, type Director, type EventId } from './worldEvents.ts';
+import { clashes, DAYTIME, EVENT_IDS, EVENTS, FIRST, GAP, newDirector, parseEventId, parseEventParam, pickEvent, RETRY_SECONDS, roll, seeded, startRunning, stepDirector, weightNow, type Director, type EventId, type Sky } from './worldEvents.ts';
 
-/** Runs a director for `minutes`, starting each event it picks; returns what started when. */
-function simulate(minutes: number, seed = 1, step = 1, d: Director = newDirector(seed)) {
+/** Runs a director for `minutes`, starting each event it picks; returns what started when. `sky`: what may happen at each second. */
+function simulate(minutes: number, seed = 1, step = 1, d: Director = newDirector(seed), sky: (t: number) => Sky = () => DAYTIME) {
   const started: { id: EventId; at: number }[] = [];
   let key = 0;
   for (let t = 0; t < minutes * 60; t += step) {
-    const id = stepDirector(d, step);
+    const id = stepDirector(d, step, sky(t));
     if (id) {
       started.push({ id, at: d.clock });
       startRunning(d, ++key, id);
@@ -87,6 +87,21 @@ describe('what happens next', () => {
     expect(clashes('plane', 'birds')).toBe(false);
   });
 
+  it('keeps the night-only ones to the night, weighted by the season', () => {
+    expect(EVENTS.aurora).toMatchObject({ nightOnly: true, big: true, street: false });
+    expect(EVENTS.fireworks).toMatchObject({ nightOnly: true, big: true });
+    expect(EVENTS.plane.nightOnly).toBe(false);
+    expect(weightNow(EVENTS.aurora, DAYTIME)).toBe(0);
+    expect(weightNow(EVENTS.aurora, { night: true, season: 'summer', holiday: null })).toBe(EVENTS.aurora.weight);
+    expect(weightNow(EVENTS.aurora, { night: true, season: 'winter', holiday: 'christmas' })).toBeGreaterThan(EVENTS.aurora.weight * 10);
+    expect(weightNow(EVENTS.fireworks, { night: true, season: 'winter', holiday: null })).toBe(0);
+    expect(weightNow(EVENTS.fireworks, { night: true, season: 'winter', holiday: 'newyear' })).toBeGreaterThan(0);
+    expect(weightNow(EVENTS.plane, { night: true, season: 'winter', holiday: 'newyear' })).toBe(EVENTS.plane.weight);
+    for (let i = 0; i < 200; i++) expect(EVENTS[pickEvent([], i / 200)!].nightOnly).toBe(false);
+    expect(parseEventParam('?event=northern_lights')).toBe('aurora');
+    expect(parseEventParam('?event=fireworks')).toBe('fireworks');
+  });
+
   it('weights the everyday higher than the rare', () => {
     const counts: Partial<Record<EventId, number>> = {};
     for (let i = 0; i < 2000; i++) {
@@ -112,9 +127,23 @@ describe('the schedule', () => {
     expect(started.length).toBeLessThan(170);
   });
 
-  it('sees every kind of event in a long day', () => {
+  it('sees every kind of daytime event in a long day, and none of the night-only ones', () => {
     const seen = new Set(simulate(16 * 60, 3).map((s) => s.id));
-    for (const id of EVENT_IDS) expect(seen, id).toContain(id);
+    for (const id of EVENT_IDS) expect(seen.has(id), id).toBe(!EVENTS[id].nightOnly);
+  });
+
+  it('sees the northern lights on winter nights, often, and fireworks only at New Year', () => {
+    // the 30-minute day: night for its last and first few minutes
+    const night = (t: number) => t % 1800 > 1640 || t % 1800 < 160;
+    const winter = simulate(24 * 60, 5, 1, newDirector(5), (t) => ({ night: night(t), season: 'winter', holiday: null }));
+    const atNight = winter.filter((s) => night(s.at));
+    expect(winter.filter((s) => !night(s.at) && EVENTS[s.id].nightOnly)).toEqual([]);
+    expect(atNight.filter((s) => s.id === 'aurora').length / atNight.length).toBeGreaterThan(0.15);
+    expect(winter.some((s) => s.id === 'fireworks')).toBe(false);
+    const summer = simulate(24 * 60, 5, 1, newDirector(5), (t) => ({ night: night(t), season: 'summer', holiday: null }));
+    expect(summer.filter((s) => s.id === 'aurora').length).toBeLessThan(winter.filter((s) => s.id === 'aurora').length / 4);
+    const newYear = simulate(24 * 60, 5, 1, newDirector(5), (t) => ({ night: night(t), season: 'winter', holiday: 'newyear' }));
+    expect(newYear.filter((s) => s.id === 'fireworks').length).toBeGreaterThan(3);
   });
 
   it('is the same for the same seed', () => {

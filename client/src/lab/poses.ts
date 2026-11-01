@@ -33,14 +33,14 @@ export interface Frame {
 
 export type Anim = (t: number, p: Proportions) => Frame;
 
-const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+export const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 export const smooth = (x: number) => {
   const k = clamp01(x);
   return k * k * (3 - 2 * k);
 };
-const frac = (x: number) => x - Math.floor(x);
+export const frac = (x: number) => x - Math.floor(x);
 /** 0 outside [a, b], easing up to 1 over `ramp` at each end. */
-const window01 = (u: number, a: number, b: number, ramp: number) => smooth((u - a) / ramp) * (1 - smooth((u - b + ramp) / ramp));
+export const window01 = (u: number, a: number, b: number, ramp: number) => smooth((u - a) / ramp) * (1 - smooth((u - b + ramp) / ramp));
 
 function frame(pose: Pose, extras: Partial<Omit<Frame, 'pose'>> = {}): Frame {
   return { pose, face: 'neutral', lids: 0, mug: 0, tilt: 0, seat: 0, zzz: false, busy: false, ...extras };
@@ -49,18 +49,18 @@ function frame(pose: Pose, extras: Partial<Omit<Frame, 'pose'>> = {}): Frame {
 // ---------- pieces of poses ----------
 
 /** An arm hanging relaxed at the side, splayed enough to clear the body; `fwd` swings it a little. */
-const hang = (p: Proportions, fwd = 0, ext = 0.985): ArmIK => ({ to: { reach: [p.splay, -1, -0.04 - fwd], ext }, pole: [0.3, 0, 1], twist: 0.3 });
+export const hang = (p: Proportions, fwd = 0, ext = 0.985): ArmIK => ({ to: { reach: [p.splay, -1, -0.04 - fwd], ext }, pole: [0.3, 0, 1], twist: 0.3 });
 /** A foot flat on the floor under its hip. */
-const planted = (p: Proportions, out = 0.015): LegGoal => ({ ankle: [p.hipX + out, p.ankle, 0], toe: 0.12 });
+export const planted = (p: Proportions, out = 0.015): LegGoal => ({ ankle: [p.hipX + out, p.ankle, 0], toe: 0.12 });
 
 /** Every few seconds a look off to one side and back, alternating sides: -1 to 1. */
-function glance(t: number, every = 6.5) {
+export function glance(t: number, every = 6.5) {
   const side = Math.floor(t / every) % 2 ? 1 : -1;
   return side * window01(t % every, 2.4, 4.6, 0.5);
 }
 
 /** Standing at ease: a slow weight shift from foot to foot (the pelvis over one leg, the other knee easing), breathing. */
-function standing(t: number, p: Proportions, sway = 1): Pose {
+export function standing(t: number, p: Proportions, sway = 1): Pose {
   const S = standHeight(p);
   const shift = Math.sin(t * 0.55) * sway;
   const breathe = Math.sin(t * 1.7);
@@ -77,14 +77,14 @@ function standing(t: number, p: Proportions, sway = 1): Pose {
   };
 }
 
-/** The pelvis on the seat, `slide` forward of its middle. */
-const seatAt = (p: Proportions, slide: number): V3 => [0, SCENE.seatY + p.seat, 0.05 - slide];
+/** The pelvis on a seat `seatY` high (the desk chair's by default), `slide` forward of its middle. */
+export const seatAt = (p: Proportions, slide: number, seatY = SCENE.seatY): V3 => [0, seatY + p.seat, 0.05 - slide];
 
 /**
  * A seated leg: the thigh along the seat, the shin down to the floor in front of the chair; a short one that can't reach
  * the floor dangles, swinging a little.
  */
-function seatedLeg(p: Proportions, pelvis: V3, t: number, phase: number): LegGoal {
+export function seatedLeg(p: Proportions, pelvis: V3, t: number, phase: number): LegGoal {
   const hipY = pelvis[1] - p.hipY;
   const knee = { y: hipY - p.thigh * 0.06, z: pelvis[2] - p.thigh * 0.998 };
   const drop = knee.y - p.ankle;
@@ -99,14 +99,14 @@ function seatedLeg(p: Proportions, pelvis: V3, t: number, phase: number): LegGoa
 }
 
 /** Where the shoulders are (roughly) when sat leaning forward `lean`, with the pelvis at `pelvis`. */
-function shoulderAt(p: Proportions, pelvis: V3, lean: number) {
+export function shoulderAt(p: Proportions, pelvis: V3, lean: number) {
   const up = p.spine + p.chest + p.shoulderY;
   return { y: pelvis[1] + up * Math.cos(lean), z: pelvis[2] - up * Math.sin(lean) };
 }
 
 /** How far forward on the seat they sit so their hands reach (x, y, z), leaning `lean`: short arms perch on the edge. */
-function slideToReach(p: Proportions, lean: number, x: number, y: number, z: number) {
-  const s = shoulderAt(p, seatAt(p, 0), lean);
+export function slideToReach(p: Proportions, lean: number, x: number, y: number, z: number, seatY = SCENE.seatY) {
+  const s = shoulderAt(p, seatAt(p, 0, seatY), lean);
   const reach = armLength(p) * 0.93;
   const dx = x - p.shoulderX;
   const dy = y - s.y;
@@ -115,8 +115,8 @@ function slideToReach(p: Proportions, lean: number, x: number, y: number, z: num
   return Math.min(0.2, Math.max(0, s.z - z - dz));
 }
 
-function seated(t: number, p: Proportions, lean: number, slide: number): Pose {
-  const pelvis = seatAt(p, slide);
+export function seated(t: number, p: Proportions, lean: number, slide: number, seatY = SCENE.seatY): Pose {
+  const pelvis = seatAt(p, slide, seatY);
   const breathe = Math.sin(t * 1.5);
   return {
     pelvis,
@@ -142,7 +142,7 @@ export function idle(t: number, p: Proportions): Frame {
 }
 
 /** The foot's place in a step cycle u (0 to 1, landing at 0): planted from `duty`'s start, then lifted and brought forward. */
-function footCycle(u: number, excursion: number, lift: number, duty: number, run: boolean) {
+export function footCycle(u: number, excursion: number, lift: number, duty: number, run: boolean) {
   if (u < duty) return { z: -excursion / 2 + (excursion * u) / duty, y: 0, pitch: 0, stance: u / duty };
   const k = (u - duty) / (1 - duty);
   const s = Math.sin(Math.PI * k);
@@ -316,10 +316,10 @@ export function point(t: number, p: Proportions): Frame {
 }
 
 /** How a slump of `lean` curls the back: the share of it at the hips, waist, chest and neck (they add up to 1). */
-const SLUMP = [0.2, 0.35, 0.35, 0.1] as const;
+export const SLUMP = [0.2, 0.35, 0.35, 0.1] as const;
 
 /** Where the middle of the head is, above and in front of the pelvis, slumped forward by `lean`. */
-function slumpedHead(p: Proportions, lean: number) {
+export function slumpedHead(p: Proportions, lean: number) {
   const segs = [p.spine, p.chest, p.neck, p.head];
   let a = 0;
   let y = 0;
@@ -333,7 +333,7 @@ function slumpedHead(p: Proportions, lean: number) {
 }
 
 /** The slump that brings the head down to height `y` over a pelvis at `pelvisY` (as far as a back curls). */
-function slumpTo(p: Proportions, pelvisY: number, y: number) {
+export function slumpTo(p: Proportions, pelvisY: number, y: number) {
   let lo = 0;
   let hi = 1.5;
   for (let i = 0; i < 30; i++) {

@@ -44,6 +44,8 @@ export interface BodyState {
   standX: number;
   standZ: number;
   teleport: number;
+  /** Hip to sole (m): shorter legs take shorter, quicker steps (the body style's, set by Character.tsx). */
+  leg: number;
 }
 
 export const SIT_SECONDS = 0.6;
@@ -54,7 +56,7 @@ const ACCEL = 4; // m/s²
 const STRAFE_ACCEL = 14; // m/s², sidestepping
 
 export function newBodyState(): BodyState {
-  return { stage: 'seated', sit: 1, x: 0, z: 0, heading: 0, speed: 0, phase: 0, seatX: 0, seatZ: 0, seatHeading: 0, standX: 0, standZ: 0, teleport: 0 };
+  return { stage: 'seated', sit: 1, x: 0, z: 0, heading: 0, speed: 0, phase: 0, seatX: 0, seatZ: 0, seatHeading: 0, standX: 0, standZ: 0, teleport: 0, leg: LEG };
 }
 
 /** The shortest signed turn from a to b, in (-PI, PI]. */
@@ -162,7 +164,7 @@ export function stepBody(s: BodyState, target: BodyTarget | null, dt: number): B
       else if (walkTo(s, s.standX, s.standZ, s.seatHeading, WALK_SPEED, dt)) s.stage = 'sitting';
       break;
   }
-  if (s.speed > 0) s.phase = (s.phase + dt * gait(s.speed, GAIT).cadence * Math.PI) % (Math.PI * 2);
+  if (s.speed > 0) s.phase = (s.phase + dt * gait(s.speed, GAIT, s.leg).cadence * Math.PI) % (Math.PI * 2);
   return s;
 }
 
@@ -179,15 +181,21 @@ export interface Gait {
 }
 
 const GAIT: Gait = { stride: 0, cadence: 0, bob: 0, lean: 0 };
-const LEG = 0.8; // hip to sole when standing
+/** Hip to sole when standing, for the old figure (and a leg of this length steps as it did). */
+export const LEG = 0.8;
 
-/** Stride and cadence for a ground speed: longer and quicker steps the faster someone goes. Writes into `out`. */
-export function gait(speed: number, out: Gait): Gait {
+/**
+ * Stride and cadence for a ground speed: longer and quicker steps the faster someone goes. Legs of another length
+ * (`leg`, hip to sole) take steps scaled to them, a little less than in proportion so short legs don't patter too fast
+ * to see. Writes into `out`.
+ */
+export function gait(speed: number, out: Gait, leg = LEG): Gait {
   const v = Math.max(0, speed);
-  const stepLength = Math.min(0.95, 0.32 + 0.2 * v);
+  const k = leg / LEG;
+  const stepLength = Math.min(0.95, 0.32 + 0.2 * v) * k ** 0.75;
   out.cadence = v > 0 ? v / stepLength : 0;
-  out.stride = Math.asin(Math.min(0.9, stepLength / (2 * LEG)));
-  out.bob = 0.018 + 0.012 * Math.min(2, v);
+  out.stride = Math.asin(Math.min(0.9, stepLength / (2 * leg)));
+  out.bob = (0.018 + 0.012 * Math.min(2, v)) * k;
   out.lean = 0.04 + 0.05 * Math.min(2.5, v);
   return out;
 }

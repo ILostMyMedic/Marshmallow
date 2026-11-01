@@ -2,7 +2,7 @@
 // gets the runner from PongMatch.tsx), and `held` is view.ts's instead of the store's.
 
 // The ping-pong match as plain module state: who plays at which end (you or a worker), the game's phase and score, the
-// player's paddle and view, and what each worker at the table does with their feet and paddle. The match runner
+// player's paddle and a smash's shake (the view itself is pongCam.ts's), and what each worker at the table does with their feet and paddle. The match runner
 // (pongRunner.ts, stepped by PongMatch.tsx) writes here; the errands (pongErrands.ts, through setPongSeats),
 // Character.tsx, the table's hanging paddles and the player's controls (Player.tsx) read it.
 
@@ -278,27 +278,18 @@ export function centrePaddle() {
 /** The probe's autopilot: the runner moves the player's paddle to meet every ball and swings it like this. */
 export const autopilot = { on: false, swing: { forward: 1.2, right: 0 } as Swing };
 
-const VIEW = { back: 1.3, y: 1.8, follow: 0.35, lookBack: -TABLE.len * 0.8, lookY: TABLE.top + 0.02 };
 let shake = { at: -Infinity, power: 0 };
 
-/** A smash shakes the view a little (Player.tsx leaves it still under reduced motion). */
+/** A smash shakes the view a little. */
 export function shakeView(power: number) {
   shake = { at: performance.now(), power };
 }
 
-/**
- * Where the camera sits while the player plays at `end` (world, `now` in performance.now() ms): behind it, a little high,
- * following the paddle a little sideways, looking down the table (yaw and pitch for an 'YXZ' rotation); and this
- * frame's shake to add to the position, from a smash.
- */
-export function pongCamera(end: End, now = performance.now()): { x: number; y: number; z: number; yaw: number; pitch: number; shake: V3 } {
-  const lat = paddle.lat * VIEW.follow;
-  const at = fromOwn(end, VIEW.back, lat);
-  const yaw = end === 'west' ? -Math.PI / 2 : Math.PI / 2;
-  const pitch = Math.atan2(VIEW.lookY - VIEW.y, VIEW.back - VIEW.lookBack);
+/** This frame's shake to add to the camera at the table (pongCam.ts places it), from a smash (`now` in performance.now() ms). */
+export function pongShake(now = performance.now()): V3 {
   const t = (now - shake.at) / 1000;
   const k = t < 0.35 ? shake.power * (1 - t / 0.35) : 0;
-  return { ...at, y: VIEW.y, yaw, pitch, shake: { x: (Math.random() - 0.5) * 0.05 * k, y: (Math.random() - 0.5) * 0.05 * k, z: (Math.random() - 0.5) * 0.05 * k } };
+  return { x: (Math.random() - 0.5) * 0.05 * k, y: (Math.random() - 0.5) * 0.05 * k, z: (Math.random() - 0.5) * 0.05 * k };
 }
 
 /** A click (or F) while playing: toss and serve when it's the player's serve, or a rematch once a game is over. */

@@ -1,5 +1,6 @@
 // Adapted from cubefarm client/src/world/Character.tsx (MIT): toys hitting people, themes, the screen's glow on the
 // face and the handshake are cut; their steps, chair, voice (every bubble, ui/voices.ts) and merge cheer are heard.
+// The body is the office's style (RigBody.tsx, Settings.bodyStyle), posed by bodyPoses.ts on the character lab's rig.
 import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -9,208 +10,55 @@ import { cheerVoice } from '../ui/cheerRules';
 import { cheerFrom } from '../ui/cheerSfx';
 import { hearBody, hearing } from '../ui/peopleSounds';
 import { registerVoice } from '../ui/voices';
+import { BI, type V3 } from '../lab/rig';
 import { seededAppearance } from './appearance';
 import { Piece } from './Batched';
-import { WALK_SPEED, gait, newBodyState, smooth, stepBody, type BodyTarget, type Gait, type Gesture } from './body';
+import { newBodyState, smooth, stepBody, WALK_SPEED, type BodyTarget } from './body';
+import { BOX_AHEAD, carryFrame, carryScale, deskPose, deskSlide, legLength, upPose } from './bodyPoses';
+import { DESK_SEAT, HEAD_LIFT } from './bodyStyle';
 import { PARTS } from './characterParts';
 import { blink, expressionFor, isDrowsy, newFace, prFaceOf, stepFace } from './face';
-import { fidgetProgress, fidgetWeight, newDeskLife, play, stepDeskLife, type Fidget, type Mood } from './fidgets';
-import { applyFace, HeadParts, Sleeve, TorsoWear, torsoWidth } from './Figure';
+import { fidgetProgress, fidgetWeight, newDeskLife, play, stepDeskLife, type Mood } from './fidgets';
+import { applyFace, HeadParts, NeckPhones } from './Figure';
 import { FoodLook } from './food';
 import { malletHolder } from './gongRunner';
 import { isCelebrating } from './gongState';
 import { toon } from './materials';
 import { lifeOf } from './model';
 import { MugLook, mugColor } from './mugLook';
-import { INK } from './Outlines';
+import { INK, ObjectInk } from './Outlines';
 import { bodyTarget, handFood, handMug, handSnack, isHidden, seatBody, setBody, subscribeMugs, trackBody } from './people';
 import { PaddleLook } from './PongTable';
 import { holdsPaddle, pongPaddle } from './pongState';
+import { toyHand } from './games/gameState';
 import { takeReaction } from './reactionFeed';
+import { BodyMeshes, OnBone, Poser, useBody, useBodyStyle, viewOf } from './RigBody';
 import { SnackLook } from './SnackLook';
-import { SpeechBubble } from './SpeechBubble';
+import { BUBBLE_TOP, SpeechBubble } from './SpeechBubble';
 import { Ball, Cyl } from './Toon';
-import { burstLevel, handLift, hashString, mouseDip, poseFor, TAP_PHASE, tapSpeed, typingSeed, type PoseName } from './typing';
+import { hashString, poseFor, tapSpeed, typingSeed, type PoseName } from './typing';
 import { Zzz } from './Zzz';
 
 // A cartoon worker. Origin is the floor under the chair; they face -Z (toward the desk). Seated by default; the people
 // controller (people.ts, body.ts) can get them up, walk them about and sit them back down. `children` (the name tag)
 // float over the desk while seated and over their head while up.
 
-type Arm = { pitch: number; yaw: number }; // yaw > 0 swings the hand toward the body's centre line
-type Pose = { l: Arm; r: Arm; lean: number; headPitch: number; headYaw: number; type: number; mouse: number };
-
-const KEYS: Arm = { pitch: -0.34, yaw: 0.26 };
-// Arm pitch rotates the arm (which points along -Z) up from horizontal: 0 = straight ahead, +PI/2 = straight up. The
-// poses are chosen so hands never pass through the head (radius 0.2, ~0.22 above the shoulders).
-const POSES: Record<PoseName, Pose> = {
-  typing: { l: KEYS, r: KEYS, lean: 0.1, headPitch: -0.02, headYaw: 0, type: 1, mouse: 0 },
-  browsing: { l: KEYS, r: { pitch: -0.4, yaw: -0.22 }, lean: 0.06, headPitch: 0.05, headYaw: 0.04, type: 0.25, mouse: 1 },
-  thinking: { l: KEYS, r: { pitch: 0.55, yaw: 0.95 }, lean: 0.02, headPitch: 0.1, headYaw: -0.12, type: 0.3, mouse: 0 }, // hand under the chin
-  relaxed: { l: { pitch: -0.9, yaw: 0.35 }, r: { pitch: -0.9, yaw: 0.35 }, lean: -0.1, headPitch: 0.06, headYaw: 0, type: 0, mouse: 0 }, // hands in the lap
-  cheer: { l: { pitch: 1.45, yaw: -0.35 }, r: { pitch: 1.45, yaw: -0.35 }, lean: -0.05, headPitch: 0.2, headYaw: 0, type: 0, mouse: 0 }, // arms up in a V
-  slump: { l: { pitch: -1.35, yaw: -0.15 }, r: { pitch: -1.35, yaw: -0.15 }, lean: 0.25, headPitch: -0.45, headYaw: 0, type: 0, mouse: 0 }, // arms dangling
-};
-
-const clone = (p: Pose): Pose => ({ ...p, l: { ...p.l }, r: { ...p.r } });
-const lerp = THREE.MathUtils.lerp;
-const PANTS = '#3d4a6b';
-
-// Hips go from the seat (y 0.5) to the top of straight legs; the knee is `thigh` below the hip (characterParts.ts).
-const HIP = { x: 0.11, seatY: 0.5, seatZ: -0.04, standY: 0.815, thigh: 0.32 };
 // Where they step out to when they get up (chair space): beside the chair, in front of it. The chair rolls back.
 const STAND = { x: 0.62, z: -0.1 };
 const CHAIR_ROLL = 0.18;
 const TAG_SEATED: [number, number, number] = [0, 1.98, -1.12]; // over the desk
-const HANG: Arm = { pitch: -1.42, yaw: -0.1 };
-// A mug in the right hand (arm space: the hand is at z -0.5), kept upright whatever the arm does, tipped to the lips for a sip.
-const HAND_MUG = { at: [0, -0.02, -0.52] as [number, number, number], ahead: -0.07, scale: 1.3, sipTilt: 1.0 };
-// Arm targets for each gesture (null: that arm keeps walking or idling). Pitch and yaw as in POSES.
-const GESTURES: Record<Gesture, { l: Arm | null; r: Arm | null; head: number }> = {
-  none: { l: null, r: null, head: 0 },
-  reach: { l: null, r: { pitch: 1.05, yaw: 0.05 }, head: 0.15 }, // touch the board
-  post: { l: null, r: { pitch: 1.05, yaw: 0.05 }, head: 0.15 },
-  hold: { l: { pitch: -0.45, yaw: 0.4 }, r: { pitch: -0.45, yaw: 0.4 }, head: -0.05 }, // carry something in front
-  sip: { l: null, r: { pitch: 0.7, yaw: 0.85 }, head: 0.25 }, // cup to the mouth
-  stretch: { l: { pitch: 1.55, yaw: 0.22 }, r: { pitch: 1.55, yaw: 0.22 }, head: 0.3 }, // arms overhead
-  stoop: { l: { pitch: -1.0, yaw: 0.3 }, r: { pitch: -1.0, yaw: 0.3 }, head: -0.5 }, // reach down for something low (the fridge)
-  shrug: { l: { pitch: -0.7, yaw: -0.75 }, r: { pitch: -0.7, yaw: -0.75 }, head: -0.12 }, // palms out: oh well
-  mug: { l: null, r: { pitch: -0.75, yaw: 0.3 }, head: -0.05 }, // a mug held in front
-  tap: { l: null, r: { pitch: -0.3, yaw: 0.05 }, head: -0.3 }, // a hand on the counter: the cooler, the machine
-  chat: { l: { pitch: -0.55, yaw: -0.45 }, r: { pitch: -0.75, yaw: 0.3 }, head: 0.08 }, // mug in one hand, the other talking
-  cheer: { l: POSES.cheer.l, r: POSES.cheer.r, head: POSES.cheer.headPitch }, // the seated cheer's arms up in a V
-  wave: { l: null, r: { pitch: 1.25, yaw: -0.3 }, head: 0.1 }, // a hand up beside the head, waving (below)
-  talk: { l: null, r: { pitch: -0.3, yaw: 0.45 }, head: 0.05 }, // a hand out in front, moving as they talk
-  // the gong (gongRunner.ts): a hand out for the mallet on its hook, raised back over the shoulder, then brought down
-  take: { l: null, r: { pitch: 0.75, yaw: -0.3 }, head: 0.1 },
-  windup: { l: { pitch: 0.2, yaw: 0.3 }, r: { pitch: 2.1, yaw: 0.05 }, head: 0.1 },
-  strike: { l: { pitch: -0.6, yaw: 0.2 }, r: { pitch: -0.25, yaw: 0.25 }, head: 0 },
-  // the stand-up (Rituals.tsx): clapping in front of the chest (below), nodding along, a thumbs-up
-  clap: { l: { pitch: 0.05, yaw: 0.62 }, r: { pitch: 0.05, yaw: 0.62 }, head: 0.08 },
-  nod: { l: null, r: null, head: -0.05 },
-  thumbs: { l: null, r: { pitch: 0.45, yaw: 0.25 }, head: 0.12 },
-  // ping-pong: the free hand out for balance; the bat arm reaches for wherever the match puts the paddle (below)
-  paddle: { l: { pitch: -0.5, yaw: 0.5 }, r: { pitch: -0.35, yaw: -0.25 }, head: 0.05 },
-  // watching something outside (events/watch.ts): pointing up at it, and both hands to the cheeks
-  point: { l: null, r: { pitch: 0.6, yaw: -0.12 }, head: 0.28 },
-  gasp: { l: { pitch: 0.72, yaw: 0.95 }, r: { pitch: 0.72, yaw: 0.95 }, head: 0.18 },
-  call: { l: { pitch: -0.75, yaw: 0.55 }, r: { pitch: 0.62, yaw: 0.8 }, head: 0.06 }, // on the phone, the other arm folded
-};
-// The paddle in the right hand (arm space: the hand is at z -0.5): its handle, and the blade's centre further along.
-const BAT = { hand: -0.5, blade: -0.17 };
-// A merge party on their floor beats any gesture: arms up in a V, standing or walking, mug or not.
-const PARTY_ARMS = { l: POSES.cheer.l, r: POSES.cheer.r, head: POSES.cheer.headPitch };
-
-// ---------- little life at the desk (fidgets.ts) ----------
-// Each fidget is drawn as a seated pose laid over the status pose: arms it takes over (weight 1) and head, lean and
-// twist offsets. `lw`/`rw` say how much of each arm it takes; yaw > 0 swings a hand toward the centre line, as above.
-type Overlay = { l: Arm; r: Arm; lw: number; rw: number; lean: number; leanW: number; pitch: number; pitchW: number; yaw: number; roll: number; twist: number; spin: number };
-const MUG_REACH: Arm = { pitch: -0.12, yaw: -0.55 };
-const MUG_DRINK: Arm = { pitch: 0.55, yaw: 0.7 };
-const ramp = (p: number, a: number, b: number) => smooth(Math.min(1, Math.max(0, (p - a) / (b - a))));
-const setArm = (a: Arm, pitch: number, yaw: number) => {
-  a.pitch = pitch;
-  a.yaw = yaw;
-};
-
-/** Writes fidget `f`'s pose at progress p (0 to 1; seconds asleep for a doze) and time t into `o`. */
-function fidgetPose(f: Fidget | null, p: number, t: number, toward: number, o: Overlay) {
-  o.lw = o.rw = o.leanW = o.pitchW = o.yaw = o.roll = o.twist = o.spin = 0;
-  switch (f) {
-    case 'leanBack': // hands behind the head, rocking a little
-      setArm(o.l, 2.45, 0.75);
-      setArm(o.r, 2.45, 0.75);
-      o.lw = o.rw = o.leanW = o.pitchW = 1;
-      o.lean = -0.2 + Math.sin(t * 1.4) * 0.025;
-      o.pitch = 0.14;
-      break;
-    case 'spin': // a swivel one way, then the other
-      o.spin = Math.sin(p * Math.PI * 2) * 0.55;
-      o.yaw = -o.spin * 0.5;
-      break;
-    case 'phone': // both hands in front of the chest, head down, a thumb tapping
-      setArm(o.l, -0.3, 0.6);
-      setArm(o.r, -0.26 + (Math.sin(t * 11) > 0.4 ? 0.04 : 0), 0.55);
-      o.lw = o.rw = o.pitchW = o.leanW = 1;
-      o.pitch = -0.42;
-      o.lean = 0.05;
-      break;
-    case 'sip': {
-      // reach for the mug, bring it up, a sip with the head back, and put it down again
-      const up = ramp(p, 0.3, 0.45) - ramp(p, 0.62, 0.77);
-      setArm(o.r, MUG_REACH.pitch + (MUG_DRINK.pitch - MUG_REACH.pitch) * up, MUG_REACH.yaw + (MUG_DRINK.yaw - MUG_REACH.yaw) * up);
-      o.rw = 1;
-      o.twist = -0.32 * (1 - up);
-      o.lean = 0.16 * (1 - up);
-      o.leanW = 1;
-      o.pitch = 0.28 * up;
-      o.pitchW = up;
-      break;
-    }
-    case 'doze': // head droops, breathing slow, with a little nod now and then
-      o.pitch = -0.6 + Math.sin(p * 0.9) * 0.05 + (Math.sin(p * 0.37) > 0.97 ? 0.12 : 0);
-      o.pitchW = 1;
-      o.roll = 0.16;
-      o.lean = 0.08;
-      o.leanW = 1;
-      break;
-    case 'neckRoll': {
-      const a = p * Math.PI * 2.4;
-      o.pitch = Math.sin(a) * 0.24 - 0.05;
-      o.pitchW = 1;
-      o.roll = Math.cos(a) * 0.3;
-      break;
-    }
-    case 'shoulders': // the left arm pulled across the chest, looking away from it
-      setArm(o.l, 0.05, 1.35);
-      o.lw = 1;
-      o.yaw = 0.3;
-      o.twist = -0.12;
-      break;
-    case 'scratch': // a hand on top of the head, scratching
-      setArm(o.r, 1.42 + Math.sin(t * 17) * 0.06, 0.6 + Math.sin(t * 17 + 1) * 0.05);
-      o.rw = 1;
-      o.roll = -0.14;
-      o.pitch = 0.04;
-      o.pitchW = 1;
-      break;
-    case 'facepalm': // hand to the forehead, head down, a slow shake
-      setArm(o.r, 0.73, 0.6);
-      o.rw = 1;
-      o.pitch = -0.3;
-      o.pitchW = 1;
-      o.yaw = Math.sin(t * 5) * 0.12;
-      o.lean = 0.12;
-      o.leanW = 1;
-      break;
-    case 'fistPump': // three quick pumps
-      setArm(o.r, 1.15 + Math.max(0, Math.sin(p * Math.PI * 6)) * 0.45, -0.15);
-      o.rw = 1;
-      o.pitch = 0.18;
-      o.pitchW = 1;
-      o.lean = -0.06;
-      o.leanW = 1;
-      break;
-    case 'wave': {
-      // turn toward them and wave with the near hand
-      const side = toward > 0 ? o.l : o.r;
-      setArm(side, 1.3, -0.3 + Math.sin(t * 10) * 0.35);
-      if (toward > 0) o.lw = 1;
-      else o.rw = 1;
-      o.yaw = Math.max(-1.1, Math.min(1.1, toward * 0.7));
-      o.twist = Math.max(-0.4, Math.min(0.4, toward * 0.3));
-      o.pitch = 0.08;
-      o.pitchW = 1;
-      break;
-    }
-  }
-  return o;
-}
+/** A held mug: this far in from the grip toward the body, so its handle (+X) is in the hand, and its size. */
+const HAND_MUG = { inward: 0.07, scale: 1.3, sipTilt: 1.0 };
+/** The paddle: its blade's middle this far over the wrist, the handle in the fist. */
+const BAT = { blade: 0.17 };
+/** The phone held to the ear (head-bone space, from the head's radius): just out from the ear, toward the mouth. */
+const CALL_PHONE = { out: 0.014, down: 0.26, ahead: 0.2 };
+const NO_HEAD: V3 = [0, 0, 0];
 
 /**
  * `chair` rolls back while they're up; `mug` is the desk mug they sip from (moved into their hand and back). `carrying`
- * is drawn in their hands while they hold something (the 'hold' gesture), in the torso's frame, which faces -Z with
- * the shoulders at y 0.44.
+ * is drawn in their hands while they hold something (the 'hold' gesture), in the old figure's torso frame (the
+ * shoulders 0.44 over the hips, facing -Z), scaled to their body. `seatY`: the seat's height (an executive chair's is higher).
  */
 export function Character({
   worker,
@@ -219,6 +67,7 @@ export function Character({
   carrying,
   standAt = STAND,
   seatedTag = TAG_SEATED,
+  seatY = DESK_SEAT,
   children,
 }: {
   worker: Worker;
@@ -229,57 +78,51 @@ export function Character({
   standAt?: { x: number; z: number };
   /** Where the name tag floats while they sit (chair space): over the desk, or over their head where there's no desk. */
   seatedTag?: [number, number, number];
+  seatY?: number;
   children?: ReactNode;
 }) {
   const id = worker.id;
-  const torso = useRef<THREE.Group>(null);
-  const head = useRef<THREE.Group>(null);
-  const armL = useRef<THREE.Group>(null);
-  const armR = useRef<THREE.Group>(null);
-  const cur = useRef<Pose>(clone(POSES.relaxed));
   const seed = useMemo(() => typingSeed(id), [id]);
   const look = useMemo(() => seededAppearance({ seed: worker.seed, role: worker.role }), [worker.seed, worker.role]);
+  const style = useBodyStyle();
+  const rig = useBody(look, worker.role, style);
+  const props = rig.props;
+  const poser = useMemo(() => new Poser(props), [props]);
   const root = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
-  const seatedLegs = useRef<THREE.Group>(null);
-  const legs = useRef<THREE.Group>(null);
-  const hipL = useRef<THREE.Group>(null);
-  const hipR = useRef<THREE.Group>(null);
-  const kneeL = useRef<THREE.Group>(null);
-  const kneeR = useRef<THREE.Group>(null);
   const tag = useRef<THREE.Group>(null);
   const mallet = useRef<THREE.Group>(null);
   const bat = useRef<THREE.Group>(null);
-  const batBlade = useRef<THREE.Group>(null);
   const held = useRef<THREE.Group>(null);
   const chairZ = useRef<number | null>(null);
   const handCup = useRef<THREE.Group>(null);
+  const cupTip = useRef<THREE.Group>(null);
+  const inHand = useRef<THREE.Group>(null);
+  const grip = useRef<THREE.Group>(null);
+  const zzz = useRef<THREE.Group>(null);
   const carried = useSyncExternalStore(subscribeMugs, () => handMug(id));
   const food = useSyncExternalStore(subscribeMugs, () => handFood(id));
   const snack = useSyncExternalStore(subscribeMugs, () => handSnack(id));
-  // Everything the body needs between frames, made once: the walk state, a gait to write into and the gesture arms.
+  // Everything the body needs between frames, made once: the walk state, which way they're going and the sip's tilt.
   const move = useMemo(
     () => ({
       s: newBodyState(),
-      g: { stride: 0, cadence: 0, bob: 0, lean: 0 } as Gait,
       placed: false,
-      gl: 0,
-      gr: 0,
-      gh: 0,
-      l: { ...HANG },
-      r: { ...HANG },
-      // reaching for the ping-pong paddle's spot: the shoulder, the way to it, the torso's turn
-      bat: new THREE.Vector3(),
-      shoulder: new THREE.Vector3(),
-      q: new THREE.Quaternion(),
+      lastX: NaN,
+      lastZ: NaN,
+      dir: [0, -1] as [number, number],
+      tilt: 0,
+      slide: 0,
+      v: new THREE.Vector3(),
+      paddle: [0, 0, 0] as [number, number, number],
+      tick: 0,
     }),
     [],
   );
-  // Fidgets: the schedule, the pose it writes, the stretch's body target, who they wave to and the mug's rest spot.
+  // Fidgets: the schedule, the stretch's body target, who they wave to and the mug's rest spot.
   const life = useMemo(
     () => ({
       s: newDeskLife(id, performance.now() / 1000, mug != null),
-      o: { l: { ...HANG }, r: { ...HANG }, lw: 0, rw: 0, lean: 0, leanW: 0, pitch: 0, pitchW: 0, yaw: 0, roll: 0, twist: 0, spin: 0 } as Overlay,
       stretch: null as BodyTarget | null,
       toward: 0,
       browse: 0,
@@ -291,7 +134,7 @@ export function Character({
   );
   const asleep = useRef(false);
   const phone = useRef<THREE.Group>(null);
-  const grip = useRef<THREE.Group>(null);
+  const callPhone = useRef<THREE.Group>(null);
   // The face (face.ts): their open PR's mood, the blended expression and the mesh it drives.
   const task = worker.task;
   const prMood = useStore((s) => prFaceOf({ role: worker.role, task: task?.kind ?? null, floorId: worker.floorId, prNumber: task?.prNumber ?? null }, s.floors, task?.prNumber != null ? s.qa[qaKey(worker.floorId, task.prNumber)] : undefined));
@@ -309,8 +152,11 @@ export function Character({
     },
     [id, life],
   );
+  // a leaver's box in both hands; anything else they hold (a snack, a can, lunch) goes in the right hand alone
+  const carry = carryScale(props);
+  const box = carryFrame(props, carry);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera, gl }, delta) => {
     const dt = Math.min(delta, 0.1);
     const now = performance.now();
     const t = now / 1000 + seed;
@@ -318,17 +164,22 @@ export function Character({
     const wall = Date.now(); // moments carry the server's clock
     const lived = lifeOf(worker, office.moments, wall);
     const party = isCelebrating(worker.floorId, now); // the gong struck for a merge on this floor: everyone cheers, busy or not
-    if (party && !voice.party && head.current && !isHidden(id)) {
+    const b = body.current;
+    if (party && !voice.party && b && !isHidden(id)) {
       // the arms go up: a "woo!" from their head
-      head.current.getWorldPosition(voice.head);
+      b.localToWorld(voice.head.fromArray(poser.pos, BI.head * 3));
       cheerFrom(voice.v, voice.head.x, voice.head.y, voice.head.z);
     }
     voice.party = party;
 
     // ---------- where the body is ----------
     const st = move.s;
+    st.leg = legLength(props);
     const r0 = root.current;
     const goal = bodyTarget(id);
+    let gesture = goal?.gesture ?? 'none';
+    let holding = false;
+    let aiming = false;
     if (r0) {
       r0.visible = !isHidden(id);
       if (!move.placed) {
@@ -343,7 +194,6 @@ export function Character({
       st.standZ = te[2] * standAt.x + te[10] * standAt.z + te[14];
       stepBody(st, goal ?? null, dt);
       if (!isHidden(id)) hearBody(id, st, dt, te[13]);
-      const b = body.current;
       if (b && st.stage === 'seated') {
         b.position.set(0, 0, 0);
         b.rotation.y = 0;
@@ -354,80 +204,54 @@ export function Character({
         b.position.set(te[0] * dx + te[2] * dz, 0, te[8] * dx + te[10] * dz);
         b.rotation.y = st.heading - st.seatHeading;
       }
-      const gesture = st.stage === 'up' ? (goal?.gesture ?? 'none') : 'none';
-      const holding = st.stage === 'up' && malletHolder() === id;
-      // the one with the mallet plays out their own strike (gongRunner.ts); the party is for everyone else
-      const g = party && !holding ? PARTY_ARMS : GESTURES[gesture];
-      const kg = 1 - Math.exp(-dt * 6);
-      if (g.l) Object.assign(move.l, g.l);
-      if (g.r) Object.assign(move.r, g.r);
-      // at the ping-pong table, the bat arm points at where the match has the paddle (an arm is one straight piece)
-      const aim = st.stage === 'up' && !party ? pongPaddle(id) : null;
-      if (aim && torso.current) {
-        torso.current.localToWorld(move.shoulder.set(0.25 * torsoWidth(look), 0.44, 0));
-        const d = move.bat.set(aim.x, aim.y, aim.z).sub(move.shoulder).applyQuaternion(torso.current.getWorldQuaternion(move.q).invert()).normalize();
-        move.r.yaw = Math.asin(Math.max(-1, Math.min(1, -d.x)));
-        move.r.pitch = Math.atan2(d.y, -d.z);
-      }
-      if (gesture === 'wave') move.r.yaw += Math.sin(t * 9) * 0.4;
-      if (gesture === 'talk') {
-        move.r.pitch += Math.sin(t * 4.3) * 0.18;
-        move.r.yaw += Math.sin(t * 2.6) * 0.2;
-      }
-      if (gesture === 'clap' && !party) {
-        // the hands meet in front of the chest a few times a second
-        const c = Math.abs(Math.sin(t * 7)) * 0.3;
-        move.l.yaw -= c;
-        move.r.yaw -= c;
+      // which way they're going, in their own frame (sideways at the ping-pong table)
+      const mx = st.x - move.lastX;
+      const mz = st.z - move.lastZ;
+      const moved = Math.hypot(mx, mz);
+      if (moved > 1e-4 && st.speed > 0.05) {
+        const c = Math.cos(st.heading);
+        const s = Math.sin(st.heading);
+        const k = 1 - Math.exp(-dt * 10);
+        move.dir[0] += ((mx * c - mz * s) / moved - move.dir[0]) * k;
+        move.dir[1] += ((mx * s + mz * c) / moved - move.dir[1]) * k;
+        const n = Math.hypot(move.dir[0], move.dir[1]) || 1;
+        move.dir[0] /= n;
+        move.dir[1] /= n;
+      } else if (st.speed < 0.05) move.dir = [0, -1];
+      move.lastX = st.x;
+      move.lastZ = st.z;
+      gesture = st.stage === 'up' ? gesture : 'none';
+      holding = st.stage === 'up' && malletHolder() === id;
+      // at the ping-pong table, the bat hand goes where the match has the paddle (the blade's middle over the fist)
+      // ...or where a game has the ball or the dart they hold (games/gameState.ts)
+      const paddle = st.stage === 'up' && !party ? pongPaddle(id) : null;
+      const toy = !paddle && st.stage === 'up' && !party ? toyHand(id) : null;
+      const aim = paddle ?? toy;
+      if (aim && b) {
+        b.updateWorldMatrix(true, false);
+        b.worldToLocal(move.v.set(aim.x, aim.y - (paddle ? BAT.blade : 0), aim.z));
+        move.paddle[0] = move.v.x;
+        move.paddle[1] = move.v.y;
+        move.paddle[2] = move.v.z;
+        aiming = true;
       }
       if (held.current) held.current.visible = gesture === 'hold';
-      move.gl += ((g.l ? 1 : 0) - move.gl) * kg;
-      move.gr += ((g.r ? 1 : 0) - move.gr) * (aim ? 1 - Math.exp(-dt * 25) : kg);
-      move.gh += (g.head - move.gh) * kg;
       if (mallet.current) mallet.current.visible = holding;
       if (bat.current) bat.current.visible = st.stage === 'up' && holdsPaddle(id);
     }
     const seated = st.stage === 'seated';
     const k = smooth(st.sit); // 1 seated, 0 standing
     const up = 1 - k;
-    const gt = gait(st.speed, move.g);
-    const walk = Math.min(1, st.speed / 0.5);
-    const swing = Math.sin(st.phase) * gt.stride * walk;
-    const bob = -gt.bob * walk * Math.sin(st.phase) ** 2;
     if (chair?.current) {
       chairZ.current ??= chair.current.position.z;
       chair.current.position.z = chairZ.current + CHAIR_ROLL * up;
     }
 
-    // ---------- the seated pose ----------
+    // ---------- what they're doing at the desk ----------
     const busy = worker.status === 'working' || worker.status === 'preparing';
     const cheering = party || lived.cheering;
     const lastLog = office.logs[id]?.at(-1)?.t ?? 0;
     const name: PoseName = party ? 'cheer' : poseFor(worker.status, worker.activity?.kind ?? null, wall - lastLog, cheering);
-    const target = POSES[name];
-    const c = cur.current;
-    const k5 = 1 - Math.exp(-dt * 5);
-    for (const side of ['l', 'r'] as const) {
-      c[side].pitch += (target[side].pitch - c[side].pitch) * k5;
-      c[side].yaw += (target[side].yaw - c[side].yaw) * k5;
-    }
-    for (const key of ['lean', 'headPitch', 'headYaw', 'type', 'mouse'] as const) c[key] += (target[key] - c[key]) * k5;
-
-    // Typing comes in bursts: fast alternating taps, then a short pause to read.
-    const burst = burstLevel(t);
-    const tap = c.type * burst * 0.1;
-    const speed = tapSpeed(worker.status);
-    const tapL = handLift(t, speed, TAP_PHASE.l) * tap;
-    const tapR = handLift(t, speed, TAP_PHASE.r) * tap * (1 - c.mouse);
-    const driftL = Math.sin(t * 3.1) * 0.05 * c.type;
-    const driftR = Math.sin(t * 2.7 + 1) * 0.05 * c.type;
-    // Mouse hand: small glides plus a click now and then.
-    const glide = Math.sin(t * 1.9) * 0.06 * c.mouse;
-    const click = mouseDip(t) * c.mouse;
-    const wave = cheering ? Math.sin(t * 9) * 0.35 : 0;
-    const waveUp = party ? wave * up : 0; // up and partying, they wave too
-    // Longer arms on taller people: tip them down a touch so hands still land on the keyboard.
-    const reach = -(look.height - 1) * 0.55;
 
     // ---------- little life at the desk: fidgets and reactions laid over the seated pose ----------
     const ls = life.s;
@@ -467,9 +291,6 @@ export function Character({
       life.stretch = null;
     }
     const fw = fidgetWeight(ls, sec);
-    const o = fidgetPose(fw > 0 ? ls.fidget : null, p, t, life.toward, life.o);
-    const wl = o.lw * fw;
-    const wr = o.rw * fw;
     // browsing: lean in closer to the screen, slowly
     life.browse += ((name === 'browsing' ? 1 : 0) - life.browse) * (1 - Math.exp(-dt * 1.2));
     asleep.current = seated && ls.fidget === 'doze' && fw > 0.5;
@@ -486,81 +307,77 @@ export function Character({
     });
     stepFace(face.s, expression, dt);
     applyFace(faceMesh, face.s, asleep.current ? 1 : blink(t, face.seed));
-    if (phone.current) phone.current.visible = (seated && ls.fidget === 'phone' && fw > 0.35) || (st.stage === 'up' && goal?.gesture === 'call');
-    if (seated && body.current) body.current.rotation.y = o.spin * fw;
-    if (chair?.current) chair.current.rotation.y = seated ? o.spin * fw : 0;
+    if (phone.current) phone.current.visible = seated && ls.fidget === 'phone' && fw > 0.35;
+    if (callPhone.current) callPhone.current.visible = st.stage === 'up' && gesture === 'call' && !party;
+    const spin = seated && ls.fidget === 'spin' ? Math.sin(p * Math.PI * 2) * 0.55 * fw : 0;
+    if (seated && b) b.rotation.y = spin;
+    if (chair?.current) chair.current.rotation.y = spin;
 
-    // ---------- blended with the standing / walking pose (k = 1: exactly the seated pose) ----------
-    // Up, the arms hang and swing against the legs, unless a gesture has them busy.
-    const idle = Math.sin(t * 1.1) * 0.03 * (1 - walk);
-    const lp = (HANG.pitch - swing * 1.1 + idle) * (1 - move.gl) + move.l.pitch * move.gl;
-    const ly = HANG.yaw * (1 - move.gl) + move.l.yaw * move.gl;
-    const rp = (HANG.pitch + swing * 1.1 + idle) * (1 - move.gr) + move.r.pitch * move.gr;
-    const ry = HANG.yaw * (1 - move.gr) + move.r.yaw * move.gr;
-    if (armL.current && armR.current) {
-      armL.current.rotation.set(lerp(c.l.pitch + reach + tapL, o.l.pitch, wl) * k + lp * up, lerp(-(c.l.yaw + driftL) + wave, -o.l.yaw, wl) * k - ly * up + waveUp, 0);
-      armR.current.rotation.set(lerp(c.r.pitch + reach + tapR - click, o.r.pitch, wr) * k + rp * up, lerp(c.r.yaw + driftR * (1 - c.mouse) + glide - wave, o.r.yaw, wr) * k + ry * up - waveUp, 0);
-      const blade = batBlade.current;
-      if (blade && bat.current?.visible) blade.rotation.set(-armR.current.rotation.x, -armR.current.rotation.y, 0, 'YXZ'); // face the way they face
-      const cup = handCup.current;
-      if (cup) {
-        // undo the arm's turn (XYZ, so inverted as YXZ) so the mug stays upright, then tip it for a sip
-        const sip = !party && goal?.gesture === 'sip' ? move.gr * HAND_MUG.sipTilt : 0;
-        cup.rotation.set(sip - armR.current.rotation.x, -armR.current.rotation.y, 0, 'YXZ');
-        cup.visible = !seated;
-      }
+    // ---------- the pose: sat at the desk, up and about, or part way between ----------
+    move.slide += (deskSlide(props, name, seatY) - move.slide) * (1 - Math.exp(-dt * 5));
+    // nobody sees a pose out of view (or out of sight), and far off every other frame is plenty; a sip from the desk
+    // mug still needs the hand where it is
+    move.tick++;
+    if (b && !life.held) {
+      const seen = r0?.visible ? viewOf(camera, b, rig.top, gl.info.render.frame) : 0;
+      if (seen === 0 || (seen === 2 && (move.tick + seed) % 2 < 1)) return;
     }
-    if (torso.current) {
-      const breathe = Math.sin(t * 1.6) * 0.015;
-      const lean = lerp(c.lean, o.lean, o.leanW * fw) + life.browse * 0.1;
-      torso.current.rotation.x = (-lean + breathe + (busy ? Math.sin(t * 9) * 0.006 * burst : 0)) * k + (breathe - gt.lean * walk) * up;
-      // shoulders turn against the hips while walking
-      torso.current.rotation.y = Math.sin(st.phase) * 0.1 * walk * up + o.twist * fw * k;
-      // a slow weight shift from foot to foot while standing, a little sway while walking
-      torso.current.rotation.z = (Math.sin(t * 0.5) * 0.03 * (1 - walk) + Math.sin(st.phase) * 0.035 * walk) * up;
-      // taller people sit a touch further forward so their back stays clear of the chair
-      torso.current.position.set(0, HIP.seatY * k + (HIP.standY + bob) * up, -(look.height - 1) * 0.25 * k);
+    const glance = busy && Math.sin(t * 0.55 + 2) > 0.92 ? -0.22 : 0;
+    const gaze = worker.status === 'preparing' ? Math.sin(t * 1.3) * 0.5 : Math.sin(t * 0.4) * 0.08;
+    const sat =
+      k > 0.001
+        ? deskPose(props, { t, seatY, pose: name, tapSpeed: tapSpeed(worker.status), head: [glance, gaze, 0], leanIn: life.browse, fidget: fw > 0 ? ls.fidget : null, progress: p, weight: fw, toward: life.toward, slide: move.slide })
+        : null;
+    const walk = Math.min(1, st.speed / 0.5);
+    const nod = st.stage === 'up' && gesture === 'nod' ? Math.max(0, Math.sin(t * 6)) * 0.22 : 0;
+    const partyArms = party && !holding;
+    const standing =
+      k < 0.999
+        ? upPose(props, {
+            t,
+            speed: st.speed,
+            phase: st.phase,
+            dir: move.dir,
+            gesture: holding ? 'none' : gesture,
+            party: partyArms,
+            paddle: aiming ? move.paddle : null,
+            carry: carrying ? carry : 0,
+            head: st.stage === 'up' ? [Math.sin(t * 0.3) * 0.05 - nod, Math.sin(t * 0.4) * 0.15 * (1 - walk), 0] : NO_HEAD,
+          })
+        : null;
+    const key = k > 0.5 ? `s:${name}` : `u:${partyArms ? 'party' : gesture}:${aiming}`;
+    poser.show(rig.bones, sec, key, k, sat, standing);
+
+    // ---------- what's in their hands, and over their head ----------
+    const hand = BI.handR;
+    if (grip.current) poser.at(hand, rig.built.grip, grip.current.position);
+    if (inHand.current) inHand.current.position.copy(grip.current?.position ?? move.v);
+    const cup = handCup.current;
+    if (cup) {
+      cup.visible = !seated;
+      cup.position.set(grip.current!.position.x - HAND_MUG.inward, grip.current!.position.y, grip.current!.position.z);
+      const want = !party && gesture === 'sip' ? HAND_MUG.sipTilt : 0;
+      move.tilt += (want - move.tilt) * (1 - Math.exp(-dt * 6));
+      if (cupTip.current) cupTip.current.rotation.x = move.tilt;
     }
-    if (seatedLegs.current) seatedLegs.current.visible = seated;
-    if (legs.current) legs.current.visible = !seated;
-    if (!seated && hipL.current && hipR.current && kneeL.current && kneeR.current) {
-      // Knees bend as each leg swings forward; standing, one knee eases while the weight is on the other foot.
-      const lift = 0.3 + gt.stride;
-      const shift = Math.sin(t * 0.5) * 0.15 * (1 - walk);
-      const bendL = -(Math.max(0, Math.cos(st.phase)) * lift * walk + Math.max(0, shift) + 0.04);
-      const bendR = -(Math.max(0, -Math.cos(st.phase)) * lift * walk + Math.max(0, -shift) + 0.04);
-      const hy = HIP.seatY * k + (HIP.standY + bob) * up;
-      const hz = HIP.seatZ * k;
-      hipL.current.position.set(-HIP.x, hy, hz);
-      hipR.current.position.set(HIP.x, hy, hz);
-      hipL.current.rotation.x = (Math.PI / 2) * k + (swing - bendL * 0.4) * up;
-      hipR.current.rotation.x = (Math.PI / 2) * k + (-swing - bendR * 0.4) * up;
-      kneeL.current.rotation.x = (-Math.PI / 2) * k + bendL * up;
-      kneeR.current.rotation.x = (-Math.PI / 2) * k + bendR * up;
-    }
+    if (bat.current?.visible) poser.at(hand, [0, 0, 0], bat.current.position);
+    const z = zzz.current;
+    if (z) poser.at(BI.head, [0.12 * rig.built.headScale, 0.2 * rig.built.headScale, 0], z.position);
     if (tag.current) {
       const [tx, ty, tz] = seatedTag;
-      tag.current.position.set(tx * k, ty * k + (HIP.standY + look.height * 0.86 + 0.26) * up, tz * k);
-    }
-    if (head.current) {
-      // Every few seconds, glance down at the keyboard; while setting up, look around.
-      const glance = busy && Math.sin(t * 0.55 + 2) > 0.92 ? -0.22 : 0;
-      const gaze = worker.status === 'preparing' ? Math.sin(t * 1.3) * 0.5 : Math.sin(t * 0.4) * 0.08;
-      const nod = st.stage === 'up' && goal?.gesture === 'nod' ? Math.max(0, Math.sin(t * 6)) * 0.22 : 0;
-      const pitch = lerp(c.headPitch + glance + (busy ? Math.sin(t * 4.5) * 0.02 * burst : 0), o.pitch, o.pitchW * fw) * k + (Math.sin(t * 0.3) * 0.05 + move.gh - nod) * up;
-      const yaw = (gaze + c.headYaw + o.yaw * fw) * k + Math.sin(t * 0.4) * 0.15 * (1 - walk) * up;
-      head.current.rotation.set(pitch, yaw, ((name === 'thinking' ? 0.12 : 0) + o.roll * fw) * k);
+      tag.current.position.set(tx * k, ty * k + (rig.top + 0.26) * up, tz * k);
     }
     // A sip: the desk mug slides into the hand, goes up to the mouth tipped toward them, and back down.
     const m = mug?.current;
     if (m) {
-      const hold = ls.fidget === 'sip' && seated ? ramp(p, 0.2, 0.3) - ramp(p, 0.78, 0.88) : 0;
+      const hold = ls.fidget === 'sip' && seated ? smooth(Math.min(1, Math.max(0, (p - 0.2) / 0.1))) - smooth(Math.min(1, Math.max(0, (p - 0.78) / 0.1))) : 0;
       if (hold > 0 && grip.current && m.parent) {
         life.rest ??= m.position.clone();
         grip.current.getWorldPosition(life.v);
         m.parent.worldToLocal(life.v);
         m.position.lerpVectors(life.rest, life.v, hold);
-        m.rotation.x = 0.7 * (ramp(p, 0.3, 0.45) - ramp(p, 0.62, 0.77));
+        const lift = smooth(Math.min(1, Math.max(0, (p - 0.3) / 0.15))) - smooth(Math.min(1, Math.max(0, (p - 0.62) / 0.15)));
+        m.rotation.x = 0.7 * lift;
         life.held = true;
       } else if (life.held && life.rest) {
         m.position.copy(life.rest);
@@ -571,94 +388,76 @@ export function Character({
   });
 
   const busy = worker.status === 'working' || worker.status === 'preparing';
+  const R = props.headR;
 
   return (
     <group ref={root}>
       <group ref={body}>
-        <Zzz on={asleep} position={[0.16, 1.34, -0.14]} />
-        {/* seated legs don't move, so both are one mesh; getting up swaps in jointed ones */}
-        <group ref={seatedLegs}>
-          <Piece geometry={PARTS.legs} color={PANTS} castShadow outline={0.012} />
-          <Piece geometry={PARTS.shoes} color={INK} castShadow />
-        </group>
-        <group ref={legs} visible={false}>
-          {[
-            { hip: hipL, knee: kneeL, x: -HIP.x },
-            { hip: hipR, knee: kneeR, x: HIP.x },
-          ].map(({ hip, knee, x }) => (
-            <group key={x} ref={hip} position={[x, HIP.seatY, HIP.seatZ]} rotation={[Math.PI / 2, 0, 0]}>
-              <Piece geometry={PARTS.thigh} color={PANTS} castShadow outline={0.012} />
-              <group ref={knee} position={[0, -HIP.thigh, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <Piece geometry={PARTS.shin} color={PANTS} castShadow outline={0.012} />
-                <Piece geometry={PARTS.shoe} color={INK} castShadow />
-              </group>
-            </group>
-          ))}
-        </group>
-
-        <group ref={torso} position={[0, HIP.seatY, -(look.height - 1) * 0.25]} scale={look.height}>
-          <TorsoWear role={worker.role} look={look} busy={busy} />
-          {/* arms pivot at the shoulders */}
-          {[
-            { ref: armL, x: -0.25 },
-            { ref: armR, x: 0.25 },
-          ].map(({ ref, x }) => (
-            <group key={x} ref={ref} position={[x * torsoWidth(look), 0.44, 0]}>
-              <Sleeve role={worker.role} look={look} />
-              {ref === armR && (
-                <>
-                  {/* where a mug sits in the hand, and the phone they check */}
-                  <group ref={grip} position={[0, 0.03, -0.56]} />
-                  <group ref={phone} position={[-0.03, 0.06, -0.52]} rotation={[0.7, -0.55, 0]} visible={false}>
-                    <Piece geometry={PARTS.phone} color={INK} />
-                    <mesh geometry={PARTS.phoneScreen} material={toon('#8ecae6', { emissive: '#8ecae6', emissiveIntensity: 0.5 })} />
-                  </group>
-                  {food && (
-                    <group position={HAND_MUG.at}>
-                      <FoodLook kind={food} />
-                    </group>
-                  )}
-                  {snack && (
-                    <group position={HAND_MUG.at}>
-                      <SnackLook snack={snack.snack} left={snack.left} />
-                    </group>
-                  )}
-                  {carried && (
-                    <group ref={handCup} position={HAND_MUG.at} visible={false}>
-                      <group position={[0, 0, HAND_MUG.ahead]} rotation={[0, -Math.PI / 2, 0]} scale={HAND_MUG.scale}>
-                        <MugLook color={mugColor(carried.id)} sips={carried.sips} shadow={false} />
-                      </group>
-                    </group>
-                  )}
-                  {/* a ping-pong paddle while they play (pongState.ts): the blade stays square to the way they face */}
-                  <group ref={bat} position={[0, 0, BAT.hand]} visible={false}>
-                    <Cyl r={0.014} h={0.1} position={[0, 0, -0.05]} rotation={[Math.PI / 2, 0, 0]} color="#d4a373" shadow={false} />
-                    <group ref={batBlade} position={[0, 0, BAT.blade]}>
-                      <PaddleLook handle={false} />
-                    </group>
-                  </group>
-                  {/* the gong's mallet, in the right hand while they have it (gongRunner.ts); the handle tips up from the fist */}
-                  <group ref={mallet} position={[0, 0, -0.5]} rotation={[0.5, 0, 0]} visible={false}>
-                    <Cyl r={0.025} h={0.55} position={[0, 0, -0.27]} rotation={[Math.PI / 2, 0, 0]} color="#f1d19b" shadow={false} />
-                    <Ball r={0.12} position={[0, 0, -0.56]} color="#e76f51" outline shadow={false} />
-                    <Cyl r={0.125} h={0.05} position={[0, 0, -0.56]} rotation={[Math.PI / 2, 0, 0]} color="#f4a261" shadow={false} />
-                  </group>
-                </>
-              )}
-            </group>
-          ))}
-
-          <group ref={head} position={[0, 0.66, 0]}>
-            <HeadParts look={look} busy={busy} face={faceMesh} />
+        <BodyMeshes body={rig} />
+        <OnBone body={rig} bone="head">
+          <group scale={rig.built.headScale}>
+            <ObjectInk.Provider value={rig.built.headScale}>
+              <HeadParts look={look} busy={busy} face={faceMesh} />
+            </ObjectInk.Provider>
           </group>
-          {carrying && (
-            <group ref={held} visible={false}>
+          {/* on a call: the phone at the ear, screen to the cheek */}
+          <group ref={callPhone} position={[R + CALL_PHONE.out, -R * CALL_PHONE.down, -R * CALL_PHONE.ahead]} rotation={[-Math.PI / 2 + 0.35, Math.PI / 2, 0, 'YXZ']} scale={Math.min(1.35, Math.max(1, rig.built.headScale))} visible={false}>
+            <Piece geometry={PARTS.phone} color={INK} />
+            <mesh geometry={PARTS.phoneScreen} material={toon('#8ecae6', { emissive: '#8ecae6', emissiveIntensity: 0.5 })} />
+          </group>
+        </OnBone>
+        {look.headphones && !busy && (
+          <OnBone body={rig} bone="chest">
+            <NeckPhones look={look} at={rig.built.phones.at} scale={rig.built.phones.scale} />
+          </OnBone>
+        )}
+        <OnBone body={rig} bone="handR">
+          {/* the phone they check at the desk, lying in the hand */}
+          <group ref={phone} position={[-0.035, -props.hand * 0.7, -0.02]} rotation={[0, 0, Math.PI / 2]} visible={false}>
+            <Piece geometry={PARTS.phone} color={INK} />
+            <mesh geometry={PARTS.phoneScreen} material={toon('#8ecae6', { emissive: '#8ecae6', emissiveIntensity: 0.5 })} />
+          </group>
+          {/* the gong's mallet, in the right hand while they have it (gongRunner.ts); the handle out from the fist */}
+          <group ref={mallet} position={[0, -props.hand * 0.6, 0]} rotation={[-0.4, 0, 0]} visible={false}>
+            <Cyl r={0.025} h={0.55} position={[0, 0, -0.27]} rotation={[Math.PI / 2, 0, 0]} color="#f1d19b" shadow={false} />
+            <Ball r={0.12} position={[0, 0, -0.56]} color="#e76f51" outline shadow={false} />
+            <Cyl r={0.125} h={0.05} position={[0, 0, -0.56]} rotation={[Math.PI / 2, 0, 0]} color="#f4a261" shadow={false} />
+          </group>
+        </OnBone>
+        {carrying && (
+          <OnBone body={rig} bone="chest">
+            <group ref={held} position={[0, box.y - 0.2 * carry, box.z + BOX_AHEAD * carry]} scale={carry} visible={false}>
               {carrying}
             </group>
-          )}
+          </OnBone>
+        )}
+        {/* where the right hand holds things (figure space), kept upright whatever the arm does */}
+        <group ref={grip} />
+        <group ref={inHand}>
+          {food && <FoodLook kind={food} />}
+          {snack && <SnackLook snack={snack.snack} left={snack.left} />}
+        </group>
+        {carried && (
+          <group ref={handCup} visible={false}>
+            <group ref={cupTip}>
+              <group scale={HAND_MUG.scale}>
+                <MugLook color={mugColor(carried.id)} sips={carried.sips} shadow={false} />
+              </group>
+            </group>
+          </group>
+        )}
+        {/* a ping-pong paddle while they play (pongState.ts): the blade square to the way they face, over the fist */}
+        <group ref={bat} visible={false}>
+          <Cyl r={0.014} h={0.1} position={[0, 0.06, 0]} color="#d4a373" shadow={false} />
+          <group position={[0, BAT.blade, 0]}>
+            <PaddleLook handle={false} />
+          </group>
+        </group>
+        <group ref={zzz}>
+          <Zzz on={asleep} position={[0, 0, 0]} />
         </group>
         {/* just above their name tag */}
-        <SpeechBubble id={id} y={HIP.standY + look.height * 0.86 + 0.4} />
+        <SpeechBubble id={id} y={rig.top + 0.4} top={BUBBLE_TOP + HEAD_LIFT[style].standing} />
         {children && (
           <group ref={tag} position={seatedTag}>
             {children}

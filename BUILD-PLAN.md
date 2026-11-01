@@ -311,7 +311,23 @@ Asked for after playing Phases 19 and 20.
 3. The CEO's office furnished: fuller, the meeting table's chairs round it rather than through it, the milestones and the awards wall kept.
 4. Sitting down: E on a bench, a sofa, an armchair or a deckchair sits you there (E again stands up), and at the roof's fire you can toast a marshmallow on a stick.
 
-**Done when:** a new office picks a body style in the setup and everyone wears it, the settings switch it; the CEO's office looks lived in with nothing through the furniture; and you can sit on every kind of seat and toast a marshmallow at the roof's fire.
+**Done when:** a new office picks a body style in the setup and everyone wears it, the settings switch it; the CEO's office looks lived in with nothing through the furniture; and you can sit on every kind of seat and toast a marshmallow at the roof's fire. (Done: seen in a browser on the demo: the setup's "The people" step picked chibi or the stylized human and every worker, the CEO, Mia and you wore it, switching live from the console's Settings; the CEO holds the phone to the ear; the CEO's office has a library corner, a reading nook, a putting green, a coffee bar, a pool table, a fish tank and a week board, with the meeting table's eight chairs round it; you sat on every kind of seat on every floor, first and third person, and toasted marshmallows from raw to on fire, and workers on roof breaks toast them too. Tested in `client/src/world/bodyPoses.test.ts`, `bodyStyle.test.ts`, `seats.test.ts`, `roof/marshmallow.test.ts`, `ceoRoom.test.ts`, `layout.test.ts`, `walkways.test.ts` and `server/settings.test.ts`.)
+
+## Phase 22: games and seasons
+
+Asked for after playing Phase 21.
+
+1. The ping-pong camera frames the table from behind your end, your body see-through, so nothing hides the ball.
+2. A basketball hoop (from cubefarm's, on its own small ball simulation) and darts, sold in the shop; you play them with the mouse, workers play them on breaks. The beanbags grow to two proper seats in a big spot (old purchases move there, or are refunded).
+3. You start in the lobby, facing the front desk.
+4. The season outside, from the office's date: snow in December and January, the northern lights on winter nights, Christmas, Halloween, autumn, spring, summer and New Year; an office setting to pick one.
+5. The backlog: the ink outlines made visible (an office setting turns them off), the overview's name chips follow people who are up, and errands always let go of what they claimed.
+
+**Done when:** you can play ping-pong without your body in the way, shoot hoops and throw darts, sit on the beanbags, open in the lobby, and see snow, the northern lights and each season's touches. (Done: seen in a browser on the demo, in both body styles: a rally from the new camera, a make and a miss at the hoop and workers shooting, a darts turn, sitting on the bigger beanbags, a fresh load in the lobby facing Mia; December's snow on the roof and balconies with a snowman, the northern lights from the roof, the lobby's Christmas tree, Halloween's pumpkins, autumn, spring, summer's pool and New Year's fireworks; the ink on and off. Tested in `client/src/world/pongCam.test.ts`, `games/hoopPhysics.test.ts`, `games/darts.test.ts`, `gameErrands.test.ts`, `shared/seasons.test.ts`, `shared/dayClock.test.ts`, `seasons/*.test.ts`, `outlineMesh.test.ts`, `errands.test.ts`, `shared/shop.test.ts` and `server/db/office.test.ts`.)
+
+## Phase 23: real projects
+
+To be planned with the manager: the office running from `main` on this computer, the office's own repo as a floor whose workers build on branches off `dev` and merge into `dev` under house rules the manager and the CEO write, with the real GitHub login and Upstash.
 
 ## Watch out for
 

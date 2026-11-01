@@ -1,6 +1,8 @@
 // window.__mmDecor: puts a floor plan into this tab's store, to see every item the shop sells without spending coins.
-//   __mmDecor()                        the floor you're on (or the first) with every spot filled and both upgrades
+//   __mmDecor()                        the floor you're on (or the first) with every spot filled and both upgrades (the big
+//                                      spots: the hoop, the beanbags and the vending machine)
 //   __mmDecor(floorId)                 the same on that floor
+//   __mmDecor(floorId, 'machines')     the same, with the vending machine, the beer fridge and the sofa in the big spots
 //   __mmDecor(floorId, items)          your own [{ spot, item, tier? }] over the kit (list a kit spot to change its tier)
 //   __mmDecor(floorId, 'kit')          back to the kit alone
 //   __mmDecor.burst(amount?, worker?)  a coin burst on the floor you're on (over that worker's desk)
@@ -22,32 +24,39 @@ const KIT: [string, string][] = [
   ['gong-corner', 'gong'],
 ];
 
-/** Every spot filled: each extra at least once, three different posters and the neon twice. */
-const FULL: [string, string][] = [
+/** The other big extras, for __mmDecor(floorId, 'machines'). */
+const MACHINES: [string, string][] = [
   ['big-1', 'vending-machine'],
   ['big-2', 'sofa'],
   ['big-3', 'beer-fridge'],
+];
+
+/** Every spot filled: each small extra and wall piece at least once, three of the five big ones, two posters. */
+const FULL: [string, string][] = [
+  ['big-1', 'hoop'],
+  ['big-2', 'beanbags'],
+  ['big-3', 'vending-machine'],
   ['floor-1', 'plant'],
   ['floor-2', 'fig'],
-  ['floor-3', 'beanbags'],
+  ['floor-3', 'plant'],
   ['floor-4', 'fig'],
   ['rug-1', 'rug'],
   ['rug-2', 'rug'],
   ['wall-1', 'poster'],
   ['wall-2', 'neon'],
-  ['wall-3', 'poster'],
+  ['wall-3', 'dartboard'],
   ['wall-4', 'poster'],
   ['wall-5', 'neon'],
 ];
 
 type Item = { spot: string; item: string; tier?: number };
-type Probe = ((floorId?: string, items?: Item[] | 'kit') => FloorItem[] | null) & {
+type Probe = ((floorId?: string, items?: Item[] | 'kit' | 'machines') => FloorItem[] | null) & {
   burst(amount?: number, workerId?: string): void;
   machines(): unknown;
 };
 
 if (typeof window !== 'undefined') {
-  const probe = ((floorId?: string, items?: Item[] | 'kit') => {
+  const probe = ((floorId?: string, items?: Item[] | 'kit' | 'machines') => {
     const s = useStore.getState();
     const here = s.floors.find((f) => f.floor === useView.getState().floor);
     const floor = floorId ? s.floors.find((f) => f.id === floorId) : (here ?? s.floors[0]);
@@ -57,11 +66,14 @@ if (typeof window !== 'undefined') {
     const extra: Item[] =
       items === 'kit'
         ? []
-        : (items ?? [
-            ...FULL.map(([spot, item]) => ({ spot, item })),
-            { spot: 'kitchen', item: 'coffee-machine', tier: 2 },
-            { spot: 'games', item: 'pingpong-table', tier: 2 },
-          ]);
+        : Array.isArray(items)
+          ? items
+          : [
+              ...FULL.map(([spot, item]) => ({ spot, item })),
+              ...(items === 'machines' ? MACHINES.map(([spot, item]) => ({ spot, item })) : []),
+              { spot: 'kitchen', item: 'coffee-machine', tier: 2 },
+              { spot: 'games', item: 'pingpong-table', tier: 2 },
+            ];
     for (const i of extra) plan.set(i.spot, { spot: i.spot, item: i.item, tier: i.tier ?? 1, since: now });
     const list = [...plan.values()];
     useStore.setState({ floorPlans: { ...s.floorPlans, [floor.id]: list } });

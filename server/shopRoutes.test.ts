@@ -67,7 +67,7 @@ describe('the shop routes', () => {
 
   it("answers 409 with the shop's reason for a refusal", async () => {
     await serve(true);
-    expect(await post(`${AT}/shop/buy`, { item: 'vending-machine' })).toEqual({ status: 409, body: { error: 'A vending machine costs 120 coins; this floor has 0' } });
+    expect(await post(`${AT}/shop/buy`, { item: 'vending-machine' })).toEqual({ status: 409, body: { error: 'Vending machine: 120 coins, and this floor has 0' } });
     expect(await post(`${AT}/shop/move`, { from: 'kitchen', to: 'big-1' })).toEqual({ status: 409, body: { error: 'The kit stays where it is' } });
     expect((await post(`${AT}/shop/buy`, { item: 'jacuzzi' })).status).toBe(409);
   });

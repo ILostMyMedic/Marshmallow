@@ -1,8 +1,9 @@
 // An office floor's bought extras (shared/shop.ts), each standing, lying or hanging in its spot (spots.ts), straight from
-// the floor's plan in the store: buying puts an item there. The vending machine and the beer fridge are their own
-// components (they're used); the rest are merged toon models (a draw call and one for the ink), canvas-painted rugs,
-// posters made from the floor's repository (poster.ts) and the repo's name in neon. Wall art is cut away with its wall
-// in the overview. The lit machines brighten with the evening, and E on one is handed to playerMachines.ts.
+// the floor's plan in the store: buying puts an item there. The vending machine, the beer fridge, the basketball hoop
+// and the dartboard are their own components (they're used: games/Hoop.tsx, games/Dartboard.tsx); the rest are merged
+// toon models (a draw call and one for the ink), canvas-painted rugs, posters made from the floor's repository
+// (poster.ts) and the repo's name in neon. Wall art is cut away with its wall in the overview. The lit machines brighten
+// with the evening, and E on one is handed to playerMachines.ts; E on a hoop or a dartboard to games/gameState.ts.
 // Adapted from cubefarm client/src/world/decor/Decorations.tsx (MIT): placing, the poster and neon painting and the
 // rug; the decor box, slot markers, carrying, instancing, the fish tank and the arcade are cut.
 import { memo, useEffect, useMemo } from 'react';
@@ -26,6 +27,9 @@ import { paintPoster, paintRug, POSTER_PX } from './posterPaint';
 import './probe';
 import { itemSize, placedItems, placement } from './spots';
 import { VendingMachine } from './VendingMachine';
+import { Dartboard } from '../games/Dartboard';
+import { takeBall, takeDarts } from '../games/gameState';
+import { Hoop } from '../games/Hoop';
 
 const ROOM_CUT = CUT_PLANES.room;
 
@@ -148,6 +152,10 @@ function ItemLook({ item, floor }: { item: FloorItem; floor: Floor }) {
       return <Poster floor={floor} spot={item.spot} />;
     case 'neon':
       return <Neon floor={floor} />;
+    case 'hoop':
+      return <Hoop spot={item.spot} floorId={floor.id} color={color} />;
+    case 'dartboard':
+      return <Dartboard spot={item.spot} color={color} />;
     default:
       return null;
   }
@@ -178,9 +186,13 @@ export const Decor = memo(function Decor({ floor }: { floor: Floor }) {
   useEffect(() => {
     const offVending = onAction('vending', (a) => vendAt(a.spot));
     const offBeer = onAction('beer', (a) => beerAt(a.spot));
+    const offHoop = onAction('hoop', (a) => takeBall(a.spot));
+    const offDarts = onAction('darts', (a) => takeDarts(a.spot));
     return () => {
       offVending();
       offBeer();
+      offHoop();
+      offDarts();
       leaveMachines();
     };
   }, []);

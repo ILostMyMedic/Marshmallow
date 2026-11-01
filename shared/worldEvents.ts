@@ -1,13 +1,16 @@
-// Adapted from cubefarm client/src/world/events/director.ts (MIT): the night-only events (fireworks, meteors), the
-// kaiju and the hurricane cut, and with them the weather, the day/night rules and Settings' frequency and calm mode;
-// one fixed pace instead, quick to the first event so a visit sees one.
+// Adapted from cubefarm client/src/world/events/director.ts (MIT): the meteors, the kaiju and the hurricane cut, and
+// with them the weather and Settings' frequency and calm mode; one fixed pace instead, quick to the first event so a
+// visit sees one. The night-only ones are the northern lights and New Year's fireworks, weighted by the season.
 
-// World events outside: the catalogue (from an airliner crossing to a giant rubber duck floating past, and down on the
-// street round the office a rock band's tour bus or a parade) and the director that picks one every so often. Pure and seeded (no clock of its own: it's stepped with the seconds that passed), so
+// World events outside: the catalogue (from an airliner crossing to a giant rubber duck floating past, down on the
+// street round the office a rock band's tour bus or a parade, and at night the northern lights) and the director that
+// picks one every so often, from what may happen now (the night, the season: shared/seasons.ts). Pure and seeded (no clock of its own: it's stepped with the seconds that passed), so
 // the schedule is tested without a server. The office runs it (server/db/world.ts) for every tab at once; each tab
 // draws what's on (client/src/world/events/).
 
-export const EVENT_IDS = ['plane', 'helicopter', 'birds', 'balloon', 'blimp', 'skywriting', 'ufo', 'rainbow', 'duck', 'whale', 'rockbus', 'icecream', 'firetruck', 'foodtruck', 'parade'] as const;
+import type { Holiday, Season, SeasonKey } from './seasons.ts';
+
+export const EVENT_IDS = ['plane', 'helicopter', 'birds', 'balloon', 'blimp', 'skywriting', 'ufo', 'rainbow', 'duck', 'whale', 'rockbus', 'icecream', 'firetruck', 'foodtruck', 'parade', 'aurora', 'fireworks'] as const;
 export type EventId = (typeof EVENT_IDS)[number];
 
 /** Everyday sights, fun ones, weird ones, and the absurd and rare. */
@@ -30,9 +33,13 @@ export interface EventDef {
   toast: boolean;
   /** Down on the street beside the office rather than in the sky: one at a time, so two never meet. */
   street: boolean;
+  /** Only while it's night in the office, and long enough before the dawn (dayClock.ts nightFor). */
+  nightOnly: boolean;
+  /** Its weight in a season or on a special day (which wins), in place of `weight`. */
+  bySeason?: Partial<Record<SeasonKey, number>>;
 }
 
-const def = (id: EventId, label: string, tier: Tier, weight: number, seconds: number, street = false): EventDef => ({
+const def = (id: EventId, label: string, tier: Tier, weight: number, seconds: number, street = false, night?: Pick<EventDef, 'bySeason'>): EventDef => ({
   id,
   label,
   tier,
@@ -41,6 +48,8 @@ const def = (id: EventId, label: string, tier: Tier, weight: number, seconds: nu
   seconds,
   toast: tier === 'weird' || tier === 'absurd',
   street,
+  nightOnly: !!night,
+  ...night,
 });
 
 export const EVENTS: Record<EventId, EventDef> = {
@@ -60,6 +69,9 @@ export const EVENTS: Record<EventId, EventDef> = {
   firetruck: def('firetruck', 'A fire engine racing by', 'everyday', 2, 29, true),
   foodtruck: def('foodtruck', 'A food truck and its queue', 'everyday', 2, 104, true),
   parade: def('parade', 'A parade with a giant marshmallow', 'weird', 1, 95, true),
+  // the night's: the northern lights often on a winter night, now and then otherwise; fireworks at New Year only
+  aurora: def('aurora', 'The northern lights', 'fun', 0.6, 150, false, { bySeason: { winter: 14 } }),
+  fireworks: def('fireworks', 'Fireworks over the city', 'fun', 0, 100, false, { bySeason: { newyear: 40 } }),
 };
 
 const ALIASES: Record<string, EventId> = {
@@ -88,6 +100,11 @@ const ALIASES: Record<string, EventId> = {
   food: 'foodtruck',
   'marching-band': 'parade',
   marshmallow: 'parade',
+  'northern-lights': 'aurora',
+  borealis: 'aurora',
+  'aurora-borealis': 'aurora',
+  firework: 'fireworks',
+  'new-year': 'fireworks',
 };
 
 /** An event's name as typed (`?event=duck`, __mmEvents.trigger('blimp')), or null when it isn't one. */
@@ -112,25 +129,48 @@ export interface WorldRun {
   forced: boolean; // started on demand (?event=, __mmEvents) rather than by the director
 }
 
-/** The world events on now, and when the director picks the next one (epoch ms). */
+/** The world events on now, when the director picks the next one (epoch ms), and the office's date (the seasons'). */
 export interface WorldView {
   running: WorldRun[];
   nextAt: number;
+  /** YYYY-MM-DD on the office's calendar (shared/seasons.ts officeDay); '' when the office hasn't said. */
+  today: string;
 }
 
-export const EMPTY_WORLD: WorldView = { running: [], nextAt: 0 };
+export const EMPTY_WORLD: WorldView = { running: [], nextAt: 0, today: '' };
 
 // ---------- what happens next ----------
 
 /** Whether two events may not run at once: the same one, two big ones, or two on the street. */
 export const clashes = (a: EventId, b: EventId) => a === b || (EVENTS[a].big && EVENTS[b].big) || (EVENTS[a].street && EVENTS[b].street);
 
+/** What may happen now: whether it's night (for long enough), and the season and special day outside. */
+export interface Sky {
+  night: boolean;
+  season: Season | null;
+  holiday: Holiday | null;
+}
+
+/** A day with no season to speak of: what the director assumes when it isn't told. */
+export const DAYTIME: Sky = { night: false, season: null, holiday: null };
+
+/** How likely `e` is now: 0 for a night-only one by day, else its weight on the special day, in the season, or its own. */
+export function weightNow(e: EventDef, sky: Sky): number {
+  if (e.nightOnly && !sky.night) return 0;
+  const special = sky.holiday ? e.bySeason?.[sky.holiday] : undefined;
+  const season = sky.season ? e.bySeason?.[sky.season] : undefined;
+  return special ?? season ?? e.weight;
+}
+
 /**
  * One event picked by weight (`roll` in [0, 1)), leaving out what's running, every big one while a big one runs, and
- * every street one while a street one does.
+ * every street one while a street one does; the night-only ones only at night, and each weighted for the season.
  */
-export function pickEvent(running: readonly { id: EventId; big: boolean }[], roll: number): EventId | null {
-  const options = Object.values(EVENTS).filter((e) => !running.some((r) => clashes(e.id, r.id)));
+export function pickEvent(running: readonly { id: EventId; big: boolean }[], roll: number, sky: Sky = DAYTIME): EventId | null {
+  const options = Object.values(EVENTS)
+    .filter((e) => !running.some((r) => clashes(e.id, r.id)))
+    .map((e) => ({ id: e.id, weight: weightNow(e, sky) }))
+    .filter((e) => e.weight > 0);
   const total = options.reduce((a, e) => a + e.weight, 0);
   if (total <= 0) return null;
   let r = roll * total;
@@ -207,14 +247,14 @@ export function newDirector(seed: number, clock = 0): Director {
 }
 
 /**
- * Moves the director on by dt seconds: what has finished drops out, and when the next event is due one is picked
- * (or, when none may happen now, it looks again shortly). Returns the event to start, or null.
+ * Moves the director on by dt seconds: what has finished drops out, and when the next event is due one is picked from
+ * what may happen under `sky` (or, when none may happen now, it looks again shortly). Returns the event to start, or null.
  */
-export function stepDirector(d: Director, dt: number): EventId | null {
+export function stepDirector(d: Director, dt: number, sky: Sky = DAYTIME): EventId | null {
   d.clock += dt;
   for (let i = d.running.length - 1; i >= 0; i--) if (d.running[i].until <= d.clock) d.running.splice(i, 1);
   if (d.clock < d.nextAt) return null;
-  const id = pickEvent(d.running, roll(d));
+  const id = pickEvent(d.running, roll(d), sky);
   d.nextAt = d.clock + (id ? within(GAP, roll(d)) : RETRY_SECONDS);
   return id;
 }

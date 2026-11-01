@@ -2087,6 +2087,63 @@ textarea.msg-box:disabled {
   margin: 2px 0;
 }
 
+/* the setup's body styles, side by side (ui/BodyStylePick.tsx): each half of the preview is the card that picks it */
+.style-pick {
+  position: relative;
+  height: 300px;
+  margin: 6px 0 4px;
+  border-radius: 14px;
+  border: 2px solid #ece4d4;
+  background: radial-gradient(circle at 50% 35%, #fff6dd, #f1e4c8);
+  overflow: hidden;
+}
+
+.style-pick-view {
+  position: absolute !important;
+  inset: 0;
+}
+
+.style-pick-cards {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px;
+}
+
+.style-pick-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #1f1d2b;
+  font: 500 0.9rem Fredoka, "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.style-pick-card strong,
+.style-pick-card small {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(255, 253, 245, 0.88);
+}
+
+.style-pick-card:hover {
+  border-color: #d8ccb4;
+}
+
+.style-pick-card.on {
+  border-color: #1f1d2b;
+  background: rgba(255, 246, 221, 0.25);
+}
+
 .wizard-ends {
   display: flex;
   flex-direction: column;
@@ -2627,4 +2684,49 @@ a.console-btn {
 /* the app monitor's live look (world/AppMonitor.tsx): behind the canvas, seen through the hole it punches */
 .app-look {
   z-index: -1;
+}
+
+/* a game in hand (ui/GameHud.tsx): the score chip borrows ping-pong's; the wind-up meter above the hint */
+.hud-game-best {
+  color: #5c6078;
+  font-size: 0.85rem;
+}
+
+.hud-game-dart {
+  min-width: 2.4em;
+  text-align: center;
+  font-weight: 700;
+}
+
+.hud-meter {
+  position: absolute;
+  left: 50%;
+  bottom: 118px;
+  width: 220px;
+  height: 14px;
+  transform: translateX(-50%);
+  border: 2px solid #1f1d2b;
+  border-radius: 999px;
+  background: rgba(255, 253, 245, 0.85);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hud-meter-sweet {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(6, 214, 160, 0.45);
+}
+
+.hud-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: #ff9f1c;
+}
+
+.hud-meter-fill.on {
+  background: #06d6a0;
 }

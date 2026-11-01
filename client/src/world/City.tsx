@@ -3,15 +3,20 @@
 // (Billboards.tsx), the bay and its red bridge far to the west (Bridge.tsx), and a dozen cars driving the nearer
 // streets. Every kind of thing is one instanced or merged mesh, so the whole city costs a handful of draw calls. It
 // fades into the haze on its own long curve (haze.ts), dims to the night and lights its windows after dusk (the
-// clock's uniforms, sky/outdoor.ts), and sits `elevation` below the floor you're on.
+// clock's uniforms, sky/outdoor.ts), and sits `elevation` below the floor you're on. The seasons (seasons/) turn its
+// trees, whiten its roofs, ground and treetops in the snow, and string lights on the plaza's trees at Christmas.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import type { Foliage } from '../../../shared/seasons';
 import { Billboards } from './Billboards';
 import { Bridge } from './Bridge';
-import { carRoutes, CITY, CORRIDOR_HALF, GROUND, STREET_Y, theCity, type CityBox, type CityBuilding } from './cityLayout';
+import { carRoutes, CITY, CORRIDOR_HALF, GROUND, LAWN, STREET_Y, theCity, TREE, type CityBox, type CityBuilding } from './cityLayout';
 import { trafficPose } from './events/streetTraffic';
 import { CITY_HAZE, hazed, hazedToon } from './haze';
+import { PlazaSeason } from './seasons/PlazaSeason';
+import { foliageColor, lawnColor } from './seasons/seasonLayout';
+import { useSeason } from './seasons/seasonState';
 import { outdoor } from './sky/outdoor';
 
 const GROUND_COLOR = '#d9d2c4'; // pavements and plazas
@@ -20,6 +25,8 @@ const PLAZA = '#efe6d6';
 const KERB = '#c9c0ae';
 /** Lane markings are painted this far out; past it they'd only shimmer. */
 const DASHES = 220;
+/** How much of the lying snow the roads keep. */
+const ROAD_SNOW = 0.3;
 
 const unit = {
   box: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
@@ -66,7 +73,13 @@ function cityMaterial(windows: boolean) {
         )
         .replace('#include <tonemapping_fragment>', 'gl_FragColor.rgb += cityGlow;\n#include <tonemapping_fragment>');
     };
-  return hazed(m, CITY_HAZE);
+  return hazed(m, CITY_HAZE, { snow: 1 });
+}
+
+/** The city's trees and lawns in the season's colours (a new list only when the season's foliage changes). */
+function inSeason(items: CityBox[], foliage: Foliage): CityBox[] {
+  if (foliage === 'green') return items;
+  return items.map((b, i) => (TREE.includes(b.color) ? { ...b, color: foliageColor(b.color, foliage, i) } : b.color === LAWN ? { ...b, color: lawnColor(b.color, foliage) } : b));
 }
 
 /** One instanced mesh of `geometry` for every box in `items`, each scaled, placed and coloured; `windows` paints them. */
@@ -138,11 +151,12 @@ function Streets({ streetsX, streetsZ, extentX, extentZ }: { streetsX: number[];
   useEffect(() => () => Object.values(geo).forEach((g) => g.dispose()), [geo]);
   return (
     <group>
-      <mesh position={[(GROUND.minX + GROUND.maxX) / 2, 0, (GROUND.minZ + GROUND.maxZ) / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={hazedToon(GROUND_COLOR, CITY_HAZE)}>
+      <mesh position={[(GROUND.minX + GROUND.maxX) / 2, 0, (GROUND.minZ + GROUND.maxZ) / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={hazedToon(GROUND_COLOR, CITY_HAZE, { snow: 1 })}>
         <planeGeometry args={[GROUND.maxX - GROUND.minX, GROUND.maxZ - GROUND.minZ]} />
       </mesh>
-      <mesh geometry={geo.roads} material={hazedToon(ROAD, CITY_HAZE)} receiveShadow />
-      <mesh geometry={geo.lines} material={hazedToon('#f4f1e8', CITY_HAZE)} />
+      {/* the roads are ploughed: only a little slush on them */}
+      <mesh geometry={geo.roads} material={hazedToon(ROAD, CITY_HAZE, { snow: ROAD_SNOW })} receiveShadow />
+      <mesh geometry={geo.lines} material={hazedToon('#f4f1e8', CITY_HAZE, { snow: ROAD_SNOW })} />
     </group>
   );
 }
@@ -209,27 +223,32 @@ function Cars() {
 export function City({ elevation }: { elevation: number }) {
   const city = useMemo(() => theCity(), []);
   const trees = useMemo(() => plazaTrees(), []);
+  const foliage = useSeason((l) => l.foliage);
+  const cones = useMemo(() => inSeason(city.cones, foliage), [city, foliage]);
+  const boxes = useMemo(() => inSeason(city.boxes, foliage), [city, foliage]);
+  const crowns = useMemo(() => inSeason(trees.crowns, foliage), [trees, foliage]);
   return (
     <group position={[0, -elevation, 0]}>
       <group position={[0, STREET_Y, 0]}>
         <Streets streetsX={city.streetsX} streetsZ={city.streetsZ} extentX={city.extentX + CORRIDOR_HALF} extentZ={city.extentZ + CORRIDOR_HALF} />
         <Instances items={city.buildings} geometry={unit.box} windows shadows />
-        <Instances items={city.boxes} geometry={unit.box} />
+        <Instances items={boxes} geometry={unit.box} />
         <Instances items={city.cylinders} geometry={unit.cylinder} />
-        <Instances items={city.cones} geometry={unit.cone} />
+        <Instances items={cones} geometry={unit.cone} />
         <Cars />
         <Billboards />
         <Bridge />
       </group>
       {/* our plaza, a step up from the pavement, with its kerb and trees */}
-      <mesh position={[0, (STREET_Y - 0.03) / 2, 0]} material={hazedToon(KERB, CITY_HAZE)}>
+      <mesh position={[0, (STREET_Y - 0.03) / 2, 0]} material={hazedToon(KERB, CITY_HAZE, { snow: 1 })}>
         <boxGeometry args={[CITY.homeHalfX * 2 + 0.6, -STREET_Y - 0.03, CITY.homeHalfZ * 2 + 0.6]} />
       </mesh>
-      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} material={hazedToon(PLAZA, CITY_HAZE)} receiveShadow>
+      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} material={hazedToon(PLAZA, CITY_HAZE, { snow: 1 })} receiveShadow>
         <planeGeometry args={[CITY.homeHalfX * 2 - 0.6, CITY.homeHalfZ * 2 - 0.6]} />
       </mesh>
       <Instances items={trees.trunks} geometry={unit.cylinder} />
-      <Instances items={trees.crowns} geometry={unit.cone} />
+      <Instances items={crowns} geometry={unit.cone} />
+      <PlazaSeason crowns={trees.crowns} />
     </group>
   );
 }

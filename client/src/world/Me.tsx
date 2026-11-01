@@ -1,53 +1,53 @@
-// You, drawn: the workers' cartoon parts in your own look (myLook.ts), standing where you are (rig.ts playerAt) and facing
-// the way you face. Following behind you (third person) all of you shows, and in the overview a "You" tag floats over
-// you too; in first person the head is left out (the camera is in it, or just over it at the ping-pong table) and the
-// body stands a little behind the camera, so looking down shows your chest, arms and feet. Your arms swing as you
-// walk, hold what you carry (view.ts held: a mug, a snack, a paddle), lift it for a sip (sipping.ts sipPose) and wave
-// when you say hi. In first person a mug or a snack is drawn with the camera instead, in a hand low on the right, as
-// in a game: the body's own hand is behind the camera. The look editor's preview draws the same figure, turned
-// whichever way you drag it.
+// You, drawn: a body in the office's style (RigBody.tsx) in your own look (myLook.ts), standing where you are (rig.ts
+// playerAt) and facing the way you face. Following behind you (third person) all of you shows, and in the overview a
+// "You" tag floats over you too; in first person the head is left out (the camera is in it) and the body stands a little
+// behind the camera, so looking down shows your chest, arms and feet. At the ping-pong table, with the camera raised
+// behind you (pongCam.ts), you're drawn see-through and headless, so the ball is never lost behind you.
+// Your arms swing as you walk, hold what you carry (view.ts held: a mug, a snack, a paddle, a marshmallow on a stick, a
+// hoop's ball or a dart, which games/ draw where your hand reaches), lift it for a sip (sipping.ts sipPose) and wave
+// when you say hi. In first person a mug, a snack or the stick is drawn
+// with the camera instead, in your own forearm and hand low on the right, as in a game: the body's own hand is behind
+// the camera. Sitting (view.ts seated), your hips are on the seat, your legs bent to the floor and your hands in your
+// lap, the whole of you leant back with a deck chair or into a beanbag (seats.ts). The look editor's preview draws the
+// same figure, turned whichever way you drag it.
 import { useMemo, useRef, type RefObject } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
+import type { BodyStyle } from '../../../shared/types';
+import { bodyMaterial } from '../lab/ink';
+import { BI } from '../lab/rig';
 import type { Appearance } from './appearance';
-import { Piece } from './Batched';
 import { gait, type Gait } from './body';
+import { holdArm, legLength, seatPose, stickArm, upPose, waveArm } from './bodyPoses';
+import { playerScale } from './bodyStyle';
 import { useCanvasTexture } from './canvasTexture';
-import { PARTS } from './characterParts';
 import { roundRect, SANS } from './draw';
 import { blink, newFace, stepFace } from './face';
-import { applyFace, HeadParts, shirtColor, Sleeve, TorsoWear, torsoWidth } from './Figure';
-import { EYE_HEIGHT } from './layout';
+import { applyFace, HeadParts, NeckPhones } from './Figure';
 import { useMe } from './myLook';
 import { MUG_SIZE, MugLook, mugColor } from './mugLook';
 import { lookingThrough } from './lookout';
-import { INK } from './Outlines';
+import { INK, ObjectInk } from './Outlines';
+import { PLAYER, toyHand } from './games/gameState';
 import { PaddleLook } from './PongTable';
 import { paddleAt } from './pongState';
 import { playerAt, rigOwnsCamera } from './rig';
+import { ArmPiece, BodyMeshes, OnBone, Poser, useBody, useBodyStyle } from './RigBody';
+import { MarshmallowStick, type StickState } from './roof/MarshmallowStick';
+import { liveOf } from './roof/toasting';
+import { SIT_POSE } from './seats';
 import { sipPose } from './sipping';
 import { DRINK_H, SnackLook } from './SnackLook';
 import { Cyl } from './Toon';
 import { useView, type Held } from './view';
 
-type Arm = { pitch: number; yaw: number };
 type Vec3 = [number, number, number];
 
-const PANTS = '#3d4a6b';
-// Hips at the top of straight legs; the knee `thigh` below (characterParts.ts), as Character.tsx has them standing.
-const HIP = { x: 0.11, standY: 0.815, thigh: 0.32 };
-const HANG: Arm = { pitch: -1.42, yaw: -0.1 };
-// Something held out in front: high and forward in first person, so it shows at the bottom right of the view; lower,
-// like a worker's mug, when you see yourself from outside.
-const HOLD_EYES: Arm = { pitch: 0.05, yaw: 0.16 };
-const HOLD_SEEN: Arm = { pitch: -0.75, yaw: 0.3 };
-const MOUTH: Arm = { pitch: 0.7, yaw: 0.85 };
-const WAVE: Arm = { pitch: 1.25, yaw: -0.3 };
 /** First person: the body stands this far (m) behind the camera. */
 const BACK = 0.28;
-// A mug or snack in the right hand (arm space: the hand is at z -0.5), kept upright whatever the arm does.
-const HAND = { at: [0, -0.02, -0.52] as [number, number, number], ahead: -0.07, scale: 1.3 };
+// A mug or snack in the right hand, kept upright whatever the arm does: a mug just ahead of the fist, its handle in it.
+const HAND = { ahead: -0.07, scale: 1.3 };
 // First person: your hand and what it holds, in camera space (metres: +X right, +Y up, -Z ahead): low on the right at
 // rest, at the bottom middle for a sip; the forearm comes in from the bottom right, from `elbow`. A mug sits left of the
 // hand (its handle in it), a snack just above it.
@@ -60,10 +60,45 @@ const VIEW = {
   snack: [-0.09, 0.06, -0.01] as Vec3,
   foodTurn: 1.1, // food points in towards the middle, not away from you, so you see it
 };
-const AHEAD = new THREE.Vector3(0, 0, 1); // a sleeve's length runs along +Z from the hand (Sleeve has it at -0.5)
-// The paddle in the right hand: its handle, and the blade's centre further along.
-const BAT = { hand: -0.5, blade: -0.17 };
-const TAG_Y = 0.45; // over the head
+const AHEAD = new THREE.Vector3(0, 0, 1); // the forearm runs along +Z from the hand (RigBody.tsx forearmOf)
+/** The paddle: its blade's middle this far over the wrist, the handle in the fist. */
+const BAT = { blade: 0.17 };
+// A marshmallow's stick: out from your hand, all but level, over the fire you're facing (roof/marshmallow.ts HEAT
+// reach); in first person from the hand in view to a point low in the middle of it (camera space, as VIEW, looking
+// level), a stride and more out in front, and kept level however far you look up or down.
+const STICK = { len: 1.35, tilt: -0.04, viewTip: new THREE.Vector3(-0.02, -0.5, -2.25) };
+const VIEW_STICK = STICK.viewTip.clone().sub(VIEW.rest);
+const VIEW_STICK_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), VIEW_STICK.clone().normalize());
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const unPitch = new THREE.Quaternion();
+/** Your marshmallow as its stick draws it (filled in each frame, not made anew). */
+const myStick: StickState = { toast: 0, flame: 0 };
+function myStickNow(): StickState {
+  const h = useView.getState().held;
+  if (h?.kind !== 'marshmallow') return myStick;
+  const l = liveOf(h);
+  myStick.toast = l.toast;
+  myStick.flame = l.flame;
+  myStick.eaten = h.eaten;
+  myStick.lift = sipPose.lift;
+  return myStick;
+}
+/** The "You" tag's height over the top of your head. */
+const TAG_UP = 0.27;
+
+let ghostMat: THREE.MeshToonMaterial | null = null;
+/**
+ * Your body at the ping-pong table: see-through and without its ink, so the ball is never lost behind you (the camera
+ * keeps you off to the side anyway: pongCam.ts). Made once, from the bodies' own material.
+ */
+function ghostMaterial() {
+  if (ghostMat) return ghostMat;
+  ghostMat = bodyMaterial.clone();
+  ghostMat.transparent = true;
+  ghostMat.opacity = 0.4;
+  ghostMat.depthWrite = false;
+  return ghostMat;
+}
 
 /** You wave until this (performance.now()); saying hi sets it. */
 const hello = { until: 0 };
@@ -71,8 +106,7 @@ export function waveHello(seconds = 1.4) {
   hello.until = performance.now() + seconds * 1000;
 }
 
-/** How much bigger than life you're drawn, so your eyes are where the camera is (layout.ts EYE_HEIGHT). */
-const scaleFor = (look: Appearance) => EYE_HEIGHT / (HIP.standY + 0.66 * look.height);
+const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
 /** The "You" tag over your head when you see yourself. */
 function YouTag() {
@@ -118,10 +152,16 @@ function tipPoint(held: Held, mug: Vec3, snack: Vec3, out: THREE.Vector3): THREE
 
 /**
  * What's in your right hand (hand space, upright): a mug centred at `mug`, turned `turn` so its handle meets the
- * hand, or a snack at `snack`, food turned `foodTurn` from pointing straight ahead. `tip` is what a sip tips
- * towards you, about tipPoint.
+ * hand, a snack at `snack`, food turned `foodTurn` from pointing straight ahead, or a marshmallow's stick from the hand
+ * turned by `stick`, `stickLen` long. `tip` is what a sip tips towards you, about tipPoint.
  */
-function InHand({ held, tip, mug, turn, snack, foodTurn }: { held: Held | null; tip: RefObject<THREE.Group | null>; mug: Vec3; turn: number; snack: Vec3; foodTurn: number }) {
+function InHand({ held, tip, mug, turn, snack, foodTurn, stick, stickLen, stickRef }: { held: Held | null; tip: RefObject<THREE.Group | null>; mug: Vec3; turn: number; snack: Vec3; foodTurn: number; stick: THREE.Quaternion | Vec3; stickLen: number; stickRef?: RefObject<THREE.Group | null> }) {
+  if (held?.kind === 'marshmallow')
+    return (
+      <group ref={stickRef} {...(stick instanceof THREE.Quaternion ? { quaternion: stick } : { rotation: stick })}>
+        <MarshmallowStick live={myStickNow} length={stickLen} />
+      </group>
+    );
   if (held?.kind !== 'mug' && held?.kind !== 'snack') return null;
   const p = tipPoint(held, mug, snack, new THREE.Vector3());
   const at = held.kind === 'mug' ? mug : snack;
@@ -135,28 +175,27 @@ function InHand({ held, tip, mug, turn, snack, foodTurn }: { held: Held | null; 
 }
 
 /**
- * Your figure. `preview`: the look editor's, with nothing in hand, easing round to the yaw `spin` holds (the editor
- * turns it as you drag); otherwise you in the room, moved every frame from where you are and what you hold.
+ * Your figure. `preview`: the look editor's (or the setup's, in `style` rather than the office's), with nothing in hand,
+ * easing round to the yaw `spin` holds (the editor turns it as you drag); otherwise you in the room, moved every frame
+ * from where you are and what you hold.
  */
-export function MeFigure({ look, preview = false, spin }: { look: Appearance; preview?: boolean; spin?: { current: number } }) {
+export function MeFigure({ look, preview = false, spin, style }: { look: Appearance; preview?: boolean; spin?: { current: number }; style?: BodyStyle }) {
+  const office = useBodyStyle();
+  const rig = useBody(look, 'worker', style ?? office);
+  const props = rig.props;
+  const poser = useMemo(() => new Poser(props), [props]);
   const root = useRef<THREE.Group>(null);
-  const torso = useRef<THREE.Group>(null);
   const head = useRef<THREE.Group>(null);
   const tag = useRef<THREE.Group>(null);
-  const armL = useRef<THREE.Group>(null);
-  const armR = useRef<THREE.Group>(null);
-  const hipL = useRef<THREE.Group>(null);
-  const hipR = useRef<THREE.Group>(null);
-  const kneeL = useRef<THREE.Group>(null);
-  const kneeR = useRef<THREE.Group>(null);
+  const phones = useRef<THREE.Group>(null);
   const cup = useRef<THREE.Group>(null);
   const tip = useRef<THREE.Group>(null);
   const inView = useRef<THREE.Group>(null); // first person: follows the camera
   const viewGrip = useRef<THREE.Group>(null);
   const viewArm = useRef<THREE.Group>(null);
   const viewTip = useRef<THREE.Group>(null);
+  const viewStick = useRef<THREE.Group>(null);
   const bat = useRef<THREE.Group>(null);
-  const blade = useRef<THREE.Group>(null);
   const faceMesh = useRef<THREE.Mesh>(null);
   const held = useView((s) => (preview ? null : s.held));
   const st = useMemo(
@@ -166,19 +205,21 @@ export function MeFigure({ look, preview = false, spin }: { look: Appearance; pr
       speed: 0,
       phase: 0,
       fp: 0,
-      r: { ...HANG },
       g: { stride: 0, cadence: 0, bob: 0, lean: 0 } as Gait,
       face: newFace(),
-      aim: new THREE.Vector3(),
-      shoulder: new THREE.Vector3(),
-      q: new THREE.Quaternion(),
+      v: new THREE.Vector3(),
+      paddle: [0, 0, 0] as Vec3,
       spun: false, // the preview has been turned at least once (so it opens where it starts, not easing round to it)
+      sit: 0, // 1 sitting, 0 on your feet, eased in between
+      hip: 0.45, // the last seat's height, in the body's units
+      lean: 0,
+      lift: 0,
       toElbow: new THREE.Vector3(),
       pivot: new THREE.Vector3(),
     }),
     [],
   );
-  const scale = preview ? 1 : scaleFor(look);
+  const scale = preview ? 1 : playerScale(style ?? office, look.height);
 
   useFrame(({ camera }, delta) => {
     const dt = Math.min(delta, 0.1);
@@ -197,80 +238,90 @@ export function MeFigure({ look, preview = false, spin }: { look: Appearance; pr
       st.spun = true;
     } else {
       first = !rigOwnsCamera() && (useView.getState().person === 'first' || held?.kind === 'paddle' || !!lookingThrough());
+      const seat = useView.getState().seated;
       const moved = Math.hypot(playerAt.x - st.x, playerAt.z - st.z);
-      st.speed += (Math.min(8, moved / Math.max(dt, 1e-3)) - st.speed) * (1 - Math.exp(-dt * 10));
+      // sitting down or getting up moves you there at once: that's no walk
+      if (seat || moved > 0.6) st.speed = 0;
+      else st.speed += (Math.min(8, moved / Math.max(dt, 1e-3)) - st.speed) * (1 - Math.exp(-dt * 10));
       st.x = playerAt.x;
       st.z = playerAt.z;
       const back = first && held?.kind !== 'paddle' ? BACK : 0; // at the table Player.tsx stands you behind the paddle itself
       g.position.set(st.x + Math.sin(playerAt.yaw) * back, 0, st.z + Math.cos(playerAt.yaw) * back);
-      g.rotation.y = playerAt.yaw;
+      g.rotation.set(0, playerAt.yaw, 0, 'YXZ');
+      if (seat) {
+        // hips on the seat, leant back about them: the whole figure turned about that point
+        const pose = SIT_POSE[seat.kind];
+        st.hip = seat.height / scale;
+        st.lean = pose.lean;
+        st.lift = pose.lift;
+        const lean = pose.lean * smoothstep(st.sit);
+        g.rotation.x = lean;
+        g.position.y = seat.height * (1 - Math.cos(lean));
+        g.position.x -= seat.height * Math.sin(lean) * Math.sin(seat.facing);
+        g.position.z -= seat.height * Math.sin(lean) * Math.cos(seat.facing);
+      }
+      st.sit += ((seat ? 1 : 0) - st.sit) * (1 - Math.exp(-dt * 10));
     }
     st.fp += ((first ? 1 : 0) - st.fp) * (1 - Math.exp(-dt * 12));
     if (head.current) head.current.visible = !first;
+    // at the ping-pong table you're a see-through figure without ink (the body mesh, its ink shell and its details)
+    const ghost = !preview && held?.kind === 'paddle' && !rigOwnsCamera();
+    rig.meshes.forEach((m, i) => {
+      if (i === 1) m.visible = !ghost;
+      else if (m.material !== (ghost ? ghostMaterial() : bodyMaterial)) m.material = ghost ? ghostMaterial() : bodyMaterial;
+    });
+    if (phones.current) phones.current.visible = !ghost; // solid headphones round a see-through neck would float
+    // the neck goes with the head, or it stands up out of the collar right under the camera
+    rig.bones[BI.neck].scale.setScalar(first ? 1e-3 : 1);
     if (tag.current) tag.current.visible = !preview && rigOwnsCamera(); // the overview: where am I?
 
-    // ---------- the walk ----------
-    const gt = gait(st.speed, st.g);
+    // ---------- the walk (and sitting: k is how far down you are) ----------
+    const k = smoothstep(st.sit);
+    const gt = gait(st.speed, st.g, legLength(props));
     if (st.speed > 0.05) st.phase = (st.phase + dt * gt.cadence * Math.PI) % (Math.PI * 2);
     const walk = Math.min(1, st.speed / 0.5);
-    const swing = Math.sin(st.phase) * gt.stride * walk;
-    const bob = -gt.bob * walk * Math.sin(st.phase) ** 2;
-    const idle = Math.sin(t * 1.1) * 0.03 * (1 - walk);
-    if (torso.current) {
-      torso.current.position.y = HIP.standY + bob;
-      torso.current.rotation.set(Math.sin(t * 1.6) * 0.015 - gt.lean * walk, Math.sin(st.phase) * 0.1 * walk, (Math.sin(t * 0.5) * 0.03 * (1 - walk) + Math.sin(st.phase) * 0.035 * walk) * (1 - st.fp));
-    }
-    if (hipL.current && hipR.current && kneeL.current && kneeR.current) {
-      // knees bend as each leg swings forward; standing, one knee eases while the weight is on the other foot
-      const lift = 0.3 + gt.stride;
-      const shift = Math.sin(t * 0.5) * 0.15 * (1 - walk);
-      const bendL = -(Math.max(0, Math.cos(st.phase)) * lift * walk + Math.max(0, shift) + 0.04);
-      const bendR = -(Math.max(0, -Math.cos(st.phase)) * lift * walk + Math.max(0, -shift) + 0.04);
-      hipL.current.position.y = hipR.current.position.y = HIP.standY + bob;
-      hipL.current.rotation.x = swing - bendL * 0.4;
-      hipR.current.rotation.x = -swing - bendR * 0.4;
-      kneeL.current.rotation.x = bendL;
-      kneeR.current.rotation.x = bendR;
-    }
 
-    // ---------- the arms: the left swings, the right holds, sips, aims the paddle or waves ----------
-    if (armL.current) armL.current.rotation.set(HANG.pitch - swing * 1.1 + idle, -HANG.yaw, 0);
-    const r = st.r;
-    const k = 1 - Math.exp(-dt * 8);
-    let want: Arm = { pitch: HANG.pitch + swing * 1.1 + idle, yaw: HANG.yaw };
-    const holding = held?.kind === 'mug' || held?.kind === 'snack';
+    // ---------- the right hand: aims the paddle, waves, holds and sips, or swings like the left ----------
+    const holding = held?.kind === 'mug' || held?.kind === 'snack' || held?.kind === 'marshmallow';
     // first person (not at a lookout): a mug or snack is drawn with the camera, and this arm swings like the other
     const seen = holding && first && !lookingThrough();
-    if (holding && !seen) {
-      const hold = { pitch: THREE.MathUtils.lerp(HOLD_SEEN.pitch, HOLD_EYES.pitch, st.fp), yaw: THREE.MathUtils.lerp(HOLD_SEEN.yaw, HOLD_EYES.yaw, st.fp) };
-      want = { pitch: THREE.MathUtils.lerp(hold.pitch, MOUTH.pitch, sipPose.lift), yaw: THREE.MathUtils.lerp(hold.yaw, MOUTH.yaw, sipPose.lift) };
-    }
-    if (now < hello.until) want = { pitch: WAVE.pitch, yaw: WAVE.yaw + Math.sin(t * 9) * 0.4 };
-    let aimed = false;
-    if (held?.kind === 'paddle' && torso.current) {
-      // the bat arm points at where the paddle is (an arm is one straight piece)
+    let mode = 'free';
+    if (held?.kind === 'paddle') {
+      // the bat hand where the paddle is (its blade's middle over the fist)
       const p = paddleAt(held.end);
-      torso.current.localToWorld(st.shoulder.set(0.25 * torsoWidth(look), 0.44, 0));
-      const d = st.aim.set(p.x, p.y, p.z).sub(st.shoulder).applyQuaternion(torso.current.getWorldQuaternion(st.q).invert()).normalize();
-      r.yaw = Math.asin(Math.max(-1, Math.min(1, -d.x)));
-      r.pitch = Math.atan2(d.y, -d.z);
-      aimed = true;
+      g.updateWorldMatrix(true, false);
+      g.worldToLocal(st.v.set(p.x, p.y - BAT.blade * scale, p.z));
+      st.paddle = [st.v.x, st.v.y, st.v.z];
+      mode = 'paddle';
+    } else if (held?.kind === 'game' && toyHand(PLAYER)) {
+      // a hoop's ball or a dart: the right hand where the game holds it (games/gameState.ts)
+      const p = toyHand(PLAYER)!;
+      g.updateWorldMatrix(true, false);
+      g.worldToLocal(st.v.set(p.x, p.y, p.z));
+      st.paddle = [st.v.x, st.v.y, st.v.z];
+      mode = 'toy';
+    } else if (now < hello.until) mode = 'wave';
+    else if (holding && !seen) mode = held?.kind === 'marshmallow' ? 'stick' : 'hold';
+    const right = mode === 'wave' ? waveArm(props, t) : mode === 'hold' ? holdArm(props, sipPose.lift) : mode === 'stick' ? stickArm() : undefined;
+    const look: Vec3 = [Math.sin(t * 0.3) * 0.05 + (holding ? sipPose.lift * 0.25 : 0), Math.sin(t * 0.4) * 0.12 * (1 - walk), 0];
+    const sat = k > 0.001 ? seatPose(props, { t, seatY: st.hip, tilt: st.lean * k, lift: st.lift, r: right, head: look }) : null;
+    let standing = null;
+    if (k < 0.999) {
+      standing = upPose(props, { t, speed: st.speed, phase: st.phase, dir: [0, -1], gesture: 'none', party: false, paddle: mode === 'paddle' || mode === 'toy' ? st.paddle : null, carry: 1, head: look });
+      if (right) standing.arm.r = right;
     }
-    if (!aimed) {
-      r.pitch += (want.pitch - r.pitch) * k;
-      r.yaw += (want.yaw - r.yaw) * k;
+    poser.show(rig.bones, now / 1000, `${k > 0.5 ? 's' : 'u'}:${mode}`, k, sat, standing);
+
+    // what's in the hand, upright at its grip (figure space); a sip tips it to the lips
+    if (cup.current) {
+      poser.at(BI.handR, rig.built.grip, cup.current.position);
+      cup.current.visible = !seen;
     }
-    if (armR.current) {
-      armR.current.rotation.set(r.pitch, r.yaw, 0);
-      // undo the arm's turn (XYZ, so inverted as YXZ) so a mug stays upright; a sip tips it to the lips
-      if (cup.current) {
-        cup.current.rotation.set(-r.pitch, -r.yaw, 0, 'YXZ');
-        cup.current.visible = !seen;
-      }
-      if (tip.current) tip.current.rotation.x = sipPose.tilt;
-      if (blade.current) blade.current.rotation.set(-r.pitch, -r.yaw, 0, 'YXZ');
+    if (tip.current) tip.current.rotation.x = sipPose.tilt;
+    if (bat.current) {
+      bat.current.visible = held?.kind === 'paddle';
+      if (bat.current.visible) poser.at(BI.handR, [0, 0, 0], bat.current.position);
     }
-    if (bat.current) bat.current.visible = held?.kind === 'paddle';
 
     // ---------- first person: the hand in view, brought up for a sip, swaying as you walk ----------
     const v = inView.current;
@@ -289,12 +340,13 @@ export function MeFigure({ look, preview = false, spin }: { look: Appearance; pr
         st.toElbow.copy(VIEW.elbow).sub(grip).addScaledVector(hand, -VIEW.scale).normalize();
         viewArm.current.quaternion.setFromUnitVectors(AHEAD, st.toElbow);
         if (viewTip.current) viewTip.current.rotation.x = sipPose.tilt;
+        // a marshmallow's stick stays out level over the fire, however far you look down at it
+        if (viewStick.current) viewStick.current.quaternion.copy(VIEW_STICK_TURN).premultiply(unPitch.setFromAxisAngle(X_AXIS, -camera.rotation.x));
       }
     }
 
-    // ---------- the head (when it shows): a look round, a blink ----------
+    // ---------- the face (when it shows): a blink, joyful when you say hi ----------
     if (head.current?.visible) {
-      head.current.rotation.set(Math.sin(t * 0.3) * 0.05 + (holding ? sipPose.lift * 0.25 : 0), Math.sin(t * 0.4) * 0.12 * (1 - walk), 0);
       stepFace(st.face, now < hello.until ? 'joyful' : 'neutral', dt);
       applyFace(faceMesh, st.face, blink(t, 4242));
     }
@@ -303,41 +355,31 @@ export function MeFigure({ look, preview = false, spin }: { look: Appearance; pr
   return (
     <>
       <group ref={root} scale={scale}>
-        {/* legs: jointed at the hips and knees */}
-        {[
-          { hip: hipL, knee: kneeL, x: -HIP.x },
-          { hip: hipR, knee: kneeR, x: HIP.x },
-        ].map(({ hip, knee, x }) => (
-          <group key={x} ref={hip} position={[x, HIP.standY, 0]}>
-            <Piece geometry={PARTS.thigh} color={PANTS} castShadow outline={0.012} />
-            <group ref={knee} position={[0, -HIP.thigh, 0]}>
-              <Piece geometry={PARTS.shin} color={PANTS} castShadow outline={0.012} />
-              <Piece geometry={PARTS.shoe} color={INK} castShadow />
-            </group>
+        <BodyMeshes body={rig} />
+        <OnBone body={rig} bone="head">
+          <group ref={head} scale={rig.built.headScale}>
+            <ObjectInk.Provider value={rig.built.headScale}>
+              <HeadParts look={look} busy={false} face={faceMesh} />
+            </ObjectInk.Provider>
           </group>
-        ))}
-        <group ref={torso} position={[0, HIP.standY, 0]} scale={look.height}>
-          <TorsoWear role="worker" look={look} busy={false} />
-          <group ref={armL} position={[-0.25 * torsoWidth(look), 0.44, 0]}>
-            <Sleeve role="worker" look={look} />
+          <group ref={tag} position={[0, props.headR + TAG_UP, 0]}>
+            <YouTag />
           </group>
-          <group ref={armR} position={[0.25 * torsoWidth(look), 0.44, 0]}>
-            <Sleeve role="worker" look={look} />
-            <group ref={cup} position={HAND.at}>
-              <InHand held={held} tip={tip} mug={[0, 0, HAND.ahead]} turn={-Math.PI / 2} snack={[0, 0, 0]} foodTurn={0} />
+        </OnBone>
+        {look.headphones && (
+          <OnBone body={rig} bone="chest">
+            <group ref={phones}>
+              <NeckPhones look={look} at={rig.built.phones.at} scale={rig.built.phones.scale} />
             </group>
-            <group ref={bat} position={[0, 0, BAT.hand]} visible={false}>
-              <Cyl r={0.014} h={0.1} position={[0, 0, -0.05]} rotation={[Math.PI / 2, 0, 0]} color="#d4a373" shadow={false} />
-              <group ref={blade} position={[0, 0, BAT.blade]}>
-                <PaddleLook handle={false} />
-              </group>
-            </group>
-          </group>
-          <group ref={head} position={[0, 0.66, 0]}>
-            <HeadParts look={look} busy={false} face={faceMesh} />
-            <group ref={tag} position={[0, TAG_Y, 0]}>
-              <YouTag />
-            </group>
+          </OnBone>
+        )}
+        <group ref={cup}>
+          <InHand held={held} tip={tip} mug={[0, 0, HAND.ahead]} turn={-Math.PI / 2} snack={[0, 0, 0]} foodTurn={0} stick={[STICK.tilt, 0, 0]} stickLen={STICK.len} />
+        </group>
+        <group ref={bat} visible={false}>
+          <Cyl r={0.014} h={0.1} position={[0, 0.06, 0]} color="#d4a373" shadow={false} />
+          <group position={[0, BAT.blade, 0]}>
+            <PaddleLook handle={false} />
           </group>
         </group>
       </group>
@@ -345,10 +387,9 @@ export function MeFigure({ look, preview = false, spin }: { look: Appearance; pr
         <group ref={inView} visible={false}>
           <group ref={viewGrip} scale={VIEW.scale}>
             <group ref={viewArm}>
-              <Piece position={[0, 0, 0.26]} rotation={[Math.PI / 2, 0, 0]} geometry={PARTS.sleeve} color={shirtColor('worker', look)} outline={0.012} />
-              <Piece geometry={PARTS.hand} color={look.skin} />
+              <ArmPiece built={rig.built} />
             </group>
-            <InHand held={held} tip={viewTip} mug={VIEW.mug} turn={0} snack={VIEW.snack} foodTurn={VIEW.foodTurn} />
+            <InHand held={held} tip={viewTip} mug={VIEW.mug} turn={0} snack={VIEW.snack} foodTurn={VIEW.foodTurn} stick={VIEW_STICK_TURN} stickLen={VIEW_STICK.length() / VIEW.scale} stickRef={viewStick} />
           </group>
         </group>
       )}

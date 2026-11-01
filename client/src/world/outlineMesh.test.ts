@@ -1,7 +1,7 @@
 // Adapted from cubefarm client/src/world/outlineMesh.test.ts (MIT).
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { attachOutline, detachOutline } from './outlineMesh';
+import { attachOutline, detachOutline, INK_NEAR, INK_PX, INK_THIN, inkFade, inkPixels } from './outlineMesh';
 
 const disposed = (g: THREE.BufferGeometry) => {
   const seen = { n: 0 };
@@ -41,5 +41,24 @@ describe('outline meshes', () => {
 
   it('does nothing for an empty group', () => {
     expect(() => detachOutline(new THREE.Group(), Math.PI)).not.toThrow();
+  });
+});
+
+describe('the ink line', () => {
+  it('draws the usual thickness at the usual width, scaling the rest between the thinnest and thickest', () => {
+    expect(inkPixels(0.018)).toBeCloseTo(INK_PX.usual);
+    expect(inkPixels(0.012)).toBeLessThan(INK_PX.usual);
+    expect(inkPixels(0.012)).toBeGreaterThanOrEqual(INK_PX.min);
+    expect(inkPixels(0.025)).toBeGreaterThan(INK_PX.usual);
+    expect(inkPixels(0.001)).toBe(INK_PX.min); // a mug's still shows
+    expect(inkPixels(0.5)).toBe(INK_PX.max);
+  });
+
+  it('keeps its width close up and thins with distance, never below INK_THIN of it', () => {
+    expect(inkFade(0.3)).toBe(1);
+    expect(inkFade(INK_NEAR)).toBe(1);
+    expect(inkFade(INK_NEAR * 1.2)).toBeLessThan(1);
+    expect(inkFade(1000)).toBe(INK_THIN);
+    expect(inkFade(0)).toBe(1);
   });
 });

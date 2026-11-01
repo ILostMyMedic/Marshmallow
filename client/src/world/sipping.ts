@@ -1,12 +1,14 @@
-// Drinking the coffee in your hands, or eating a snack from the fridge: E starts a sip or a bite (whatever you hold
-// gets first go at E, through actions.ts's onUseHeld, registered here), Player.tsx calls tickSip every frame, and the
-// player's body and the camera read `sipPose`. The timings are in sip.ts. Walking carries on throughout. The sip comes
-// off what you hold at the plan's 'drink' cue: an empty mug stays in your hand (refill it at the machine), a finished
-// snack leaves it. Each cue plays its sound from your own mouth (ui/sipSfx.ts).
+// Drinking the coffee in your hands, or eating a snack from the fridge or a marshmallow you toasted: E starts a sip or
+// a bite (whatever you hold gets first go at E, through actions.ts's onUseHeld, registered here), Player.tsx calls
+// tickSip every frame, and the player's body and the camera read `sipPose`. The timings are in sip.ts. Walking carries
+// on throughout. The sip comes off what you hold at the plan's 'drink' cue: an empty mug stays in your hand (refill it
+// at the machine), a finished snack leaves it, and a marshmallow says how it came out. Each cue plays its sound from
+// your own mouth (ui/sipSfx.ts).
 // Adapted from cubefarm client/src/world/toys/sipping.ts (MIT): the roof's sausage and the dropped mug are cut.
 import { sipSound } from '../ui/sipSfx';
 import { onUseHeld } from './actions';
-import { cuesDue, eAction, planFor, pose, snackFor, type SipPlan } from './sip';
+import { eatLine, stageOf } from './roof/marshmallow';
+import { cuesDue, eAction, marshmallowPlan, planFor, pose, snackFor, type SipPlan } from './sip';
 import { useView, type Action, type Held } from './view';
 
 let sip: { plan: SipPlan; id: string; start: number; next: number } | null = null;
@@ -18,13 +20,13 @@ let sip: { plan: SipPlan; id: string; start: number; next: number } | null = nul
  */
 export const sipPose = { lift: 0, tilt: 0, head: 0 };
 
-const heldId = (h: Held | null) => (h && h.kind !== 'paddle' ? h.id : null);
+const heldId = (h: Held | null) => (h && h.kind !== 'paddle' && h.kind !== 'game' ? h.id : null);
 
 /** E with coffee or a snack in hand: start a sip (the last one a gulp) or a bite. False mid-sip, or with nothing to sip. */
 export function sipCoffee(now = performance.now()): boolean {
   const held = useView.getState().held;
-  if (sip || !held || held.kind === 'paddle') return false;
-  const plan = held.kind === 'mug' ? planFor(held.sips) : snackFor(held.snack, held.left);
+  if (sip || !held || held.kind === 'paddle' || held.kind === 'game') return false;
+  const plan = held.kind === 'mug' ? planFor(held.sips) : held.kind === 'snack' ? snackFor(held.snack, held.left) : held.eaten ? null : marshmallowPlan(stageOf(held.toast) === 'charcoal' || !!held.alight);
   if (!plan) return false;
   sip = { plan, id: held.id, start: now, next: 0 };
   return true;
@@ -52,7 +54,11 @@ export function tickSip(now = performance.now()) {
     if (cue === 'drink') {
       if (held?.kind === 'mug') view.setHeld({ ...held, sips: Math.max(0, held.sips - 1) });
       else if (held?.kind === 'snack') view.setHeld({ ...held, left: Math.max(0, held.left - 1) });
-    } else if (cue === 'drop' && held?.kind === 'snack') {
+      else if (held?.kind === 'marshmallow') {
+        view.setHeld({ ...held, eaten: true });
+        view.showToast(eatLine(held.toast, held.alight ? 1 : 0));
+      }
+    } else if (cue === 'drop' && (held?.kind === 'snack' || held?.kind === 'marshmallow')) {
       endSip();
       view.setHeld(null); // all gone
       return;

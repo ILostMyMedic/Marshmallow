@@ -6,7 +6,9 @@
 // and the profile, voice, outside, notification, theme and accessibility settings.
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { BOX_SIZE_INFO, BOX_SIZES } from '../../../../shared/cloud';
-import { DAY_MODES, type BoxSize, type CloudCredentialSource, type DayMode } from '../../../../shared/types';
+import { SEASON_SETTING_NAMES, SEASON_SETTINGS, type SeasonSetting } from '../../../../shared/seasons';
+import { BODY_STYLES, DAY_MODES, type BodyStyle, type BoxSize, type CloudCredentialSource, type DayMode } from '../../../../shared/types';
+import { STYLE_BLURBS, STYLE_NAMES } from '../../world/bodyStyle';
 import { useStore } from '../../store';
 import { ConfirmButton, Field, ModelPick, SecretField } from './fields';
 import { EFFORTS, LIMITS, pruneEdits, settingsForm, settingsPatch, type FormEdits, type SettingsForm } from './forms';
@@ -131,11 +133,11 @@ function CloudCard({ form, set }: { form: SettingsForm; set: <K extends keyof Se
   );
 }
 
-/** The office clock (world/dayTime.ts follows it): the sky, the light and lunch, the same in every tab. */
+/** The office clock (world/dayTime.ts follows it): the sky, the light and lunch, the same in every tab; the season outside; and how everyone's drawn. */
 function ClockCard({ form, set }: { form: SettingsForm; set: <K extends keyof SettingsForm>(k: K, v: SettingsForm[K]) => void }) {
   return (
     <section className="console-card">
-      <h3 className="console-h">🕐 Time</h3>
+      <h3 className="console-h">🕐 Time and people</h3>
       <Field label="The office clock" hint="The sky, the lamps and lunch follow it, in every tab.">
         <select value={form.dayMode} onChange={(e) => set('dayMode', e.target.value as DayMode)}>
           {DAY_MODES.map((m) => (
@@ -145,6 +147,27 @@ function ClockCard({ form, set }: { form: SettingsForm; set: <K extends keyof Se
           ))}
         </select>
       </Field>
+      <Field label="The season outside" hint="Snow in December and January, blossom in spring, falling leaves in autumn, pumpkins, a Christmas tree, fireworks at New Year: by the office's date, or any of them now. In every tab.">
+        <select value={form.season} onChange={(e) => set('season', e.target.value as SeasonSetting)}>
+          {SEASON_SETTINGS.map((m) => (
+            <option key={m} value={m}>
+              {SEASON_SETTING_NAMES[m]}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Body style" hint={`${STYLE_BLURBS[form.bodyStyle]} Everyone in the office, you included, in every tab.`}>
+        <select value={form.bodyStyle} onChange={(e) => set('bodyStyle', e.target.value as BodyStyle)}>
+          {BODY_STYLES.map((s) => (
+            <option key={s} value={s}>
+              {STYLE_NAMES[s]}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <label className="console-toggle">
+        <input type="checkbox" checked={form.inkOutlines} onChange={(e) => set('inkOutlines', e.target.checked)} /> Ink outlines round the furniture and the people, in every tab (off: fewer draw calls, for a slow computer)
+      </label>
     </section>
   );
 }

@@ -17,10 +17,15 @@ describe('settingsPatch', () => {
     expect(settingsPatch(form(), now)).toEqual({ patch: {}, problems: {} });
   });
 
+  it('sends the season shown outside when it changes', () => {
+    expect(settingsForm(now).season).toBe('auto');
+    expect(settingsPatch(form({ season: 'christmas' }), now).patch).toEqual({ season: 'christmas' });
+  });
+
   it('sends only what changed, trimmed and as numbers', () => {
-    const { patch, problems } = settingsPatch(form({ managerName: '  Alex ', sessionLimit: '6', maxWorkers: '10', autoscale: false, defaultEffort: 'high', dayMode: 'clock' }), now);
+    const { patch, problems } = settingsPatch(form({ managerName: '  Alex ', sessionLimit: '6', maxWorkers: '10', autoscale: false, defaultEffort: 'high', dayMode: 'clock', bodyStyle: 'chibi', inkOutlines: false }), now);
     expect(problems).toEqual({});
-    expect(patch).toEqual({ managerName: 'Alex', sessionLimit: 6, autoscale: false, defaultEffort: 'high', dayMode: 'clock' });
+    expect(patch).toEqual({ managerName: 'Alex', sessionLimit: 6, autoscale: false, defaultEffort: 'high', dayMode: 'clock', bodyStyle: 'chibi', inkOutlines: false });
   });
 
   it('turns an emptied session limit into no limit', () => {

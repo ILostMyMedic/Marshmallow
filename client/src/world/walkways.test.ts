@@ -1,7 +1,7 @@
 // Adapted from cubefarm client/src/world/walkways.test.ts (MIT): without the toys, the dog and the lobby's furniture.
 import { describe, expect, it } from 'vitest';
 import { KANBAN_KEYS } from './draw';
-import { BOARD, EXEC_AWARD_SHELF, PLAYER_RADIUS, SEATS, ceoColliders, elevatorDoorway, lobbyColliders, officeColliders, pongTableRect } from './layout';
+import { BOARD, CEO_SEATS, EXEC_AWARD_SHELF, EXEC_CHESS, EXEC_GREEN, EXEC_HOLE, EXEC_POOL, EXEC_SHELVES, EXEC_TANK, EXEC_WEEK, PLAYER_RADIUS, SEATS, ceoColliders, elevatorDoorway, lobbyColliders, officeColliders, pongTableRect } from './layout';
 import { BALCONY, BALCONY_OUT, HALF_W, SIDE_OPENINGS, SIDES, sideSign } from './layout';
 import { segmentClear, type Pt } from './nav';
 import { CRAWL, WALK_R, WALK_SPEED, findPath, heldUp, spot, standable, steer, walkways, type Body, type FloorKind, type Mover, type Walkways } from './walkways';
@@ -20,7 +20,7 @@ const length = (from: Pt, path: Pt[]) => {
 };
 
 describe('named spots', () => {
-  it.each(FLOORS)('every %s spot (and seat) is somewhere a person can stand, with unique ids', (floor) => {
+  it.each([...FLOORS, 'ceo'] as const)('every %s spot (and seat) is somewhere a person can stand, with unique ids', (floor) => {
     const w = walkways(floor);
     const all = [...new Set([...w.homes, ...w.spots])];
     expect(new Set(all.map((s) => s.id)).size).toBe(all.length);
@@ -57,7 +57,25 @@ describe('named spots', () => {
     const w = walkways('ceo');
     expect(w.homes.map((s) => s.id)).toEqual(['ceo']);
     const home = spot(w, 'ceo')!;
-    for (const id of ['elevator', 'lounge', 'bar', 'globe', 'awards', 'window-w0']) expect(findPath(w, home, spot(w, id)!), id).not.toBeNull();
+    for (const id of ['elevator', 'lounge', 'bar', 'globe', 'awards', 'library', 'putt', 'fish', 'chess', 'pool', 'whiteboard', 'window-w0', 'window-w1', 'window-e0', 'window-e1']) expect(findPath(w, home, spot(w, id)!), id).not.toBeNull();
+  });
+
+  it("puts the CEO's new spots in front of what they look at, facing it", () => {
+    const w = walkways('ceo');
+    const facing = (id: string, x: number, z: number, far = 2.2) => {
+      const s = spot(w, id)!;
+      const len = Math.hypot(x - s.x, z - s.z);
+      expect((Math.cos(s.facing) * (x - s.x) + Math.sin(s.facing) * (z - s.z)) / len, id).toBeGreaterThan(0.95);
+      expect(len, id).toBeLessThan(far);
+    };
+    facing('library', EXEC_SHELVES.x, EXEC_SHELVES.z);
+    facing('putt', EXEC_HOLE.x, EXEC_HOLE.z, EXEC_GREEN.w);
+    facing('fish', EXEC_TANK.x, EXEC_TANK.z);
+    facing('whiteboard', EXEC_WEEK.x, EXEC_WEEK.z);
+    facing('chess', EXEC_CHESS.x, EXEC_CHESS.z);
+    facing('pool', EXEC_POOL.x, EXEC_POOL.z);
+    // nobody stands on a seat, and every seat's furniture is in the way of the walk grid
+    for (const s of CEO_SEATS) expect(standable(w, s.x, s.z), s.id).toBe(false);
   });
 
   it("every CEO spot is somewhere to stand, reached from their desk round the furniture (the awards wall's shelf included)", () => {
@@ -102,7 +120,7 @@ describe('the ping-pong table', () => {
 });
 
 describe('the balconies', () => {
-  it.each(FLOORS)('are off-limits on the %s floor: nobody stands out there or in a side doorway, and no walk leads out', (floor) => {
+  it.each([...FLOORS, 'ceo'] as const)('are off-limits on the %s floor: nobody stands out there or in a side doorway, and no walk leads out', (floor) => {
     const w = walkways(floor);
     for (const side of SIDES) {
       const s = sideSign(side);
@@ -121,10 +139,10 @@ describe('the balconies', () => {
 });
 
 describe('findPath', () => {
-  it.each(FLOORS)('on the %s floor, every spot is reachable from every desk, round the furniture', (floor) => {
+  it.each([...FLOORS, 'ceo'] as const)('on the %s floor, every spot is reachable from every desk, round the furniture', (floor) => {
     const w = walkways(floor);
     // the colliders people bump into, plus the elevator doorway: no leg may cross any of them
-    const solid = [...(floor === 'office' ? officeColliders() : lobbyColliders()), elevatorDoorway()];
+    const solid = [...(floor === 'office' ? officeColliders() : floor === 'ceo' ? ceoColliders() : lobbyColliders()), elevatorDoorway()];
     for (const home of w.homes) {
       for (const to of [...w.homes, ...w.spots]) {
         if (to === home) continue;

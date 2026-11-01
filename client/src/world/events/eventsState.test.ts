@@ -28,7 +28,7 @@ describe('the events a tab draws', () => {
   });
 
   it("follows the office's world in the store", () => {
-    useStore.getState().apply({ type: 'world', world: { running: [run(9, 'ufo', Date.now() - 5000)], nextAt: 0 } });
+    useStore.getState().apply({ type: 'world', world: { running: [run(9, 'ufo', Date.now() - 5000)], nextAt: 0, today: '' } });
     expect(runningEvents().map((r) => r.id)).toEqual(['ufo']);
     expect(runningEvents()[0].t).toBeGreaterThanOrEqual(5);
     useStore.getState().apply({ type: 'world', world: EMPTY_WORLD });

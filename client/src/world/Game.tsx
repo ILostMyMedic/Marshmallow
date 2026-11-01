@@ -21,11 +21,12 @@ import { WorldEvents } from './events/WorldEvents';
 import { CeoFloor } from './CeoFloor';
 import { planRects } from './decor/spots';
 import { useRide } from './elevatorRide';
-import { elevationOf, isFloor, kindOf, stops, topStorey } from './floors';
+import { elevationOf, isFloor, kindOf, LOBBY, ROOF, stops, storeyOf, topStorey } from './floors';
 import { ceoColliders, lobbyColliders, officeColliders, shellColliders } from './layout';
 import { Lobby } from './Lobby';
 import { Me } from './Me';
 import { OfficeFloor } from './OfficeFloor';
+import { InkViewport } from './Outlines';
 import { OverviewChips } from './OverviewChips';
 import { AdaptiveResolution, currentDpr } from './perf';
 import { pickAt } from './picking';
@@ -33,6 +34,10 @@ import { Player } from './Player';
 import { bindCamera, orbitBy, panBy, setViewport, zoomBy } from './rig';
 import { Roof } from './roof/Roof';
 import { roofColliders } from './roof/roofLayout';
+import { Seasons } from './seasons/Seasons';
+import { seasonColliders } from './seasons/seasonLayout';
+import { useSeason } from './seasons/seasonState';
+import { SeatTargets } from './SeatTargets';
 import { DayClock } from './sky/DayClock';
 import { DayLights } from './sky/DayLights';
 import { Sky } from './sky/Sky';
@@ -167,11 +172,9 @@ const titleOf = (kind: ReturnType<typeof kindOf>, name: string | undefined) => (
 export function Game() {
   const loaded = useStore((s) => s.loaded);
   const floors = useStore((s) => s.floors);
-  const workers = useStore((s) => s.workers);
   const picked = useView((s) => s.floor);
-  // Until the manager picks a floor: the first with workers on it, else the first floor, else the lobby.
-  const busiest = floors.find((f) => Object.values(workers).some((w) => w.floorId === f.id)) ?? floors[0];
-  const shown = picked !== null && isFloor(picked, floors) ? picked : (busiest?.floor ?? 0);
+  // Until the manager picks a floor (or when the one picked is gone): the lobby, the way in.
+  const shown = picked !== null && isFloor(picked, floors) ? picked : LOBBY;
   const kind = kindOf(shown);
   const floor = kind === 'office' ? (floors.find((f) => f.floor === shown) ?? null) : null;
   const top = floors.reduce((n, f) => Math.max(n, f.floor), 0);
@@ -183,9 +186,14 @@ export function Game() {
   // the elevator's doorway opens and shuts with its doors (elevatorRide.ts elevatorShut)
   // an office floor's bought furniture blocks you too (rugs and wall art don't)
   const plan = useStore((s) => (floor ? s.floorPlans[floor.id] : undefined));
+  // and what the season puts out (a Christmas tree, a snowman: seasons/seasonLayout.ts)
+  const season = useSeason((l) => l);
   const colliders = useMemo(
-    () => (kind === 'lobby' ? lobbyColliders(false) : kind === 'ceo' ? ceoColliders(false) : kind === 'roof' ? roofColliders() : [...officeColliders(false), ...planRects(plan ?? [])]),
-    [kind, plan],
+    () => [
+      ...(kind === 'lobby' ? lobbyColliders(false) : kind === 'ceo' ? ceoColliders(false) : kind === 'roof' ? roofColliders() : [...officeColliders(false), ...planRects(plan ?? [])]),
+      ...seasonColliders(kind, season),
+    ],
+    [kind, plan, season],
   );
   // what the camera following you stays inside: the room's walls (none round the roof terrace)
   const walls = useMemo(() => (kind === 'roof' ? [] : shellColliders(kind === 'lobby' ? 'lobby' : kind === 'ceo' ? 'ceo' : 'office')), [kind]);
@@ -212,13 +220,16 @@ export function Game() {
         <CameraRig />
         <Player floor={shown} colliders={colliders} walls={walls} />
         <AdaptiveResolution />
+        <InkViewport />
         <Chatter />
         <Me />
+        <SeatTargets key={shown} kind={kind} plan={floor ? plan : undefined} />
         <OverviewChips floor={shown} />
         {floor ? <OfficeFloor key={floor.id} floor={floor} top={topStorey(top)} /> : kind === 'ceo' ? <CeoFloor top={top} /> : kind === 'roof' ? <Roof top={top} /> : <Lobby top={topStorey(top)} />}
         <TourGuide floor={shown} />
         <City elevation={elevationOf(shown, top)} />
         <WorldEvents elevation={elevationOf(shown, top)} />
+        <Seasons kind={kind} storey={storeyOf(shown, top)} elevation={elevationOf(shown, top)} roof={elevationOf(ROOF, top) - elevationOf(shown, top)} />
         <Sounds floor={shown} />
       </Canvas>
       <header className="game-title">

@@ -61,6 +61,8 @@ export interface Errand {
   when(worker: ErrandWorker, state: ErrandState): boolean;
   /** Where to: spot ids from walkways.ts; `prefix*` matches every spot starting with prefix. Nearer ones win. */
   spot: readonly string[];
+  /** Picked from this many of the nearest free spots (default 2; Infinity: any of them). */
+  near?: number;
   /** A spot of its own instead of `spot` (beside a teammate, say); null when there's nowhere to go. */
   place?(worker: ErrandWorker, state: ErrandState): Spot | null;
   /** What they do once there, in order. */
@@ -264,6 +266,44 @@ export function nextWaypoint(path: readonly Pt[], i: number, at: Pt): number {
 
 /** Heading (body.ts: a yaw, 0 facing -Z) for a walkways.ts facing (0 east, π/2 south). */
 export const headingFor = (facing: number) => Math.atan2(-Math.cos(facing), -Math.sin(facing));
+
+// ---------- ending errands ----------
+
+/**
+ * Who still owes which errand its `end`, so every errand that got going is ended exactly once however it stops: done,
+ * cut short, turned round for another, the worker taken (the gong run), let go or gone from the floor, or the floor
+ * left. The director keeps one. An end never called left what the errand had taken for them (a spot, a place in its
+ * own count of who's on it) taken after they'd gone back to work or off on another errand; one called twice could let
+ * go of what someone else holds by then.
+ */
+export class ErrandEnds {
+  private owed = new Map<string, Errand>();
+
+  /** `id` sets off on `e`: whatever else they were on is ended first, cut short (more of the same carries on). */
+  begin(id: string, e: Errand) {
+    if (this.owed.get(id) === e) return;
+    this.end(id, 'cut');
+    this.owed.set(id, e);
+  }
+
+  /** Ends what `id` is on, if it isn't ended already. */
+  end(id: string, how: 'done' | 'cut') {
+    const e = this.owed.get(id);
+    if (!e) return;
+    this.owed.delete(id);
+    e.end?.(id, how);
+  }
+
+  /** Ends everyone's, cut short (the floor left). */
+  endAll() {
+    for (const id of [...this.owed.keys()]) this.end(id, 'cut');
+  }
+
+  /** The errand `id` hasn't been ended yet, if any. */
+  owes(id: string): Errand | null {
+    return this.owed.get(id) ?? null;
+  }
+}
 
 // ---------- the registry ----------
 

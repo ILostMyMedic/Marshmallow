@@ -12,4 +12,12 @@ describe('signHeight', () => {
     expect(signHeight(0, true)).toBe(BUBBLE.clear);
     expect(signHeight(1, true)).toBe(SIGN_HEIGHT.seated);
   });
+
+  it('moves with a body style’s heads, bubble and all', () => {
+    const lift = { standing: 0.2, seated: 0.1 };
+    expect(signHeight(1, false, lift)).toBeCloseTo(SIGN_HEIGHT.seated + 0.1);
+    expect(signHeight(0, false, lift)).toBeCloseTo(SIGN_HEIGHT.standing + 0.2);
+    expect(signHeight(0, true, lift)).toBeCloseTo(BUBBLE.clear + 0.2);
+    expect(signHeight(0, true, { standing: -0.4, seated: 0 })).toBeCloseTo(BUBBLE.clear - 0.4);
+  });
 });

@@ -1,17 +1,21 @@
-// The first-run setup: what the office calls you, your company's name, and whether to hire a CEO (and on which model).
+// The first-run setup: what the office calls you, your company's name, how everyone in it is drawn (the body style,
+// saved as soon as it's picked), and whether to hire a CEO (and on which model).
 // It opens by itself until it's finished or skipped (settings.setupDone); closing it counts as skipping, and keeps the
 // names you typed. Adapted from cubefarm client/src/ui/SetupWizard.tsx (MIT). Cut: the CEO's name, look and tie, the
 // CEO's scaling mode, the first project (the end offers the console's Floors tab instead) and the tutorial.
 import { useEffect, useState } from 'react';
+import type { BodyStyle } from '../../../shared/types';
 import { useStore } from '../store';
+import { parseBodyStyle } from '../world/bodyStyle';
 import { useView } from '../world/view';
 import { ModelPick } from './console/fields';
 import { showTab } from './console/nav';
 import { clearProblem, hireCeo, run, useProblem } from './console/run';
+import { BodyStylePick } from './BodyStylePick';
 import { Panel } from './Panel';
 
 const COMPANIES = ['Toasted Labs', 'Campfire Software', 'Gooey Bits', 'Puffball Inc.', 'Sugar Cube Studio', 'Fluffy Cloud Works', 'Hot Cocoa Systems', 'Pillow Fort Software', 'Golden Crust Co.', 'Sticky Fingers Ltd.'];
-const STEPS = ['Welcome', 'You', 'The CEO', 'Ready'];
+const STEPS = ['Welcome', 'You', 'The people', 'The CEO', 'Ready'];
 
 const pickOther = (list: string[], current: string) => {
   const rest = list.filter((x) => x !== current);
@@ -30,6 +34,9 @@ export function SetupWizard() {
   const [hire, setHire] = useState(true);
   const [model, setModel] = useState('');
   const [busy, setBusy] = useState(false);
+  const style = parseBodyStyle(settings.bodyStyle);
+  /** The body style goes to the office straight away: everyone (the office behind this, every tab) changes with it. */
+  const pickStyle = (s: BodyStyle) => s !== style && void run('PATCH', '/api/settings', { bodyStyle: s });
   useEffect(() => clearProblem, []);
 
   const names = { managerName: managerName.trim(), companyName: companyName.trim() };
@@ -108,6 +115,16 @@ export function SetupWizard() {
 
         {step === 2 && (
           <>
+            <div className="wizard-icon">🧑‍🤝‍🧑</div>
+            <h2>How do your people look?</h2>
+            <p className="wizard-tag">Everyone in the office is drawn in one style: the workers, the CEO, the guide at the front desk and you.</p>
+            <BodyStylePick value={style} onPick={pickStyle} />
+            <p className="console-hint">Change it any time in the manager's console (O), on its Settings tab.</p>
+          </>
+        )}
+
+        {step === 3 && (
+          <>
             <div className="wizard-icon">🧠</div>
             <h2>A CEO?</h2>
             <p className="wizard-tag">
@@ -145,7 +162,7 @@ export function SetupWizard() {
           </>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <>
             <div className="wizard-icon">🎉</div>
             <h2>{company} is open for business</h2>

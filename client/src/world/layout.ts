@@ -1,5 +1,6 @@
 // Adapted from cubefarm client/src/world/layout.ts (MIT): the footprint, the outside, the furniture an office floor
 // has so far and the player's colliders (without the toys' heights).
+import type { Seat } from './seats';
 
 // Every floor of the building shares one footprint. Units are metres; -Z is "north".
 
@@ -14,7 +15,7 @@ export const PLAYER_RADIUS = 0.3;
 
 // Elevator sits behind a doorway in the middle of the south wall.
 export const ELEVATOR = { doorHalf: 1.2, cabinHalf: 1.5, depth: 2.6, doorHeight: 2.5 };
-/** Where you start on a floor: in front of the elevator, facing north. */
+/** Where you start on a floor: in front of the elevator, facing north (the lobby has its own: LOBBY_SPAWN). */
 export const SPAWN = { x: 0, z: HALF_D - 1.6, yaw: 0 };
 
 export interface Rect {
@@ -247,6 +248,8 @@ export function officeColliders(doorway = true): Rect[] {
  */
 export const RECEPTION = { x: 0, z: -4.2, w: 4.6, d: 1.0 };
 export const RECEPTION_CHAIR = { x: 0, z: RECEPTION.z - 1.05 };
+/** Where you start in the lobby (a fresh visit): on the rug, facing the front desk and Mia behind it. */
+export const LOBBY_SPAWN = { x: RECEPTION.x, z: RECEPTION.z + 6, yaw: 0 };
 export const TODAY_BOARD = { w: 6.4, h: 2.2, y: 1.15, z: -HALF_D + 0.06 };
 /** The floor directory on the south wall, west of the elevator's doors (you read it facing south). */
 export const DIRECTORY = { x: -(ELEVATOR.doorHalf + 2.1), w: 2.2, h: 2.4, y: 0.5, z: HALF_D - 0.05 };
@@ -291,12 +294,25 @@ export function lobbyColliders(doorway = true): Rect[] {
 
 // ---------- the CEO's floor (above the repo floors) ----------
 
+// The executive office, corner by corner: the CEO's desk faces the room from the north, the credenza and the company's
+// sign behind it and a runner from it to the elevator; the library (bookcases, a chess table and a reading nook) in the
+// north-west; the lounge in the west; a putting green in the south-west by the awards wall; the meeting table under the
+// milestones in the north-east with the week's whiteboard, a window seat and a telescope; a pool table, the coffee bar,
+// a café table and the fish tank in the south-east.
+
 /**
  * The CEO's desk on the north side, turned to face the room (and the elevator): its middle and size. Their chair is
  * 0.8 m behind it, to the north; a credenza and the company's sign are on the wall behind them.
  */
 export const EXEC_DESK = { x: 0, z: -6.8, w: 2.8, d: 1.2 };
 export const EXEC_CREDENZA = { x: 0, z: -HALF_D + 0.35, w: 5.2, d: 0.6 };
+/** Two guest chairs facing the CEO across the desk. */
+export const EXEC_GUESTS: [number, number][] = [
+  [-0.75, EXEC_DESK.z + EXEC_DESK.d / 2 + 0.75],
+  [0.75, EXEC_DESK.z + EXEC_DESK.d / 2 + 0.75],
+];
+/** The globe beside the desk. */
+export const EXEC_GLOBE = { x: -3.4, z: -8.2 };
 /** The lounge in the west half: a long sofa against the west wall facing east, armchairs and a low table on a rug. */
 export const EXEC_SOFA = { x: -HALF_W + 0.9, z: 3.5 };
 export const EXEC_ARMCHAIRS: [number, number][] = [
@@ -304,16 +320,63 @@ export const EXEC_ARMCHAIRS: [number, number][] = [
   [-HALF_W + 4.6, 5.2],
 ];
 export const EXEC_COFFEE = { x: -HALF_W + 2.75, z: 3.5 };
-/** The meeting table in the east half, its chairs round it. */
+/** The round side table at the sofa's south end, a lamp on it. */
+export const EXEC_SIDE_TABLE = { x: -HALF_W + 0.7, z: 5.9, r: 0.28 };
+/** Floor lamps: at the sofa's north end, and in the reading nook's corner. */
+export const EXEC_LAMPS: [number, number][] = [
+  [-HALF_W + 0.5, 1.2],
+  [-HALF_W + 0.45, -HALF_D + 0.45],
+];
+/**
+ * The library along the north wall west of the desk: bookcases w wide in `bays`, d deep and h tall, full of books and
+ * trinkets. And the reading nook in the corner, by the window: an armchair looking into the room (east), a footstool
+ * in front of it (w square) and a side table beside it.
+ */
+export const EXEC_SHELVES = { x: -9.9, z: -HALF_D + 0.23, w: 7.6, d: 0.42, h: 2.3, bays: 4 };
+export const EXEC_NOOK = { x: -HALF_W + 1.4, z: -9.6 };
+export const EXEC_NOOK_STOOL = { x: -HALF_W + 2.45, z: -9.6, w: 0.5 };
+export const EXEC_NOOK_TABLE = { x: -HALF_W + 1.4, z: -10.75, r: 0.25 };
+/** The putting green in the south-west, running east–west with round ends: its middle, length and width; the hole near its west end, and the golf bag in the corner. */
+export const EXEC_GREEN = { x: -11.4, z: 8.8, w: 4.8, d: 1.3 };
+export const EXEC_HOLE = { x: EXEC_GREEN.x - EXEC_GREEN.w / 2 + 0.6, z: EXEC_GREEN.z };
+export const EXEC_GOLF_BAG = { x: -HALF_W + 0.4, z: 10.25 };
+/** The company's mascot, a marshmallow on a plinth, between the lounge and the runner. */
+export const EXEC_STATUE = { x: -5.6, z: 2.2, r: 0.42 };
+/** A chess table in front of the library: the table's middle, and its two armchairs `chair` west and east of it, facing it. */
+export const EXEC_CHESS = { x: -9.2, z: -7.4, w: 0.6, chair: 0.8 };
+/** The pool table in the south-east, its length east–west: its middle, length, width and the rails' top. */
+export const EXEC_POOL = { x: 6.6, z: 4.6, w: 2.5, d: 1.4, h: 0.86 };
+/** A cushioned window seat under the east wall's north window (l long, d deep, the cushion's top h up), and a brass telescope beside it. */
+export const EXEC_WINDOW_SEAT = { x: HALF_W - 0.28, z: SIDE_OPENINGS.ceo.east.windows[0], l: 2.6, d: 0.56, h: 0.47 };
+export const EXEC_SCOPE = { x: HALF_W - 1.1, z: -10.0 };
+/** The meeting table in the east half under the milestones: a racetrack (straight sides, round ends) w by d. */
 export const EXEC_MEETING = { x: 8.5, z: -3, w: 3.4, d: 1.5 };
-/** The bar cart by the east wall, the globe beside the desk, and the plants. */
-export const EXEC_BAR = { x: HALF_W - 0.5, z: 8.2 };
-export const EXEC_GLOBE = { x: -3.4, z: -8.2 };
+/** A meeting chair: its middle `out` from the table's edge, its footprint w by d (before it's turned), its seat's top. */
+export const MEETING_CHAIR = { out: 0.42, w: 0.5, d: 0.5, seat: 0.5 };
+/** The rolling whiteboard east of the table, facing it, with the company's week (CeoWeekBoard.tsx): its board w by h, bottom y up. */
+export const EXEC_WEEK = { x: 12.6, z: -3, w: 2.0, h: 1.2, y: 0.85 };
+/** The coffee bar against the east wall in the south-east: a counter l long, d deep and h high, the espresso machine at its north end; two stools at it. */
+export const EXEC_BAR = { x: HALF_W - 0.3, z: 8.0, l: 3.2, d: 0.6, h: 1.0 };
+export const EXEC_STOOLS: [number, number][] = [
+  [HALF_W - 1.15, 8.3],
+  [HALF_W - 1.15, 9.2],
+];
+/** A café table by the south wall, its chairs `chair` west and east of its middle, facing it. */
+export const EXEC_CAFE = { x: 11.6, z: 9.9, r: 0.42, chair: 0.78 };
+/** The fish tank on its cabinet against the south wall, east of the elevator: w by d, the cabinet `base` high, the tank h tall on it. */
+export const EXEC_TANK = { x: 5.2, z: HALF_D - 0.32, w: 2.4, d: 0.56, base: 0.72, h: 0.78 };
+/** The coat stand beside the elevator's doors. */
+export const EXEC_COAT_STAND = { x: -2.2, z: HALF_D - 0.5 };
+/** Bushy plants either side of the credenza, and tall ones in three corners and by the fish tank: x, z and how big. */
 export const EXEC_PLANTS: [number, number, number][] = [
-  [-HALF_W + 0.9, -HALF_D + 0.9, 1.3],
-  [HALF_W - 0.9, -HALF_D + 0.9, 1.3],
-  [-HALF_W + 0.9, HALF_D - 0.9, 1.1],
+  [-3.6, -HALF_D + 0.8, 1.1],
   [3.4, -HALF_D + 0.8, 1.1],
+];
+export const EXEC_TALL_PLANTS: [number, number, number][] = [
+  [HALF_W - 0.9, -HALF_D + 0.9, 1.2],
+  [HALF_W - 0.9, HALF_D - 0.9, 1.2],
+  [-HALF_W + 0.9, HALF_D - 0.9, 1.1],
+  [8.4, HALF_D - 0.7, 1],
 ];
 
 /** The company's milestones on the north wall over the meeting table, and the low cabinet under it with their trophies. */
@@ -326,20 +389,91 @@ export const EXEC_TROPHIES = { x: 8.5, z: -HALF_D + 0.3, w: 4.4, d: 0.5, h: 0.9 
 export const EXEC_AWARDS = { x: -7.4, w: 6, h: 1.85, y: 1.42, z: HALF_D - 0.06 };
 export const EXEC_AWARD_SHELF = { x: -7.4, z: HALF_D - 0.3, w: 6, d: 0.5, h: 0.85 };
 
-/** The meeting table's chairs: x, z and which way they face (a yaw, 0 facing -Z). */
+/** A wall of the room. */
+export type Wall = 'north' | 'south' | 'west' | 'east';
+/** Pictures are this many times as wide as they are tall. */
+export const PICTURE_ASPECT = 1.6;
+/**
+ * The framed pictures (ceoArt.ts paints them): on which wall, the middle along it (x on the north and south walls, z on
+ * the west and east), the bottom y and the width. Over the sofa, by the putting green, east of the milestones and over
+ * the café table.
+ */
+export const EXEC_ART: { wall: Wall; at: number; y: number; w: number }[] = [
+  { wall: 'west', at: 4, y: 1.5, w: 2 },
+  { wall: 'south', at: -12.7, y: 1.35, w: 2.4 },
+  { wall: 'north', at: 12.75, y: 1.35, w: 2.3 },
+  { wall: 'south', at: EXEC_CAFE.x, y: 1.4, w: 2.2 },
+];
+/** The wall clock on the east wall, between the side door and the coffee bar: z, and its middle's height. */
+export const EXEC_CLOCK = { z: 5.45, y: 2.3 };
+/**
+ * The rugs, where CeoFloor.tsx lays them (and footsteps soften): under the desk, the runner from it to the elevator, the
+ * lounge's, the meeting table's, the reading nook's and the chess table's.
+ */
+export const EXEC_RUGS: Rect[] = [
+  rect(EXEC_DESK.x, EXEC_DESK.z + 0.6, 8, 6),
+  { minX: -0.9, maxX: 0.9, minZ: EXEC_DESK.z + 3.6, maxZ: HALF_D - 1.1 },
+  rect(EXEC_COFFEE.x + 0.6, EXEC_COFFEE.z, 6.2, 6),
+  rect(EXEC_MEETING.x, EXEC_MEETING.z, 6.6, 4.4),
+  rect(-HALF_W + 1.9, -9.85, 3.2, 3.1),
+  rect(EXEC_CHESS.x, EXEC_CHESS.z, 3.6, 2.2),
+];
+
+/**
+ * The meeting table's chairs: x, z and which way they face (a yaw, 0 facing -Z). Three along each straight side and one
+ * at each round end, each `out` from the edge, so they're tucked in but never through the top.
+ */
 export function meetingChairs(): [number, number, number][] {
   const { x, z, w, d } = EXEC_MEETING;
+  const side = d / 2 + MEETING_CHAIR.out;
+  const end = w / 2 + MEETING_CHAIR.out;
   const out: [number, number, number][] = [];
-  for (const dx of [-w / 3, 0, w / 3]) {
-    out.push([x + dx, z - d / 2 - 0.45, Math.PI]);
-    out.push([x + dx, z + d / 2 + 0.45, 0]);
+  for (const dx of [-(w - d) / 2, 0, (w - d) / 2]) {
+    out.push([x + dx, z - side, Math.PI]);
+    out.push([x + dx, z + side, 0]);
   }
+  out.push([x - end, z, -Math.PI / 2]);
+  out.push([x + end, z, Math.PI / 2]);
   return out;
 }
+
+/** The chess table's armchairs: west of it facing east, and east of it facing west. */
+export const chessChairs = (): [number, number, number][] => [
+  [EXEC_CHESS.x - EXEC_CHESS.chair, EXEC_CHESS.z, -Math.PI / 2],
+  [EXEC_CHESS.x + EXEC_CHESS.chair, EXEC_CHESS.z, Math.PI / 2],
+];
+
+/** The café table's chairs: west of it facing east, and east of it facing west. */
+export const cafeChairs = (): [number, number, number][] => [
+  [EXEC_CAFE.x - EXEC_CAFE.chair, EXEC_CAFE.z, -Math.PI / 2],
+  [EXEC_CAFE.x + EXEC_CAFE.chair, EXEC_CAFE.z, Math.PI / 2],
+];
+
+/**
+ * Everywhere you can sit on the CEO's floor (seats.ts reads it): the sofa's three places, the lounge's armchairs, the
+ * reading nook's, the chess table's, the meeting table's chairs, the guest chairs at the desk, the coffee bar's stools,
+ * the café's chairs and the window seat's two places. `facing` is the yaw a sitter faces (0 faces -Z), `height` the seat's top; x, z where their hips go.
+ */
+export const CEO_SEATS: readonly Seat[] = [
+  ...[-0.85, 0, 0.85].map((dz, i): Seat => ({ id: `ceo-sofa-${i}`, x: EXEC_SOFA.x + 0.05, z: EXEC_SOFA.z + dz, facing: -Math.PI / 2, height: 0.46, kind: 'sofa' })),
+  ...EXEC_ARMCHAIRS.map(([x, z], i): Seat => ({ id: `ceo-armchair-${i}`, x: x - 0.03, z, facing: Math.PI / 2, height: 0.42, kind: 'armchair' })),
+  { id: 'ceo-nook', x: EXEC_NOOK.x + 0.03, z: EXEC_NOOK.z, facing: -Math.PI / 2, height: 0.42, kind: 'armchair' },
+  ...meetingChairs().map(([x, z, yaw], i): Seat => ({ id: `ceo-chair-${i}`, x, z, facing: yaw, height: MEETING_CHAIR.seat, kind: 'chair' })),
+  ...EXEC_GUESTS.map(([x, z], i): Seat => ({ id: `ceo-guest-${i}`, x, z, facing: 0, height: 0.48, kind: 'chair' })),
+  ...EXEC_STOOLS.map(([x, z], i): Seat => ({ id: `ceo-stool-${i}`, x, z, facing: -Math.PI / 2, height: 0.74, kind: 'stool' })),
+  ...cafeChairs().map(([x, z, yaw], i): Seat => ({ id: `ceo-cafe-${i}`, x, z, facing: yaw, height: 0.47, kind: 'chair' })),
+  ...chessChairs().map(([x, z, yaw], i): Seat => ({ id: `ceo-chess-${i}`, x: x - Math.sin(yaw) * 0.03, z, facing: yaw, height: 0.42, kind: 'armchair' })),
+  ...[-0.6, 0.6].map((dz, i): Seat => ({ id: `ceo-window-${i}`, x: EXEC_WINDOW_SEAT.x - 0.02, z: EXEC_WINDOW_SEAT.z + dz, facing: Math.PI / 2, height: EXEC_WINDOW_SEAT.h, kind: 'bench' })),
+];
 
 /** What can't be walked through on the CEO's floor. `doorway` as for officeColliders. */
 export function ceoColliders(doorway = true): Rect[] {
   const { x, z, w, d } = EXEC_MEETING;
+  const reach = 2 * (MEETING_CHAIR.out + MEETING_CHAIR.d / 2);
+  const round = (c: { x: number; z: number; r: number }) => rect(c.x, c.z, c.r * 2, c.r * 2);
+  const { x: bx, z: bz, l, d: bd } = EXEC_BAR;
+  const t = EXEC_TANK;
+  const s = EXEC_SHELVES;
   return [
     ...shellColliders('ceo'),
     ...(doorway ? [elevatorDoorway()] : []),
@@ -347,15 +481,35 @@ export function ceoColliders(doorway = true): Rect[] {
     rect(EXEC_DESK.x, EXEC_DESK.z, EXEC_DESK.w + 0.1, EXEC_DESK.d + 0.1),
     rect(EXEC_DESK.x, EXEC_DESK.z - 0.8, 0.8, 0.7), // the chair and whoever's in it
     rect(EXEC_CREDENZA.x, EXEC_CREDENZA.z, EXEC_CREDENZA.w, EXEC_CREDENZA.d),
+    ...EXEC_GUESTS.map(([gx, gz]) => rect(gx, gz, 0.55, 0.55)),
+    rect(EXEC_GLOBE.x, EXEC_GLOBE.z, 0.7, 0.7),
     rect(EXEC_SOFA.x, EXEC_SOFA.z, 1.1, 3.6),
     ...EXEC_ARMCHAIRS.map(([ax, az]) => rect(ax, az, 0.9, 0.9)),
     rect(EXEC_COFFEE.x, EXEC_COFFEE.z, 1.0, 1.6),
-    rect(x, z, w + 1.3, d + 1.6), // the table and its chairs
-    rect(EXEC_BAR.x, EXEC_BAR.z, 0.6, 1.1),
-    rect(EXEC_GLOBE.x, EXEC_GLOBE.z, 0.7, 0.7),
+    round(EXEC_SIDE_TABLE),
+    ...EXEC_LAMPS.map(([lx, lz]) => rect(lx, lz, 0.4, 0.4)),
+    rect(s.x, s.z, s.w, s.d),
+    rect(EXEC_NOOK.x, EXEC_NOOK.z, 0.9, 0.9),
+    rect(EXEC_NOOK_STOOL.x, EXEC_NOOK_STOOL.z, EXEC_NOOK_STOOL.w, EXEC_NOOK_STOOL.w),
+    round(EXEC_NOOK_TABLE),
+    rect(EXEC_HOLE.x, EXEC_HOLE.z, 0.25, 0.25), // the flag: the green itself is walked on
+    rect(EXEC_GOLF_BAG.x, EXEC_GOLF_BAG.z, 0.45, 0.45),
+    rect(EXEC_STATUE.x, EXEC_STATUE.z, EXEC_STATUE.r * 2 + 0.1, EXEC_STATUE.r * 2 + 0.1),
+    rect(x, z, w + reach, d + reach), // the table and its chairs
+    rect(EXEC_WEEK.x, EXEC_WEEK.z, 0.6, EXEC_WEEK.w + 0.2),
+    rect(bx, bz, bd, l),
+    ...EXEC_STOOLS.map(([sx, sz]) => rect(sx, sz, 0.45, 0.45)),
+    rect(EXEC_CAFE.x, EXEC_CAFE.z, 2 * (EXEC_CAFE.chair + MEETING_CHAIR.w / 2), EXEC_CAFE.r * 2 + 0.1), // the café table and its chairs
+    rect(t.x, t.z, t.w, t.d),
+    rect(EXEC_COAT_STAND.x, EXEC_COAT_STAND.z, 0.5, 0.5),
+    rect(EXEC_CHESS.x, EXEC_CHESS.z, EXEC_CHESS.chair * 2 + 0.9, 0.9), // the chess table and its armchairs
+    rect(EXEC_POOL.x, EXEC_POOL.z, EXEC_POOL.w + 0.1, EXEC_POOL.d + 0.1),
+    rect(EXEC_WINDOW_SEAT.x, EXEC_WINDOW_SEAT.z, EXEC_WINDOW_SEAT.d, EXEC_WINDOW_SEAT.l),
+    rect(EXEC_SCOPE.x, EXEC_SCOPE.z, 0.5, 0.5),
     rect(EXEC_TROPHIES.x, EXEC_TROPHIES.z, EXEC_TROPHIES.w, EXEC_TROPHIES.d),
     rect(EXEC_AWARD_SHELF.x, EXEC_AWARD_SHELF.z, EXEC_AWARD_SHELF.w, EXEC_AWARD_SHELF.d),
     ...EXEC_PLANTS.map(plantRect),
+    ...EXEC_TALL_PLANTS.map(plantRect),
   ];
 }
 

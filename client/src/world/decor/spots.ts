@@ -1,13 +1,16 @@
 // Where each of an office floor's shop spots (shared/shop.ts SHOP_SPOTS, by the same ids) is in the room, the most room
 // an item there may take, where a bought item stands in it and what it blocks. The floor and big spots are reserved in
 // the walk grid whether they're filled or not (walkways.ts builds it once per floor kind), so nothing ever walks through
-// a later purchase; each big spot also has named places in front of it for the errands (a vending machine's line). Pure,
+// a later purchase; each big spot also has named places in front of it for the errands (a vending machine's line, where
+// to shoot at a hoop from), and each wall spot one to throw darts at a board from. Pure,
 // so it's tested (spots.test.ts): clear of the furniture, the walkways, the windows and each other, with every desk and
 // named spot still reachable when every spot is full. Decor.tsx draws what a floor has bought.
 // Adapted from cubefarm client/src/world/layout.ts DECOR_SLOT_AT and decor/decor.ts (MIT): the slots, placement,
 // footprints and reserved rects; the decor box, carrying things about and the slot markers are cut.
 import { SHOP_SPOTS, spotOf, type SpotKind } from '../../../../shared/shop';
 import type { FloorItem } from '../../../../shared/types';
+import { BOARD as DARTBOARD, OCHE } from '../games/darts';
+import { RIM_OUT } from '../games/hoopPhysics';
 import { HALF_D, HALF_W, PONG_TABLE, type Rect } from '../layout';
 
 export interface SpotPlace {
@@ -76,10 +79,27 @@ export const ITEM_SIZE: Record<string, ItemSize> = {
   sofa: { w: 2.3, d: 0.92, h: 1.0 },
   plant: { w: 0.72, d: 0.72, h: 1.55 },
   fig: { w: 0.9, d: 0.9, h: 2.15 },
-  beanbags: { w: 1.15, d: 0.8, h: 0.7 },
+  beanbags: { w: 2.2, d: 0.95, h: 0.95 },
+  hoop: { w: 0.9, d: 0.5, h: 3.56 },
+  dartboard: { w: 0.62, d: 0.06, h: 0.62 },
   poster: { w: 1.0, d: 0.05, h: 1.3 },
   neon: { w: 1.5, d: 0.06, h: 0.5 },
 };
+
+/**
+ * Where the two beanbags' middles are across their model (decor/models.ts; seats.ts sits people there), how big round
+ * each one is, and how high its seat is.
+ */
+export const BEANBAG = { xs: [-0.56, 0.56] as readonly number[], r: 0.5, seat: 0.33 };
+
+/**
+ * A dartboard's bull's height in wall spot `spot`: the proper height, but over the little plant east of the whiteboard
+ * a little higher, so its leaves are under the board rather than in front of it.
+ */
+export const dartboardY = (spot: string) => (spot === 'wall-1' ? 1.95 : DARTBOARD.y);
+
+/** Wall pieces that hang at their own height (their middle) rather than the spot's: a dartboard, at its bull's. */
+const HANG_Y: Record<string, (spot: string) => number> = { dartboard: dartboardY };
 
 /** What the player bumps into: the pots, not the leaves; everything else, all of it. */
 const SOLID: Record<string, { w: number; d: number }> = { plant: { w: 0.5, d: 0.5 }, fig: { w: 0.55, d: 0.55 } };
@@ -107,7 +127,19 @@ export function placement(spot: string, item: string): { x: number; y: number; z
   const kind = kindOf(spot);
   const out = kind === 'big' ? (size.d - s.d) / 2 : kind === 'wall' ? size.d / 2 : 0;
   const f = front(s.rotY);
-  return { x: s.x + f.x * out, y: kind === 'wall' ? (s.y ?? WALL.y) : 0, z: s.z + f.z * out, rotY: s.rotY };
+  return { x: s.x + f.x * out, y: kind === 'wall' ? (HANG_Y[item]?.(spot) ?? s.y ?? WALL.y) : 0, z: s.z + f.z * out, rotY: s.rotY };
+}
+
+/**
+ * Where spot `id` meets its wall, at its middle: a big spot's back edge, a wall spot's face (a hoop or a dartboard
+ * hangs from there), with the turn that faces into the room. Null for a spot without a place.
+ */
+export function wallFoot(id: string): { x: number; z: number; rotY: number } | null {
+  const s = SPOT_AT[id];
+  if (!s) return null;
+  const back = kindOf(id) === 'wall' ? 0 : s.d / 2;
+  const f = front(s.rotY);
+  return { x: s.x - f.x * back, z: s.z - f.z * back, rotY: s.rotY };
 }
 
 /** The axis-aligned footprint of a w x d box at (x, z), turned by rotY (a quarter turn swaps its sides). */
@@ -173,12 +205,16 @@ function local(s: SpotPlace, u: number, v: number) {
 /** walkways.ts's facing for a direction on the floor. */
 const facingOf = (dx: number, dz: number) => Math.atan2(dz, dx);
 
-/** How far out from a big spot's front edge its front place is, and where the line and the two places to stand and drink are. */
-export const SLOT_REACH = { front: 0.55, line: { u: 0.9, v: 0.95 }, sip: { u: [-1.0, -1.95], v: 1.1 } };
+/**
+ * How far out from a big spot's front edge its front place is, and where the line and the two places to stand and drink
+ * are; and how far from its wall a shot at a hoop hanging there is taken (a couple of metres and more out from the rim).
+ */
+export const SLOT_REACH = { front: 0.55, line: { u: 0.9, v: 0.95 }, sip: { u: [-1.0, -1.95], v: 1.1 }, shoot: RIM_OUT + 2.6 };
 
 /**
  * Each big spot's places, whatever stands in it: `<id>-front` (at the machine, facing it), `<id>-line` (waiting a turn,
- * off to one side) and `<id>-sip-0`/`-1` (face to face on the other side, to drink or eat at).
+ * off to one side), `<id>-sip-0`/`-1` (face to face on the other side, to drink or eat at) and `<id>-shoot` (out in the
+ * room, facing a hoop hanging there).
  */
 export function slotSpots(): SlotSpot[] {
   const out: SlotSpot[] = [];
@@ -194,12 +230,29 @@ export function slotSpots(): SlotSpot[] {
     out.push({ id: `${id}-line`, ...at(line.u, edge + line.v), facing: toward });
     out.push({ id: `${id}-sip-0`, ...at(sip.u[0], edge + sip.v), facing: facingOf(-along.x, -along.z) });
     out.push({ id: `${id}-sip-1`, ...at(sip.u[1], edge + sip.v), facing: facingOf(along.x, along.z) });
+    out.push({ id: `${id}-shoot`, ...at(0, SLOT_REACH.shoot - edge), facing: toward });
   }
   return out;
+}
+
+/**
+ * How far along its wall from a wall spot's middle its oche is (+ to the right as you face the wall's spot from the room):
+ * straight out, but for the north-east one, whose straight-out place is the water cooler's.
+ */
+const OCHE_ALONG: Record<string, number> = { 'wall-2': -1.0 };
+
+/** Each wall spot's `<id>-oche`: where to stand and throw at a dartboard hanging there, facing it. */
+export function wallSlotSpots(): SlotSpot[] {
+  return PLACED_SPOTS.filter((x) => kindOf(x) === 'wall').map((id) => {
+    const s = SPOT_AT[id];
+    const p = local(s, OCHE_ALONG[id] ?? 0, OCHE);
+    const board = local(s, 0, 0);
+    return { id: `${id}-oche`, ...p, facing: facingOf(board.x - p.x, board.z - p.z) };
+  });
 }
 
 /**
  * The walk spots of big spot `id`, by their errand names. The far place to drink at is handed out first, so whoever
  * comes second never has to squeeze past the first standing at the near one.
  */
-export const slotSpotIds = (id: string) => ({ front: `${id}-front`, line: [`${id}-line`] as readonly string[], eat: [`${id}-sip-1`, `${id}-sip-0`] as readonly string[] });
+export const slotSpotIds = (id: string) => ({ front: `${id}-front`, line: [`${id}-line`] as readonly string[], eat: [`${id}-sip-1`, `${id}-sip-0`] as readonly string[], shoot: `${id}-shoot` });

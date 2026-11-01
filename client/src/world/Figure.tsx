@@ -1,34 +1,23 @@
-// Adapted from cubefarm client/src/world/Figure.tsx (MIT): the shirt colour and body shape come from the look.
+// Adapted from cubefarm client/src/world/Figure.tsx (MIT): the head, its face and what's worn on it. The body is the
+// office's style (RigBody.tsx); this is the head every style wears, at its own scale.
 import { useLayoutEffect, type RefObject } from 'react';
 import type * as THREE from 'three';
-import { ACCENTS, BUILD_SHAPE, type Appearance } from './appearance';
+import { ACCENTS, type Appearance } from './appearance';
 import { hairUnder, PARTS } from './characterParts';
 import { EYES, MORPHS, MORPH_AT, type FaceState } from './face';
 import { Piece } from './Batched';
 import { mix, shade } from './materials';
 import { INK } from './Outlines';
 
-// What a person wears and their face (Character.tsx): the clothes (and the CEO's suit) on the torso, and the head's
-// parts, as Pieces of shared geometry (characterParts.ts); applyFace writes an expression into the face's morph targets.
+// The head's parts, as Pieces of shared geometry (characterParts.ts); applyFace writes an expression into the face's
+// morph targets.
 
 // Glasses frames, picked by the same accent index as hats and stripes.
 const FRAMES = ['#1f1d2b', '#7f5539', '#1f1d2b', '#c1121f', '#355070', '#1f1d2b'];
-const WHITE = '#f8f9fa';
-const GOLD = '#ffd166';
 const SUIT = '#2b2d42';
-const LAPEL = '#1d1f30';
 
-type Role = 'worker' | 'ceo';
-
-/** The shirt (or suit) colour: the CEO wears a navy suit. */
-export const shirtColor = (role: Role, look: Appearance) => (role === 'ceo' ? SUIT : look.shirt);
-
-/** How wide the torso is drawn (the arms hang from its edges). */
-export const torsoWidth = (look: Appearance) => BUILD_SHAPE[look.build].width * look.shoulders;
-
-/** Headphones on the head while working; resting round the neck otherwise. */
+/** Headphones on the head while working (resting round the neck otherwise: Character.tsx). */
 const phonesOn = (look: Appearance, busy: boolean) => look.headphones && busy;
-const phonesAtNeck = (look: Appearance, busy: boolean) => look.headphones && !busy;
 
 function Headphones({ look }: { look: Appearance }) {
   return (
@@ -39,51 +28,15 @@ function Headphones({ look }: { look: Appearance }) {
   );
 }
 
-/** Torso-space (origin on the seat, facing -Z): the shirt and everything worn over it, scaled for their build. */
-export function TorsoWear({ role, look, busy }: { role: Role; look: Appearance; busy: boolean }) {
-  const isCeo = role === 'ceo';
-  const shirt = shirtColor(role, look);
-  const outfit = PARTS.outfit[look.outfit];
-  const accent = ACCENTS[look.accent];
-  const shape = BUILD_SHAPE[look.build];
+/**
+ * Headphones resting round the neck (chest-bone space, where the body's design says: Built.phones), tipped forward; on the
+ * head instead while they work (HeadParts).
+ */
+export function NeckPhones({ look, at, scale }: { look: Appearance; at: readonly [number, number, number]; scale: number }) {
   return (
-    <group scale={[torsoWidth(look), 1, shape.depth]}>
-      <Piece position={[0, 0.3, 0]} geometry={PARTS.torso} color={shirt} castShadow outline={0.015} />
-      {look.outfit !== 'sweater' && look.outfit !== 'turtleneck' && (
-        <Piece position={[0, 0.5, -0.02]} rotation={[Math.PI / 2, 0, 0]} geometry={PARTS.collar} color={isCeo ? WHITE : shade(look.shirt, -0.15)} />
-      )}
-      {outfit.main && <Piece geometry={outfit.main} color={shade(look.shirt, -0.08)} castShadow />}
-      {outfit.trim && <Piece geometry={outfit.trim} color={look.outfit === 'stripe' ? accent : look.outfit === 'hoodie' || look.outfit === 'cardigan' ? WHITE : shade(look.shirt, -0.14)} />}
-      {isCeo && (
-        <>
-          {/* white shirt front, tie and knot under the blazer; the lanyard over them */}
-          <Piece position={[0, 0.36, -0.192]} geometry={PARTS.shirtFront} color={WHITE} />
-          <Piece position={[0, 0.33, -0.206]} geometry={PARTS.tie} color={look.shirt} />
-          <Piece position={[0, 0.445, -0.206]} geometry={PARTS.tieKnot} color={shade(look.shirt, -0.2)} />
-          <Piece geometry={PARTS.blazer.lapels} color={LAPEL} />
-          <Piece geometry={PARTS.blazer.button} color={GOLD} />
-          <Piece geometry={PARTS.blazer.square} color={look.shirt} />
-          <Piece geometry={PARTS.lanyard.strap} color={shade(look.shirt, -0.2)} />
-          <Piece geometry={PARTS.lanyard.card} color={WHITE} />
-        </>
-      )}
-      {phonesAtNeck(look, busy) && (
-        // resting around the neck
-        <group position={[0, 0.49, -0.09]} rotation={[Math.PI / 2 - 0.5, 0, 0]} scale={0.74}>
-          <Headphones look={look} />
-        </group>
-      )}
+    <group position={[at[0], at[1], at[2]]} rotation={[Math.PI / 2 - 0.5, 0, 0]} scale={scale}>
+      <Headphones look={look} />
     </group>
-  );
-}
-
-/** One arm, pointing along -Z from the shoulder: the sleeve and the hand. */
-export function Sleeve({ role, look }: { role: Role; look: Appearance }) {
-  return (
-    <>
-      <Piece position={[0, 0, -0.24]} rotation={[Math.PI / 2, 0, 0]} geometry={PARTS.sleeve} color={shirtColor(role, look)} castShadow outline={0.012} />
-      <Piece position={[0, 0, -0.5]} geometry={PARTS.hand} color={look.skin} castShadow />
-    </>
   );
 }
 

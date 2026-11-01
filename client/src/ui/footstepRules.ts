@@ -4,7 +4,7 @@
 // Adapted from cubefarm client/src/ui/footstepRules.ts (MIT), with layout.ts's surfaceAt moved in for the CEO's floor.
 
 import type { FloorKindOf } from '../world/floors';
-import { DESK_RUGS, ELEVATOR, EXEC_COFFEE, EXEC_DESK, HALF_D, HALF_W, LOBBY_RUG, rect, type Rect } from '../world/layout';
+import { DESK_RUGS, ELEVATOR, EXEC_GREEN, EXEC_RUGS, HALF_D, HALF_W, LOBBY_RUG, rect, type Rect } from '../world/layout';
 import { DECKING } from '../world/roof/roofLayout';
 
 export interface StepTracker {
@@ -43,8 +43,8 @@ export const vary = (r: number) => 0.9 + r * 0.2;
 
 export type Surface = 'wood' | 'rug' | 'lobby' | 'cabin';
 
-/** The CEO's rugs, where CeoFloor.tsx lays them: under the desk and in the lounge. */
-const CEO_RUGS: Rect[] = [rect(EXEC_DESK.x, EXEC_DESK.z + 0.6, 8, 6), rect(EXEC_COFFEE.x + 0.6, EXEC_COFFEE.z, 6.2, 6)];
+/** The CEO's rugs, where CeoFloor.tsx lays them, and the putting green. */
+const CEO_RUGS: Rect[] = [...EXEC_RUGS, rect(EXEC_GREEN.x, EXEC_GREEN.z, EXEC_GREEN.w, EXEC_GREEN.d)];
 
 /**
  * The floor under (x, z), for footsteps. A rug's edge counts as rug; past the doorway is the elevator cabin, and outside,

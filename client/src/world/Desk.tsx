@@ -294,6 +294,9 @@ function ExecDesk() {
   );
 }
 
+/** The executive chair's seat top: higher than a desk chair's (bodyStyle.ts DESK_SEAT). */
+const EXEC_SEAT = 0.52;
+
 /** The CEO's chair: a high back in dark leather with a headrest and arms, on a chrome star. */
 function ExecChair() {
   return (
@@ -382,7 +385,7 @@ export const Desk = memo(function Desk({ worker, accent, position, rotationY = 0
       {worker && (
         <>
           <group position={[0, 0, 0.8]}>
-            <Character key={worker.id} worker={worker} chair={chairRef} mug={mugRef}>
+            <Character key={worker.id} worker={worker} chair={chairRef} mug={mugRef} seatY={exec ? EXEC_SEAT : undefined}>
               <NameTag worker={worker} color={shirt} />
             </Character>
           </group>

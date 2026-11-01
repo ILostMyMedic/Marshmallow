@@ -53,8 +53,8 @@ type OutlineUniforms = { screenspace: { value: boolean }; thickness: { value: nu
 const base = new WeakMap<THREE.Material, { set: number; base: number }>();
 
 /**
- * The game's own outlines (Outlines.tsx, on the head's parts) are drawn in pixels with sub-pixel thicknesses, so they
- * don't show. In the lab they're switched to drei's object-space shell, the thickness they were written for, divided by
+ * The game's own outlines (Outlines.tsx, on the head's parts) are drawn a pixel or two wide whatever the distance. In
+ * the lab they're switched to drei's object-space shell, the thickness they were written for, divided by
  * `scale` so a bigger head keeps the body's line; or hidden when `on` is false.
  */
 export function inkGameOutlines(root: THREE.Object3D, on: boolean, scale: number) {

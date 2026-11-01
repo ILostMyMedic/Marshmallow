@@ -4,6 +4,8 @@ import path from 'node:path';
 import type { WebSocket } from 'ws';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ServerEvent } from '../../shared/types.ts';
+import { CYCLE_MS } from '../../shared/dayClock.ts';
+import { officeDay } from '../../shared/seasons.ts';
 import { EVENTS, FIRST, GAP } from '../../shared/worldEvents.ts';
 import { Store } from '../store.ts';
 import { openDb, type Db } from './db.ts';
@@ -19,8 +21,10 @@ const newStore = () => {
   s.addClient({ OPEN: 1, readyState: 1, send: (t: string) => events.push(JSON.parse(t)), on: () => undefined } as unknown as WebSocket);
   return s;
 };
+let store: Store;
 const open = async () => {
-  const w = new World(db, newStore(), clock);
+  store = newStore();
+  const w = new World(db, store, clock);
   await w.load();
   return w;
 };
@@ -99,13 +103,37 @@ describe('the world events', () => {
     const { nextAt } = world.get();
     now += 20_000;
     world = await open();
-    expect(world.get()).toEqual({ running: [blimp], nextAt });
+    expect(world.get()).toEqual({ running: [blimp], nextAt, today: officeDay(now) });
     // closed past the next event's time: the first comes a minute or two after opening again
     now = nextAt + 3_600_000;
     world = await open();
     expect(world.get().running).toEqual([]);
     expect(world.get().nextAt - now).toBeGreaterThanOrEqual(FIRST[0] * 1000);
     expect(world.get().nextAt - now).toBeLessThanOrEqual(FIRST[1] * 1000);
+  });
+
+  it("tells the tabs the office's date, and again when a new day comes", async () => {
+    now = new Date(2026, 11, 31, 23, 59, 58).getTime();
+    const world = await open();
+    expect(world.get().today).toBe('2026-12-31');
+    await world.tick();
+    expect(worlds()).toEqual([]);
+    now += 3000;
+    await world.tick();
+    expect(world.get().today).toBe('2027-01-01');
+    expect(worlds().at(-1)?.today).toBe('2027-01-01');
+  });
+
+  it('starts the night-only events only at night, weighted by the season the office shows', async () => {
+    const world = await open();
+    // the 30-minute day: midnight on the hour and the half hour, noon a quarter past
+    const midnight = Math.ceil(now / CYCLE_MS) * CYCLE_MS;
+    expect(world.sky(midnight + 30_000)).toMatchObject({ night: true, season: 'autumn', holiday: null });
+    expect(world.sky(midnight + 12 * 60_000).night).toBe(false);
+    store.updateSettings({ season: 'christmas' });
+    expect(world.sky(midnight)).toMatchObject({ season: 'winter', holiday: 'christmas' });
+    store.updateSettings({ dayMode: 'day' });
+    expect(world.sky(midnight).night).toBe(false);
   });
 
   it('keeps to the same schedule across a restart as without one', async () => {

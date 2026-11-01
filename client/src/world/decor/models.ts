@@ -6,6 +6,7 @@
 // kiosk; the vending machine, the beer fridge, the couch, the beanbags, the espresso machine and the tournament table are new.
 import { mix, shade } from '../materials';
 import { ball, box, cyl, disc, model, torus, type Part } from './parts';
+import { BEANBAG } from './spots';
 
 const LEAF = ['#52b788', '#40916c', '#74c69d', '#2d6a4f'];
 const INKY = '#1f1d2b';
@@ -59,18 +60,22 @@ export const sofaModel = (color: string) =>
     ];
   });
 
-/** Two squashy beanbags side by side, turned a little towards each other. */
+/**
+ * Two big squashy beanbags side by side, a metre across each: a squashed round base, a hollow sat into it and a slumped
+ * back rising behind, one in the floor's colour and one warmer.
+ */
 export const beanbagsModel = (color: string) =>
   model(`beanbags:${color}`, () => {
     const other = mix(color, '#ffd166', 0.55);
-    return [-1, 1].flatMap((s) => {
-      const c = s < 0 ? color : other;
-      const x = s * 0.29;
-      const back = { x: x - s * 0.04, z: -0.15 };
+    const r = BEANBAG.r;
+    return BEANBAG.xs.flatMap((x, i) => {
+      const c = i === 0 ? color : other;
       return [
-        ball(0.29, c, [x, 0.19, 0.02], [1, 0.62, 1], 16),
-        ball(0.21, shade(c, 0.07), [x, 0.31, -0.02], [1, 0.5, 0.85], 14),
-        ball(0.24, shade(c, -0.06), [back.x, 0.3, back.z], [1.05, 0.9, 0.55], 14),
+        ball(r, c, [x, r * 0.56, 0.02], [1, 0.56, 0.9], 20),
+        ball(r * 0.66, shade(c, 0.07), [x, BEANBAG.seat + 0.04, 0.08], [1, 0.36, 0.88], 18),
+        ball(r * 0.84, shade(c, -0.06), [x, r * 1.02, -0.22], [1.02, 0.92, 0.5], 18),
+        // the fold where the back meets the seat
+        ball(r * 0.6, shade(c, -0.02), [x, r * 0.86, -0.06], [1.2, 0.4, 0.55], 14),
       ];
     });
   });

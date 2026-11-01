@@ -2,7 +2,9 @@
 // the scene fog's colour with distance, on a much longer curve than the fog's own (Game.tsx tunes that for the office,
 // and it would swallow everything past 320 m). Patched into three.js's own materials in place of their fog, so it costs
 // nothing extra and follows the fog's colour; with no fog in the scene there's no haze either. The same patch dims the
-// outside to the night (sky/outdoor.ts): it shares the office's lights, which the lamps warm after dusk.
+// outside to the night (sky/outdoor.ts): it shares the office's lights, which the lamps warm after dusk. And in the
+// snow (the season's: sky/outdoor.ts uSnow) it whitens what faces up on the city's materials that ask for it: the
+// roofs, the ground and the tops of the trees, at no extra draw call.
 import * as THREE from 'three';
 import { outdoor } from './sky/outdoor';
 
@@ -33,30 +35,45 @@ const FRAGMENT = /* glsl */ `
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, hazeK * (2.0 - hazeK) * uHaze.z);
 #endif`;
 
+// Whitens what faces up, by the snow lying out there (uSnow) and how much of it this material takes (uSnowK).
+const SNOW = /* glsl */ `#include <normal_fragment_maps>
+{
+  float snowUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.95, 1.0), smoothstep(0.22, 0.62, snowUp) * uSnow * uSnowK);
+}`;
+
 /**
  * Gives `m` the haze `h` in place of the fog (keeping any shader patch it already has), and dims it to the night
- * unless it's `selfLit` (a billboard's face glows at night). The values are uniforms, so every hazed material of a
- * kind shares one program.
+ * unless it's `selfLit` (a billboard's face glows at night). `snow`: how much of the snow lying out there it takes on
+ * what faces up (none by default: a blimp or a billboard never gets any). The values are uniforms, so every hazed
+ * material of a kind shares one program.
  */
-export function hazed<T extends THREE.Material>(m: T, h: Haze, opts: { selfLit?: boolean } = {}): T {
+export function hazed<T extends THREE.Material>(m: T, h: Haze, opts: { selfLit?: boolean; snow?: number } = {}): T {
   const before = m.onBeforeCompile;
   const key = m.customProgramCacheKey();
   const uHaze = { value: new THREE.Vector3(h.near, h.far, h.strength) };
   const dim = !opts.selfLit;
+  const snow = opts.snow ?? 0;
+  const uSnowK = { value: snow };
   if ('fog' in m) m.fog = true;
   m.onBeforeCompile = (shader, renderer) => {
     before.call(m, shader, renderer);
     shader.uniforms.uHaze = uHaze;
     if (dim) shader.uniforms.uOutdoor = outdoor.uOutdoor;
+    if (snow > 0) {
+      shader.uniforms.uSnow = outdoor.uSnow;
+      shader.uniforms.uSnowK = uSnowK;
+    }
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vHazePos;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvHazePos = mvPosition.xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform vec3 uHaze;\nvarying vec3 vHazePos;${dim ? '\nuniform vec3 uOutdoor;' : ''}`)
+      .replace('#include <common>', `#include <common>\nuniform vec3 uHaze;\nvarying vec3 vHazePos;${dim ? '\nuniform vec3 uOutdoor;' : ''}${snow > 0 ? '\nuniform float uSnow;\nuniform float uSnowK;' : ''}`)
+      .replace('#include <normal_fragment_maps>', snow > 0 ? SNOW : '#include <normal_fragment_maps>')
       .replace('#include <opaque_fragment>', dim ? 'outgoingLight *= uOutdoor;\n#include <opaque_fragment>' : '#include <opaque_fragment>')
       .replace('#include <fog_fragment>', FRAGMENT);
   };
-  m.customProgramCacheKey = () => `${key}|haze${dim ? '|dim' : ''}`;
+  m.customProgramCacheKey = () => `${key}|haze${dim ? '|dim' : ''}${snow > 0 ? '|snow' : ''}`;
   return m;
 }
 
@@ -74,10 +91,10 @@ const cache = new Map<string, THREE.MeshToonMaterial>();
 
 /**
  * A cel-shaded colour under a haze, shared by everything that colour (never disposed, like materials.ts's).
- * `vertexColors`: white, tinted by each vertex's colour.
+ * `vertexColors`: white, tinted by each vertex's colour. `snow`: how much of the lying snow it takes (hazed's).
  */
-export function hazedToon(color: string, h: Haze, opts: { vertexColors?: boolean; side?: THREE.Side; opacity?: number } = {}): THREE.MeshToonMaterial {
-  const key = `${color}|${h.near}|${h.far}|${h.strength}|${opts.vertexColors ? 1 : 0}|${opts.side ?? ''}|${opts.opacity ?? ''}`;
+export function hazedToon(color: string, h: Haze, opts: { vertexColors?: boolean; side?: THREE.Side; opacity?: number; snow?: number } = {}): THREE.MeshToonMaterial {
+  const key = `${color}|${h.near}|${h.far}|${h.strength}|${opts.vertexColors ? 1 : 0}|${opts.side ?? ''}|${opts.opacity ?? ''}|${opts.snow ?? 0}`;
   let m = cache.get(key);
   if (!m) {
     m = hazed(
@@ -90,6 +107,7 @@ export function hazedToon(color: string, h: Haze, opts: { vertexColors?: boolean
         opacity: opts.opacity ?? 1,
       }),
       h,
+      { snow: opts.snow },
     );
     cache.set(key, m);
   }

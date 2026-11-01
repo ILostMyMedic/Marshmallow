@@ -31,7 +31,7 @@ export const useRide = create<Ride>()(() => ({ phase: null, to: 0, at: 0 }));
 
 let arrival: { x: number; z: number; yaw: number } | null = null;
 
-/** Where to put you on the new floor, once (null: the usual spot in front of the elevator). */
+/** Where to put you on the new floor, once (null: the floor's usual spot, Player.tsx). */
 export function takeArrival() {
   const a = arrival;
   arrival = null;
